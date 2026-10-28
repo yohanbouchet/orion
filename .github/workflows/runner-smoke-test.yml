@@ -1,0 +1,31 @@
+# Fichier  : .github/workflows/runner-smoke-test.yml
+# Rôle     : test de fumée du runner auto-hébergé : prouve qu'un job
+#            lancé par GitHub s'exécute dans un pod jetable de Minikube.
+# Utilise  : le groupe de runners orion-local (ARC, infra/arc/)
+# Utilisé par : lancement manuel (onglet Actions de GitHub)
+
+name: Runner smoke test
+
+# Lancement manuel uniquement : aucun push ni pull request (et donc
+# aucun fork) ne peut faire tourner ce job sur la machine locale.
+on:
+  workflow_dispatch:
+
+# Moindre privilège : le jeton automatique GITHUB_TOKEN ne reçoit
+# aucun droit, ce test n'a besoin ni de lire ni d'écrire le dépôt.
+permissions: {}
+
+jobs:
+  smoke-test:
+    # Envoie le job au groupe de runners auto-hébergés défini dans ARC
+    runs-on: orion-local
+    # Coupe le job s'il bloque, pour ne pas garder un runner occupé
+    timeout-minutes: 5
+    steps:
+      # Affiche où et sous quelle identité le job s'exécute
+      - name: Show runner identity
+        run: |
+          echo "Hello from the self-hosted runner"
+          echo "Pod name: $(hostname)"
+          echo "User: $(id)"
+          echo "Kernel: $(uname -r)"
