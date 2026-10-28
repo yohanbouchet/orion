@@ -1,0 +1,30 @@
+# Fichier  : infra/arc/values-orion-runners.yaml
+# Rôle     : réglages Helm du groupe de runners GitHub Actions auto-hébergés
+#            (ARC, chart gha-runner-scale-set 0.15.1) qui exécutent la CI
+#            du dépôt orion dans Minikube.
+# Utilise  : le secret Kubernetes orion-arc-github-app (namespace arc-runners)
+# Utilisé par : helm install orion-local …
+#               -f infra/arc/values-orion-runners.yaml
+
+# Dépôt servi par ces runners (un seul dépôt : moindre privilège)
+githubConfigUrl: "https://github.com/yohanbouchet/orion"
+
+# Nom du secret Kubernetes contenant l'identifiant de la GitHub App.
+# Seul le NOM est ici : la clé privée n'est jamais dans le dépôt.
+githubConfigSecret: orion-arc-github-app
+
+# Nom du groupe : c'est l'étiquette à mettre dans les workflows
+# (runs-on: orion-local) pour envoyer un job sur ces runners.
+runnerScaleSetName: orion-local
+
+# 0 runner au repos : rien ne tourne (ni ne consomme) sans job.
+minRunners: 0
+# 2 runners maximum en même temps : limite la RAM prise dans Minikube.
+maxRunners: 2
+
+# Mode « Docker-in-Docker » : chaque runner reçoit un démon Docker à lui
+# pour construire les images. Ce conteneur est en mode privilégié :
+# risque accepté car il reste enfermé dans Minikube et le runner est
+# détruit après chaque job (à documenter dans le plan de sécurité).
+containerMode:
+  type: "dind"
