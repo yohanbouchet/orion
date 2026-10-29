@@ -4,7 +4,7 @@
 #            vérifie automatiquement que l'image lancée est bien l'image
 #            attendue (empreinte), sinon s'arrête en erreur.
 # Utilise  : docker, minikube, kubectl, helm ; infra/sonarqube/*.yaml
-# Utilisé par : l'opérateur (lancement manuel), plus tard la CI
+# Utilisé par : scripts/deploy-sonarqube.sh
 # Paramètres : MINIKUBE_PROFILE (défaut : orion) ; aucun secret en argument
 
 # Arrêt à la première erreur (-e), sur une variable inconnue (-u) et si
@@ -49,6 +49,8 @@ done
 
 log "1/5 Namespace, secrets and database"
 kubectl apply -f "${INFRA_DIR}/namespace.yaml"
+# Pare-feu entre pods, appliqué avant de créer les pods
+kubectl apply -f "${INFRA_DIR}/network-policy.yaml"
 ensure_secret sonarqube-db password
 ensure_secret sonarqube-monitoring passcode
 kubectl apply -f "${INFRA_DIR}/postgres.yaml"
