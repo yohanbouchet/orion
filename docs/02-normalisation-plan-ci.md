@@ -32,6 +32,45 @@ Les deux équipes demandent elles-mêmes ce cadre : analyse statique du code
 pour les Dev, contrôles de sécurité en amont pour les Ops. Ce document met en
 œuvre les recommandations R1, R2, R3 et R7.
 
+### 1.3 État initial du pipeline
+
+Le pipeline actuel (GitLab CI, 2 étapes, 4 tâches) a été mesuré à froid le
+27/10/2026 : **4,67 min**, 4 tâches sur 4 réussies. Il ne contrôle ni la
+qualité ni la sécurité, ne publie aucune image, et la livraison reste
+entièrement manuelle :
+
+```mermaid
+flowchart LR
+    dev["Dev<br/>push sur le dépôt"]
+    subgraph ci["CI GitLab : 4,67 min, aucun contrôle de sécurité"]
+        direction LR
+        subgraph test["Étape test"]
+            direction TB
+            tf["test-front<br/>npm ci + 8 tests<br/>3,43 min"]
+            tb["test-back<br/>2 tests<br/>2,37 min"]
+        end
+        subgraph build["Étape build"]
+            direction TB
+            bf["build-front<br/>npm ci de nouveau<br/>57 s"]
+            bb["build-back<br/>tests rejoués<br/>1,23 min"]
+        end
+        test --> build
+    end
+    subgraph manuel["Hors CI : manuel"]
+        direction LR
+        remise["Version remise<br/>aux Ops"]
+        trivy["Scan Trivy<br/>à la main"]
+        deploy["Déploiement<br/>docker à la main"]
+        remise --> trivy --> deploy
+    end
+    dev --> ci
+    ci -. "aucune image<br/>publiée" .-> manuel
+```
+
+Ses principaux défauts (détail dans l'audit, 3.3.2) : images d'outils non
+figées, aucun cache (dépendances retéléchargées à chaque tâche), tests
+rejoués à l'étape `build`, aucun rapport ni analyse, aucune image publiée.
+
 ## 2. Normes et bonnes pratiques
 
 ### 2.1 Principes de base
@@ -134,6 +173,36 @@ chemin de la demande à la livraison reste tracé.
 
 - **Outil** : GitHub Actions, exécuté sur le runner auto-hébergé ARC, un
   runner jetable par tâche.
+- **Pipeline cible** :
+
+```mermaid
+flowchart TB
+    issue["Issue<br/>team:dev / team:ops"] --> pr["Branche courte<br/>+ pull request"]
+    pr --> runner
+    subgraph runner["GitHub Actions sur le runner ARC jetable"]
+        direction LR
+        subgraph checks["Contrôles en parallèle"]
+            direction TB
+            lint["Style<br/>ESLint, hadolint, ShellCheck"]
+            tests["Tests + couverture<br/>Karma + lcov, JUnit + JaCoCo"]
+            sca["Dépendances<br/>Trivy"]
+            secrets["Secrets<br/>gitleaks"]
+        end
+        qg["Quality Gate<br/>SonarQube"]
+        img["Images Docker<br/>construites + scan Trivy"]
+        checks --> qg --> img
+    end
+    runner --> ok{"Tout est<br/>vert ?"}
+    ok -->|non| bloque["PR bloquée<br/>correction sur la branche"]
+    ok -->|oui| livraison
+    subgraph livraison["Livraison"]
+        direction LR
+        merge["Fusion<br/>sur main"] --> rel["semantic-release<br/>version vX.Y.Z"]
+        rel --> reg[("Registre<br/>images version + SHA")]
+        reg --> cd["Déploiement continu<br/>(plan de CD)"]
+    end
+```
+
 - **Fréquence** : à chaque poussée sur une branche ouverte en PR et à chaque
   fusion sur `main`. Chaque développeur intègre son travail au moins une fois
   par jour.
