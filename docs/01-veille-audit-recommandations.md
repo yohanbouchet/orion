@@ -5,18 +5,42 @@
 | Projet    | Démarche DevOps pour l'application MicroCRM      |
 | Client    | Orion (destinataire : Maria, CTO)                |
 | Auteur    | Yohan Bouchet                                    |
-| Version   | 0.2 (brouillon : veille et audit rédigés)           |
+| Version   | 1.0 (à valider)           |
 | Date      | 29/10/2026                                       |
 
 ## 1. Introduction
 
 ### 1.1 Objectifs
 
-*À rédiger.*
+Ce document donne à la direction technique d'Orion une vision objective de
+la façon dont MicroCRM est aujourd'hui développé, testé, livré et exploité,
+et propose une feuille de route pour y installer une démarche DevOps. Il
+répond à trois questions :
+
+1. **Quelles technologies retenir ?** Rapport de veille (section 2).
+2. **Où en est-on ?** Audit des processus actuels, chiffré (section 3).
+3. **Que faire, et dans quel ordre ?** Recommandations (section 4) et
+   prochaines étapes (section 5).
 
 ### 1.2 Rappel du contexte
 
-*À rédiger.*
+Orion développe **MicroCRM**, une application de gestion de la relation
+client qui relie des personnes à des organisations : un front Angular et une
+API Spring Boot, réunis dans un même dépôt.
+
+Deux équipes travaillent sur l'application :
+
+- **Dev** (4 personnes, responsable : Roubina) : à l'aise en TypeScript,
+  Angular et Docker, débutante en Java, Spring et Gradle ;
+- **Ops** (2 personnes, responsable : Nico) : à l'aise en Bash, Ansible,
+  Debian et Docker, de niveau moyen en PostgreSQL.
+
+Le processus actuel est en grande partie manuel : la version est remise aux
+Ops, qui la scannent avec Trivy puis la déploient à la main avec Docker. Des
+failles de sécurité ont **retardé le premier déploiement de démonstration**.
+Les deux équipes demandent davantage d'automatisation : analyse statique du
+code pour les Dev, contrôles de sécurité en amont et registre d'images
+interne pour les Ops.
 
 ## 2. Rapport de veille
 
@@ -348,18 +372,152 @@ images versionnées dans un registre ; (4) rendre l'exploitation mesurable
 
 ### 4.1 Objectifs
 
-*À rédiger.*
+Les recommandations traitent les 4 priorités de l'audit (3.4). Chacune vise un
+résultat **mesurable**, comparé aux mesures de départ
+([docs/mesures-avant/](mesures-avant/README.md)) :
+
+| Objectif | Mesure avant | Cible |
+| --- | --- | --- |
+| Aucune faille connue livrée sans décision | 95 failles dans l'image back (8 critiques) | 0 faille critique ou haute corrigeable dans une image publiée |
+| Qualité contrôlée à chaque modification | Quality Gate sans condition | Quality Gate bloquant sur chaque PR |
+| Tests mesurés | Couverture 0 % | Couverture mesurée et publiée à chaque PR |
+| Pipeline plus rapide malgré plus de contrôles | 4,67 min (cache froid) | Durée suivie à chaque exécution ; gain mesuré dans le rapport de performance |
+| Livraison traçable | Aucune image publiée, version `0.0.1-SNAPSHOT` | Chaque image liée à une version et à un commit |
+| Déploiement sans action manuelle | Déploiement manuel par les Ops | Déploiement et retour arrière automatisés |
+
+Les choix s'appuient sur des référentiels reconnus du métier : **OWASP
+Top 10:2025** (application), **OWASP Top 10 CI/CD Security Risks**
+(pipeline), **Pod Security Standards** de Kubernetes (cluster) et les fins de
+support publiées sur **endoflife.date** (maintenance).
 
 ### 4.2 Recommandations
 
-*À rédiger.*
+#### R1. Fiabiliser et accélérer le pipeline CI
+
+- **Description** : réécrire le pipeline en GitHub Actions sur le runner ARC :
+  images d'outils figées par empreinte, cache des dépendances npm et Gradle,
+  tests lancés une seule fois, rapports de tests (JUnit) et de couverture
+  (JaCoCo côté back, lcov côté front) conservés.
+- **Raisonnement** : l'audit montre des téléchargements répétés, des tests
+  rejoués et aucun rapport (3.3.2) ; une étiquette mobile comme `latest` est
+  la porte d'entrée de l'attaque subie par Trivy en mars 2026 (2.3.4).
+- **Implémentation** : phase 3 ; actions GitHub figées par SHA de commit ;
+  runner jetable, limité aux branches protégées (risque OWASP CICD-SEC-4,
+  « Poisoned Pipeline Execution », sur un dépôt public).
+- **Impacts** : pipeline reproductible et plus court ; résultats de tests
+  visibles par les Dev dans chaque PR.
+
+#### R2. Intégrer les contrôles qualité et sécurité dans la CI
+
+- **Description** : bloquer la fusion d'une PR si l'un des contrôles échoue :
+  Quality Gate SonarQube, Trivy (dépendances et images), hadolint
+  (Dockerfiles), gitleaks (secrets) ; Dependabot pour les mises à jour.
+- **Raisonnement** : c'est la demande des deux équipes (analyse statique côté
+  Dev, scans en amont côté Ops) et la réponse au risque majeur de l'audit
+  (3.3.4). Le Quality Gate par défaut ne contrôlant que le code nouveau, des
+  conditions sur l'ensemble du code sont à définir.
+- **Implémentation** : phase 3. Le runner doit joindre SonarQube : soit
+  SonarQube rejoint le cluster (chart Helm officiel de SonarSource), soit il
+  reste en conteneur et devient joignable depuis Minikube ; choix à faire au
+  début de la phase 3. Analyse CodeQL à étudier en complément (2.3.3).
+- **Impacts** : les failles sont arrêtées avant la livraison, et non plus
+  découvertes à la main par les Ops.
+
+#### R3. Construire des images durcies, versionnées et publiées
+
+- **Description** : corriger le `Dockerfile` (versions figées et maintenues,
+  utilisateur non root, sonde de santé, bon port exposé, image `standalone`
+  sans copie du système de fichiers entier) ; numérotation sémantique (semver)
+  et tags Git ; publication dans un registre.
+- **Raisonnement** : images lourdes, en root, sur une base Alpine non
+  maintenue et impossibles à tracer (3.3.5).
+- **Implémentation** : phase 3 ; registre GHCR ou Harbor à décider (2.3.5) ;
+  image PostgreSQL durcie déjà réalisée (86 failles → 0, sans root).
+- **Impacts** : chaque version déployée est identifiable, rejouable et
+  contrôlée.
+
+#### R4. Remettre le socle applicatif sous maintenance
+
+- **Description** : monter Spring Boot 3.2 vers une version maintenue
+  (4.1, maintenue jusqu'au 31/07/2027) et Angular 17 vers une version
+  maintenue (22, jusqu'au 30/06/2028), puis maintenir ces versions grâce à
+  Dependabot.
+- **Raisonnement** : sans maintenance, plus aucun correctif de sécurité n'est
+  publié (3.3.4), et les correctifs des dépendances (91 failles npm côté
+  front) visent en priorité les versions maintenues.
+- **Implémentation** : à planifier avec l'équipe Dev, à l'aise en Angular mais
+  débutante en Spring ; chaque montée de version passe par une PR et la CI de
+  R1 et R2.
+- **Impacts** : moins de failles à la source ; effort de développement à
+  prévoir.
+
+#### R5. Automatiser le déploiement sur Kubernetes
+
+- **Description** : déployer MicroCRM sur Kubernetes avec Helm, avec une base
+  PostgreSQL 18 persistante, des sondes de santé (Spring Boot Actuator), une
+  adresse d'API configurable, une mise à jour progressive et un retour arrière
+  en une commande ; sauvegarde régulière de la base.
+- **Raisonnement** : déploiement manuel, données perdues à chaque redémarrage,
+  aucune procédure de retour arrière (3.3.6).
+- **Implémentation** : phases 4 et 5 ; environnements séparés par espaces de
+  noms ; conteneurs non root conformes aux Pod Security Standards ;
+  Headlamp pour visualiser le cluster.
+- **Impacts** : livraisons fréquentes et sans risque ; temps de
+  rétablissement mesurable.
+
+#### R6. Rendre l'exploitation observable
+
+- **Description** : journaux structurés, centralisés dans ELK ; tableaux de
+  bord et alertes sur la disponibilité, les performances et la sécurité ;
+  indicateurs DORA (fréquence de déploiement, délai de mise en production,
+  taux d'échec, temps de rétablissement).
+- **Raisonnement** : aucune supervision ni alerte aujourd'hui (3.3.6).
+- **Implémentation** : phase 6 ; ELK placé hors du cluster supervisé, pour
+  rester disponible en cas d'incident sur celui-ci (répartition à confirmer).
+- **Impacts** : incidents détectés avant les utilisateurs ; progrès de la
+  démarche DevOps mesurés.
+
+#### R7. Outiller la collaboration Dev/Ops
+
+- **Description** : toute modification passe par une PR relue ; messages de
+  commit normalisés (Conventional Commits) ; documentation versionnée dans le
+  dépôt ; décisions et incidents tracés dans des tickets.
+- **Raisonnement** : échanges par e-mail et de vive voix, sans trace partagée
+  (3.3.7).
+- **Implémentation** : règles détaillées dans le document de normalisation
+  (`02-normalisation-plan-ci.md`).
+- **Impacts** : responsabilités claires ; connaissances partagées entre Dev et
+  Ops.
 
 ## 5. Conclusion
 
 ### 5.1 Synthèse
 
-*À rédiger.*
+MicroCRM est une petite application, lisible et bien structurée, mais sa
+chaîne de production ne protège ni la qualité ni la sécurité : couverture des
+tests nulle, 95 failles dans l'image back dont 8 critiques, socle hors
+maintenance, déploiement manuel et aucune supervision. Les deux équipes
+disposent pourtant des compétences de base (Docker, Bash, Ansible, Trivy) et
+demandent elles-mêmes l'automatisation.
+
+Les technologies retenues sont gratuites, maintenues et adaptées à ces
+compétences : GitHub Actions avec un runner local jetable, SonarQube, Trivy,
+Kubernetes, PostgreSQL et ELK. Les 7 recommandations installent d'abord des
+**contrôles automatiques** (R1 à R3), puis le **déploiement automatisé**
+(R5) et la **supervision** (R6), en s'appuyant sur des référentiels reconnus
+(OWASP, Pod Security Standards, endoflife.date).
 
 ### 5.2 Prochaines étapes
 
-*À rédiger.*
+| Étape | Contenu | Recommandations |
+| --- | --- | --- |
+| 1. Normalisation | Règles communes (code, branches, revue, tests, sécurité) et plan de mise en œuvre de la CI | R7 |
+| 2. Intégration continue | Pipeline GitHub Actions avec contrôles bloquants et images publiées | R1, R2, R3 |
+| 3. Déploiement continu | Infrastructure en code, déploiement Kubernetes, base persistante, sauvegardes | R5 |
+| 4. Supervision | ELK, alertes, indicateurs DORA | R6 |
+| 5. Bilan | Rapport de performance : comparaison avec les mesures de départ | — |
+
+La montée de version du socle (R4) est à planifier avec l'équipe Dev, en
+parallèle des étapes 2 et 3. Le calendrier détaillé, les responsables et les
+risques figurent dans le plan de mise en œuvre
+(`02-normalisation-plan-ci.md`).

@@ -3,7 +3,8 @@
 Relevés réalisés les 27 et 28/10/2026 sur le code d'origine de MicroCRM
 (commit `4298760`), **sans aucune modification de l'application**. Ils servent
 de référence au rapport de performance : chaque gain sera comparé à ces
-valeurs. Analyse détaillée : [audit, section 3](../01-veille-audit-recommandations.md#3-audit).
+valeurs. Analyse détaillée :
+[audit, section 3](../01-veille-audit-recommandations.md#3-audit).
 
 ## Pipeline d'origine
 
