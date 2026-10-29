@@ -1,0 +1,107 @@
+# Fichier  : infra/sonarqube/postgres.yaml
+# Rôle     : base PostgreSQL de SonarQube dans le cluster (image durcie,
+#            sans root), avec son adresse fixe (Service) et son disque.
+# Utilise  : image orion/postgres:18.6-hardened (infra/postgres/Dockerfile,
+#            chargée dans Minikube) ; secret « sonarqube-db » (mot de passe,
+#            créé hors du dépôt) ; espace de noms de namespace.yaml
+# Utilisé par : SonarQube (infra/sonarqube/values.yaml, adresse JDBC)
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarqube-db
+  namespace: sonarqube
+spec:
+  # Envoie le trafic aux pods qui portent cette étiquette
+  selector:
+    app.kubernetes.io/name: sonarqube-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sonarqube-db
+  namespace: sonarqube
+spec:
+  serviceName: sonarqube-db
+  # Une seule instance : SonarQube n'utilise qu'une base
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sonarqube-db
+  # Modèle du pod à créer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sonarqube-db
+    spec:
+      # Le pod n'a pas besoin de parler à l'API Kubernetes : pas de jeton
+      automountServiceAccountToken: false
+      securityContext:
+        # Refuse de démarrer si l'image tente de tourner en root
+        runAsNonRoot: true
+        # Compte « postgres » de l'image (numéro 70), comme le Dockerfile
+        runAsUser: 70
+        runAsGroup: 70
+        # Le disque appartient au groupe 70 : postgres peut y écrire
+        fsGroup: 70
+        # Filtre des appels système par défaut du moteur de conteneurs
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: orion/postgres:18.6-hardened
+          # Image chargée dans Minikube, jamais téléchargée
+          imagePullPolicy: Never
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: sonarqube
+            - name: POSTGRES_USER
+              value: sonarqube
+            # Mot de passe lu dans le secret Kubernetes, jamais écrit ici
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sonarqube-db
+                  key: password
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          # Prêt à recevoir du trafic quand PostgreSQL répond
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "sonarqube", "-d", "sonarqube"]
+            periodSeconds: 10
+          # Redémarre le conteneur s'il ne répond plus pendant 1 min
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "sonarqube", "-d", "sonarqube"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          # Mesuré : environ 90 Mio en fonctionnement (29/10/2026)
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+  # Un disque persistant par pod, conservé si le pod est recréé
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi

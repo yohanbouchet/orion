@@ -1,0 +1,57 @@
+# Fichier  : infra/sonarqube/values.yaml
+# Rôle     : réglages du chart Helm officiel SonarQube (SonarSource) pour
+#            le cluster : Community Build, base PostgreSQL externe, aucun
+#            conteneur privilégié, ressources mesurées.
+# Utilise  : chart sonarqube/sonarqube 2026.5.1003 ; base de postgres.yaml ;
+#            secrets « sonarqube-db » et « sonarqube-monitoring » (hors dépôt)
+# Utilisé par : helm upgrade --install (commande dans le README)
+
+# Community Build (gratuite), version figée : celle vérifiée le 28/10/2026
+community:
+  enabled: true
+  buildNumber: "26.10.0.133078"
+
+# Image chargée dans Minikube par scripts/deploy-sonarqube.sh après
+# vérification de son empreinte : interdiction de la télécharger ailleurs
+image:
+  repository: sonarqube
+  pullPolicy: Never
+
+# Désactivé : conteneur privilégié et root qui règle vm.max_map_count ;
+# le nœud Minikube hérite déjà du réglage de l'Ubuntu (1048576)
+initSysctl:
+  enabled: false
+# Désactivé : conteneur root qui corrige les droits du disque ; inutile
+# avec le stockage de Minikube
+initFs:
+  enabled: false
+
+# Base externe : le StatefulSet de postgres.yaml (chart sans base intégrée)
+jdbcOverwrite:
+  enabled: true
+  jdbcUrl: "jdbc:postgresql://sonarqube-db:5432/sonarqube"
+  jdbcUsername: "sonarqube"
+  # Mot de passe lu dans le même secret que la base, jamais écrit ici
+  jdbcSecretName: "sonarqube-db"
+  jdbcSecretPasswordKey: "password"
+
+# Code d'accès aux sondes de santé de SonarQube (lu dans un secret)
+monitoringPasscodeSecretName: "sonarqube-monitoring"
+monitoringPasscodeSecretKey: "passcode"
+
+# Mesuré : environ 2 Gio en fonctionnement (29/10/2026) ; le défaut du
+# chart (4 Go réservés, 10 Go maximum) dépasse les 7 Go de Minikube
+resources:
+  requests:
+    cpu: 400m
+    memory: 2560Mi
+  limits:
+    memory: 3Gi
+# Index de recherche conservés sur disque : sinon, ils sont reconstruits
+# à chaque redémarrage du pod (long)
+persistence:
+  enabled: true
+  size: 5Gi
+# Pas de pod de test Helm
+tests:
+  enabled: false
