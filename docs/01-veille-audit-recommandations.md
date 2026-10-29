@@ -5,7 +5,7 @@
 | Projet    | Démarche DevOps pour l'application MicroCRM      |
 | Client    | Orion (destinataire : Maria, CTO)                |
 | Auteur    | Yohan Bouchet                                    |
-| Version   | 0.1 (brouillon : partie audit rédigée)           |
+| Version   | 0.2 (brouillon : veille et audit rédigés)           |
 | Date      | 29/10/2026                                       |
 
 ## 1. Introduction
@@ -22,15 +22,137 @@
 
 ### 2.1 Méthodologie
 
-*À rédiger.*
+La veille ne compare que les briques où un choix réel se pose. Chaque
+comparaison part d'un **besoin constaté** dans l'audit (section 3) ou dans les
+sondages des équipes, puis évalue deux solutions selon les mêmes critères :
+
+1. **Réponse au besoin** d'Orion ;
+2. **Coût** : gratuit pour un dépôt public et une exécution locale ;
+3. **Maturité et maintenance** : dernière version publiée, date de fin de
+   support, projet actif ;
+4. **Sécurité** : incidents connus, licence, exposition ;
+5. **Compétences des équipes** : outils déjà maîtrisés (sondages).
+
+Sources : documentation officielle des éditeurs, pages des versions publiées
+sur GitHub et endoflife.date, consultées entre le 19 et le 29/10/2026. Les
+outils de travail sont ceux décrits dans la méthodologie de l'audit (3.2).
 
 ### 2.2 Technologies évaluées
 
-*À rédiger.*
+| Brique | Technologie | Catégorie | Fonctionnalités clés | Cas d'usage chez Orion | Référence (29/10/2026) |
+| --- | --- | --- | --- | --- | --- |
+| CI/CD | GitHub Actions | Orchestrateur de pipelines | Workflows en YAML, déclenchement sur push et PR, marketplace d'actions | Tester, analyser, construire et livrer MicroCRM | Gratuit pour un dépôt public |
+| Runner | Actions Runner Controller (ARC) | Exécuteur de tâches dans Kubernetes | Runners jetables (un par tâche), mise à l'échelle automatique jusqu'à zéro | Exécuter le pipeline en local, au plus près de Minikube et de SonarQube | `gha-runner-scale-set` 0.15.1 (23/10/2026) |
+| Qualité du code | SonarQube Community Build | Analyse statique (SAST) | Notes de qualité, couverture, duplication, Quality Gate | Bloquer le code de mauvaise qualité, mesurer la couverture | 26.10 (conteneur officiel) |
+| Scan des images | Trivy | Scanner de failles | Images, dépendances, configuration (IaC), secrets, SBOM | Bloquer une image vulnérable avant sa publication | v0.76.1 (21/10/2026), Apache-2.0 |
+| Registre d'images | GitHub Container Registry (GHCR) ou Harbor | Registre d'images OCI | Stockage versionné des images, droits d'accès | Livrer des images traçables aux Ops | Choix en phase 3 |
+| Orchestration | Kubernetes (Minikube) | Orchestrateur de conteneurs | Redémarrage automatique, sondes de santé, mise à jour progressive et retour arrière | Déployer MicroCRM sans intervention manuelle | 1.37, supporté jusqu'au 28/10/2027 |
+| Supervision | ELK (Elasticsearch, Logstash, Kibana) | Centralisation des journaux et tableaux de bord | Recherche dans les journaux, tableaux de bord, alertes | Suivre la disponibilité, les erreurs et les indicateurs DORA | Elastic 8.19 supporté jusqu'au 15/07/2027 ; 9.5 actuelle |
+| Base de données | PostgreSQL | Base relationnelle | Persistance, transactions, sauvegardes | Conserver les données de MicroCRM | 18, supportée jusqu'au 14/11/2030 |
 
 ### 2.3 Matrices comparatives
 
-*À rédiger.*
+#### 2.3.1 Plateforme CI/CD : GitHub Actions contre GitLab CI
+
+| Critère | GitHub Actions | GitLab CI (GitLab.com Free) |
+| --- | --- | --- |
+| Coût | Gratuit pour un dépôt public, runners auto-hébergés compris | 400 minutes de calcul par mois sur les runners partagés |
+| Sécurité intégrée | Dependabot et analyse CodeQL gratuits pour un dépôt public | Rapports SAST et secrets en JSON ; analyse des dépendances réservée à l'offre Ultimate |
+| Indicateurs DORA | À calculer soi-même | Natifs, mais réservés à l'offre Ultimate |
+| Point d'attention | Facturation à la minute des runners auto-hébergés annoncée en 12/2025 pour les dépôts privés, puis reportée | Modèles Terraform dépréciés (licence BSL) |
+
+**Choix : GitHub Actions**, validé avec le mentor. Le dépôt public y reçoit
+gratuitement les fonctions de sécurité qui seraient payantes sur GitLab.
+
+#### 2.3.2 Runner : ARC auto-hébergé contre runner hébergé par GitHub
+
+| Critère | ARC dans Minikube | Runner hébergé par GitHub |
+| --- | --- | --- |
+| Accès à l'infrastructure locale | Oui : il tourne dans le cluster | Non : il ne voit ni Minikube ni SonarQube |
+| Isolation | Un runner jetable par tâche, détruit ensuite | Machine virtuelle neuve par tâche |
+| Coût | Gratuit, mais consomme la machine locale | Gratuit pour un dépôt public |
+| Point d'attention | À protéger : un dépôt public ne doit pas lancer de code de PR externe sur ce runner | Aucun accès aux secrets locaux |
+
+**Choix : ARC**, imposé par l'exécution 100 % locale. Runner jetable et limité
+aux branches protégées.
+
+#### 2.3.3 Qualité du code : SonarQube Community Build contre CodeQL
+
+| Critère | SonarQube Community Build | CodeQL (GitHub) |
+| --- | --- | --- |
+| Qualité et maintenabilité | Oui : notes, dette, duplication | Non |
+| Couverture des tests | Oui (rapports JaCoCo et lcov) | Non |
+| Quality Gate bloquant | Oui | Non |
+| Détection des injections (SQL, XSS) | Non (« Limited security analysis ») | Oui |
+| Hébergement | Local, en conteneur | Résultats publiés sur GitHub ; gratuit pour un dépôt public |
+
+**Choix : SonarQube Community Build**, demandé par les Dev (analyse statique)
+et seul à fournir le Quality Gate et la couverture. CodeQL est une option
+**complémentaire** à étudier en phase 3.
+
+#### 2.3.4 Scan des images : Trivy contre Grype
+
+| Critère | Trivy | Grype (Anchore) |
+| --- | --- | --- |
+| Périmètre | Failles, configuration, secrets, SBOM | Failles (SBOM via l'outil Syft) |
+| Version et licence | v0.76.1 (21/10/2026), Apache-2.0 | v0.121.0 (19/10/2026), Apache-2.0 |
+| Compétences | Déjà utilisé par les Ops (sondage) | Inconnu des équipes |
+| Sécurité | **Compromis en mars 2026** (CVE-2026-33634) : version 0.69.4 et actions GitHub piégées, qui volaient les secrets des pipelines | Pas d'incident relevé |
+
+**Choix : Trivy**, déjà maîtrisé par les Ops. L'incident de mars 2026 impose
+une règle : **version figée par empreinte (digest ou SHA de commit)**, jamais
+d'étiquette mobile comme `latest`. Les versions utilisées pour l'audit
+(0.75.0 et 0.76.1) sont postérieures à l'incident.
+
+#### 2.3.5 Registre d'images : GHCR contre Harbor
+
+| Critère | GHCR | Harbor |
+| --- | --- | --- |
+| Hébergement | Service GitHub, externe | Auto-hébergé : registre **interne**, comme le demandent les Ops |
+| Coût | Gratuit pour les images publiques | Gratuit (Apache-2.0), mais au minimum 2 CPU, 4 Go de RAM et 40 Go de disque |
+| Sécurité | Droits liés au dépôt, jeton du pipeline | Scan Trivy intégré, droits par projet, réplication |
+| Exploitation | Rien à maintenir | Un service de plus à mettre à jour et sauvegarder |
+| Version | — | v2.14.6 (23/10/2026) |
+
+**Décision reportée à la phase 3**, en fonction des ressources de la machine
+locale.
+
+#### 2.3.6 Orchestration : Kubernetes contre Docker Compose
+
+| Critère | Kubernetes (Minikube) | Docker Compose |
+| --- | --- | --- |
+| Résilience | Redémarre les conteneurs, sondes de santé | Redémarrage simple, une seule machine |
+| Déploiement | Mise à jour progressive et retour arrière intégrés | Arrêt puis relance |
+| Complexité | Plus élevée (nouvelle compétence) | Faible, Docker déjà maîtrisé par les Ops |
+| Point d'attention | Le module ingress-nginx de Minikube n'est plus maintenu depuis mars 2026 | — |
+
+**Choix : Kubernetes**, qui automatise ce que les Ops font aujourd'hui à la
+main. Docker Compose reste utilisé pour les outils autour (SonarQube).
+
+#### 2.3.7 Supervision : ELK contre Prometheus et Grafana
+
+| Critère | ELK | Prometheus + Grafana |
+| --- | --- | --- |
+| Donnée principale | Journaux (texte, événements) | Métriques (nombres dans le temps) |
+| Licences | ELv2, SSPL ou AGPLv3 au choix (AGPLv3 depuis 09/2024) | Apache-2.0 (Prometheus), AGPL-3.0 (Grafana) |
+| Alertes gratuites | Limitées dans l'offre gratuite (types de connecteurs) | Oui, dans Grafana |
+| Version | Elastic 9.5 | Prometheus v3.15.1, Grafana v13.3.0 |
+
+**Choix : ELK**, attendu par le projet. Il répond au besoin le plus urgent
+de l'audit : des journaux aujourd'hui en texte libre et non centralisés.
+
+#### 2.3.8 Base de données : PostgreSQL contre HSQLDB
+
+| Critère | PostgreSQL 18 | HSQLDB (actuel) |
+| --- | --- | --- |
+| Persistance | Oui, sur disque | Mode mémoire utilisé : données perdues à chaque redémarrage (un mode fichier existe) |
+| Usage visé | Production | Développement et tests |
+| Support | Jusqu'au 14/11/2030 | — |
+| Compétences | Connu des Ops (niveau moyen) | — |
+| Mutualisation | Même image durcie que la base de SonarQube | — |
+
+**Choix : PostgreSQL 18**, avec l'image durcie du projet (sans gosu, sans
+root).
 
 ## 3. Audit
 
