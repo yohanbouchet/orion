@@ -1,0 +1,99 @@
+# Fichier  : infra/sonarqube/compose.yaml
+# Rôle     : SonarQube Community Build (analyse de la qualité et de la
+#            sécurité du code) + sa base PostgreSQL, en local, dans Docker.
+# Utilise  : infra/postgres/Dockerfile (image de la base),
+#            infra/sonarqube/.env (mot de passe de la base, hors Git)
+# Utilisé par : docker compose up -d (lancé depuis infra/sonarqube/) ;
+#               le scanner SonarQube (analyse du code d'origine, puis CI)
+
+# Nom du projet Compose : préfixe des conteneurs, volumes et réseaux.
+name: orion-sonarqube
+
+services:
+  # Base de SonarQube : notre image PostgreSQL durcie (sans gosu, UID 70).
+  sonarqube-db:
+    build:
+      context: ../postgres
+    image: orion/postgres:18.6-hardened
+    environment:
+      POSTGRES_DB: sonarqube
+      POSTGRES_USER: sonarqube
+      # Mot de passe lu dans .env ; Compose refuse de démarrer s'il manque.
+      POSTGRES_PASSWORD: ${SONARQUBE_DB_PASSWORD:?missing in .env}
+    volumes:
+      # Données de la base : gardées si le conteneur est recréé.
+      - sonarqube-db-data:/var/lib/postgresql
+    # Réseau interne seulement : la base n'est pas joignable de l'extérieur.
+    networks:
+      - sonarqube-backend
+    healthcheck:
+      # « Prête » quand PostgreSQL accepte les connexions.
+      test: ["CMD", "pg_isready", "-U", "sonarqube", "-d", "sonarqube"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Interdit de gagner des droits en cours de route ; aucun privilège Linux.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+  # SonarQube Community Build, image officielle figée par son empreinte.
+  sonarqube:
+    image: sonarqube:26.10.0.133078-community@sha256:aa0d41212704d1ed35f7ae3b49886b39f639590baf8020cdb191c2a2eb8f9eae
+    # Démarre seulement quand la base est déclarée « prête ».
+    depends_on:
+      sonarqube-db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonarqube-db:5432/sonarqube
+      SONAR_JDBC_USERNAME: sonarqube
+      SONAR_JDBC_PASSWORD: ${SONARQUBE_DB_PASSWORD:?missing in .env}
+    volumes:
+      # Volumes nommés (la doc SonarSource déconseille les dossiers liés).
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+      - sonarqube-logs:/opt/sonarqube/logs
+    # Port publié sur 127.0.0.1 seulement : invisible depuis le réseau.
+    ports:
+      - "127.0.0.1:9000:9000"
+    # backend : parler à la base ; frontend : sortie vers l'extérieur.
+    networks:
+      - sonarqube-backend
+      - sonarqube-frontend
+    # Limites demandées par Elasticsearch (intégré à SonarQube).
+    ulimits:
+      nofile:
+        soft: 131072
+        hard: 131072
+      nproc: 8192
+    healthcheck:
+      # « Sain » quand l'API de SonarQube répond status UP.
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS http://127.0.0.1:9000/api/system/status
+          | grep -q '"status":"UP"'
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      # Le 1er démarrage (création des tables) est long : délai de grâce.
+      start_period: 120s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+networks:
+  # internal: true : aucun accès à Internet ni depuis l'extérieur.
+  sonarqube-backend:
+    internal: true
+  sonarqube-frontend: {}
+
+volumes:
+  sonarqube-db-data:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonarqube-logs:

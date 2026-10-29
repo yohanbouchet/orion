@@ -1,0 +1,40 @@
+# Fichier  : .gitignore
+# Rôle     : liste des fichiers que Git ne doit JAMAIS suivre dans ce dépôt
+#            public (secrets, états d'infrastructure, fichiers générés).
+# Utilise  : rien
+# Utilisé par : git (add, status) pour tout le dépôt ; complété par
+#               back/.gitignore et front/.gitignore
+
+# --- Secrets ---
+# Fichiers de variables d'environnement (mots de passe, jetons).
+.env
+.env.*
+# Exception : le modèle sans valeur secrète DOIT être commité.
+!.env.example
+# Clés privées et certificats (ex. clé de la GitHub App du runner).
+*.pem
+*.key
+# Accès à un cluster Kubernetes (contient des certificats).
+kubeconfig
+*.kubeconfig
+
+# --- Terraform ---
+# Dossier des fournisseurs téléchargés (régénéré par terraform init).
+.terraform/
+# État : décrit l'infrastructure réelle et peut contenir des secrets.
+*.tfstate
+*.tfstate.*
+# Valeurs des variables (souvent des secrets) ; le modèle reste commité.
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# --- Ansible ---
+# Fichier du mot de passe qui chiffre les secrets Ansible (vault).
+.vault_pass*
+*.retry
+
+# --- Rapports générés localement ---
+# Résultats de scans et de tests : produits par la CI, pas versionnés.
+reports/
+.scannerwork/
