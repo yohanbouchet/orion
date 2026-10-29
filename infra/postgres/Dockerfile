@@ -4,8 +4,8 @@
 #            gosu ne sert qu'au démarrage (passer de root à postgres) ;
 #            trivy y trouve 61 failles (1 critique, 25 hautes) le 28/10/2026.
 # Utilise  : image officielle postgres:18.6-alpine3.24 (Docker Hub)
-# Utilisé par : infra/sonarqube/compose.yaml (service sonarqube-db) ;
-#               plus tard la base de MicroCRM (phase 5)
+# Utilisé par : infra/sonarqube/postgres.yaml (base de SonarQube dans le
+#               cluster) ; plus tard la base de MicroCRM (phase 5)
 
 # Image officielle, version précise : PostgreSQL 18.6 sur Alpine 3.24
 # (PostgreSQL 18 supporté jusqu'au 14/11/2030, Alpine 3.24 jusqu'au

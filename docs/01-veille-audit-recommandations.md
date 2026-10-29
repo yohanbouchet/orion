@@ -151,7 +151,8 @@ locale.
 | Point d'attention | Le module ingress-nginx de Minikube n'est plus maintenu depuis mars 2026 | — |
 
 **Choix : Kubernetes**, qui automatise ce que les Ops font aujourd'hui à la
-main. Docker Compose reste utilisé pour les outils autour (SonarQube).
+main. Docker Compose reste réservé aux outils placés hors du cluster
+(supervision).
 
 #### 2.3.7 Supervision : ELK contre Prometheus et Grafana
 
@@ -416,10 +417,10 @@ support publiées sur **endoflife.date** (maintenance).
   Dev, scans en amont côté Ops) et la réponse au risque majeur de l'audit
   (3.3.4). Le Quality Gate par défaut ne contrôlant que le code nouveau, des
   conditions sur l'ensemble du code sont à définir.
-- **Implémentation** : phase 3. Le runner doit joindre SonarQube : soit
-  SonarQube rejoint le cluster (chart Helm officiel de SonarSource), soit il
-  reste en conteneur et devient joignable depuis Minikube ; choix à faire au
-  début de la phase 3. Analyse CodeQL à étudier en complément (2.3.3).
+- **Implémentation** : phase 3. Pour que le runner joigne SonarQube,
+  SonarQube est déployé dans le cluster (chart Helm officiel de SonarSource),
+  dans un espace de noms dédié et isolé (décision du 29/10/2026). Analyse
+  CodeQL à étudier en complément (2.3.3).
 - **Impacts** : les failles sont arrêtées avant la livraison, et non plus
   découvertes à la main par les Ops.
 
