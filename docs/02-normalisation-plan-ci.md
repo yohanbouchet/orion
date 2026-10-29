@@ -360,7 +360,7 @@ attendus, comparés aux mesures de départ du document 1 :
 | Ressource | Détail |
 | --- | --- |
 | Personnes | Équipe Dev (4), équipe Ops (2), consultant DevOps ; Maria (CTO) pour les arbitrages |
-| Serveur | Machine Ubuntu de l'équipe (8 cœurs, 14 Gio de RAM) : Minikube (4 cœurs et 7 Go alloués) avec le runner, SonarQube en conteneur (environ 2,4 Gio mesurés) |
+| Serveur | Machine Ubuntu de l'équipe (8 cœurs, 14 Gio de RAM) : Minikube (4 cœurs et 7 Go alloués) avec le runner et SonarQube (environ 2 Gio mesurés) |
 | Services | Dépôt GitHub public : GitHub Actions, Dependabot et registre d'images gratuits pour un dépôt public |
 | Logiciels | SonarQube Community Build, Trivy, hadolint, gitleaks, ESLint, semantic-release : gratuits et open source |
 | Budget | 0 € de licence ; le coût est le temps des équipes et la machine existante |

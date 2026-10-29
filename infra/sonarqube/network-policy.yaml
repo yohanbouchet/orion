@@ -1,0 +1,80 @@
+# Fichier  : infra/sonarqube/network-policy.yaml
+# Rôle     : pare-feu entre pods de l'espace « sonarqube » : tout est
+#            interdit, sauf runner → SonarQube, SonarQube → base et
+#            SonarQube → DNS. Testé : appliqué par le réseau de Minikube.
+# Utilise  : étiquettes posées par postgres.yaml et le chart SonarQube ;
+#            espace de noms arc-runners (runner ARC)
+# Utilisé par : scripts/deploy-sonarqube.sh
+
+# 1. Tout interdire, en entrée comme en sortie, pour tous les pods de
+#    l'espace : chaque flux utile est ensuite autorisé explicitement
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: sonarqube
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+# 2. SonarQube : seul le runner entre (port 9000) ; il ne sort que vers
+#    la base et le DNS (aucun accès à Internet)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sonarqube-web
+  namespace: sonarqube
+spec:
+  # S'applique au pod de SonarQube (étiquette posée par le chart)
+  podSelector:
+    matchLabels:
+      app: sonarqube
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    # Seuls les pods de l'espace du runner ARC peuvent l'appeler
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: arc-runners
+      ports:
+        - port: 9000
+  egress:
+    # Vers la base de données uniquement
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sonarqube-db
+      ports:
+        - port: 5432
+    # Vers le DNS du cluster, pour traduire « sonarqube-db » en adresse
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# 3. Base : seul SonarQube entre (port 5432) ; elle ne sort nulle part
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sonarqube-db
+  namespace: sonarqube
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sonarqube-db
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sonarqube
+      ports:
+        - port: 5432
