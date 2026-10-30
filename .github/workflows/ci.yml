@@ -8,7 +8,7 @@
 # Utilise  : actions officielles de GitHub et de SonarSource, figées par SHA
 #            de commit ; images officielles des outils de sécurité, figées
 #            par digest ; sonar-project.properties ; environnement sonarqube ;
-#            .github/actionlint.yaml (vérification du fichier)
+#            .trivyignore (failles acceptées et datées)
 # Utilisé par : GitHub Actions (PR, fusions sur main, lancement manuel)
 
 name: CI

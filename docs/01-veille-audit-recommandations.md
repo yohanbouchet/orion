@@ -294,8 +294,10 @@ chiffre étant vérifié par l'auteur.
 
 - **Description** : aucun contrôle de sécurité automatisé. Les Ops scannent
   les images à la main avec Trivy, après réception d'une version.
-- **Forces** : les Ops connaissent déjà Trivy ; les dépendances sont
-  verrouillées (`package-lock.json`), ce qui rend les scans reproductibles.
+- **Forces** : les Ops connaissent déjà Trivy ; les dépendances du front
+  sont verrouillées (`package-lock.json`), ce qui rend leurs scans
+  reproductibles. Celles du back ne le sont pas (aucun fichier de
+  verrouillage Gradle) : Trivy ne peut pas les analyser.
 - **Faiblesses** :
 
 | Constat                              | Mesure (avant)                         |
@@ -312,7 +314,8 @@ chiffre étant vérifié par l'auteur.
     depuis le 15/05/2025 ;
   - l'API REST est **sans authentification** (création, modification et
     suppression ouvertes) et le CORS accepte toutes les origines
-    (`allowedOrigins("*")`, relevé 3 fois par SonarQube, OWASP A05) ;
+    (`allowedOrigins("*")`, relevé 3 fois par SonarQube : mauvaise
+    configuration, OWASP A02:2025, A05 dans l'édition 2021) ;
   - l'application manipule des données personnelles (noms, e-mails) : le RGPD
     s'applique, sauvegardes comprises.
 - **Risques** : c'est le risque majeur. Les failles ont **déjà retardé le

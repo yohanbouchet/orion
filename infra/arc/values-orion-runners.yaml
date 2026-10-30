@@ -3,8 +3,8 @@
 #            (ARC, chart gha-runner-scale-set 0.15.1) qui exécutent la CI
 #            du dépôt orion dans Minikube.
 # Utilise  : le secret Kubernetes orion-arc-github-app (namespace arc-runners) ;
-#            l'image orion/actions-runner:2.338.2-hardened (infra/arc/Dockerfile,
-#            chargée dans Minikube)
+#            l'image orion/actions-runner:2.338.2-hardened.2
+#            (infra/arc/Dockerfile, chargée dans Minikube)
 # Utilisé par : helm upgrade --install orion-local …
 #               -f infra/arc/values-orion-runners.yaml
 
