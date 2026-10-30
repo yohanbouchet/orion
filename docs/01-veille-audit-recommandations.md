@@ -459,7 +459,9 @@ support publiées sur **endoflife.date** (maintenance).
 - **Description** : monter Spring Boot 3.2 vers une version maintenue
   (4.1, maintenue jusqu'au 31/07/2027) et Angular 17 vers une version
   maintenue (22, jusqu'au 30/06/2028), puis maintenir ces versions grâce à
-  Dependabot.
+  Dependabot. Côté front, remplacer Karma, abandonné par ses auteurs, par
+  Vitest, lanceur de tests par défaut d'Angular, qui produit aussi le rapport
+  des tests (JUnit) lu par SonarQube.
 - **Raisonnement** : sans maintenance, plus aucun correctif de sécurité n'est
   publié (3.3.4), et les correctifs des dépendances (91 failles npm côté
   front) visent en priorité les versions maintenues.
