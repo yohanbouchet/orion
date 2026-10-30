@@ -270,9 +270,11 @@ chiffre étant vérifié par l'auteur.
 - **Faiblesses** :
   - couverture des tests **non mesurée** : SonarQube affiche **0 %** parce
     qu'aucun rapport de couverture ne lui est fourni (ni JaCoCo côté back, ni
-    lcov côté front), pas parce qu'aucun test ne s'exécute. Mesure faite
-    après l'audit (30/10/2026, ticket #13) : les tests du back couvrent
-    **60 % des lignes** (42 sur 70) mais seulement **2 branches sur 8** ;
+    lcov côté front), pas parce qu'aucun test ne s'exécute. Mesures faites
+    après l'audit (30/10/2026, tickets #13 et #16) : les tests couvrent
+    **60 % des lignes du back** (42 sur 70, 2 branches sur 8) et **31 % des
+    lignes du front** (36 sur 117, 2 branches sur 21) ; les cas d'erreur
+    (branches) ne sont presque jamais testés ;
   - **37 problèmes** relevés : fiabilité notée **D** (33 problèmes, dont
     12 appels asynchrones dont l'échec n'est jamais traité en TypeScript et
     2 risques de `NullPointerException` en Java), sécurité notée **C**
