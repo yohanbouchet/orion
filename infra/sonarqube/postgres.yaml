@@ -4,7 +4,8 @@
 # Utilise  : image orion/postgres:18.6-hardened (infra/postgres/Dockerfile,
 #            chargée dans Minikube) ; secret « sonarqube-db » (mot de passe,
 #            créé hors du dépôt) ; espace de noms de namespace.yaml
-# Utilisé par : SonarQube (infra/sonarqube/values.yaml, adresse JDBC)
+# Utilisé par : scripts/deploy-sonarqube.sh ; SonarQube
+#               (infra/sonarqube/values.yaml, adresse JDBC)
 
 apiVersion: v1
 kind: Service

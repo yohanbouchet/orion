@@ -4,7 +4,7 @@
 #            vérifie automatiquement que l'image lancée est bien l'image
 #            attendue (empreinte), sinon s'arrête en erreur.
 # Utilise  : docker, minikube, kubectl, helm ; infra/sonarqube/*.yaml
-# Utilisé par : scripts/deploy-sonarqube.sh
+# Utilisé par : l'opérateur (lancement manuel), plus tard la CI
 # Paramètres : MINIKUBE_PROFILE (défaut : orion) ; aucun secret en argument
 
 # Arrêt à la première erreur (-e), sur une variable inconnue (-u) et si
