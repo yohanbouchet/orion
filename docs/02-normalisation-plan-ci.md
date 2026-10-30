@@ -314,7 +314,7 @@ attendus, comparés aux mesures de départ du document 1 :
   dépôt : protection de `main`, suppression automatique des branches
   fusionnées, `CODEOWNERS`, modèles d'issue et de PR, étiquettes
   (`team:dev`, `team:ops`), `.editorconfig`.
-- **Responsables** : consultant DevOps (pilote), Roubina (Dev), Nico (Ops).
+- **Responsables** : ingénieur DevOps (pilote), Roubina (Dev), Nico (Ops).
 - **Livrables** : normes validées ; dépôt configuré.
 
 #### Étape 2 — Runner et outils de la chaîne
@@ -323,7 +323,7 @@ attendus, comparés aux mesures de départ du document 1 :
   privilégié, protégé contre les forks) ; rendre SonarQube joignable depuis
   ce runner ; créer
   les secrets du pipeline dans GitHub.
-- **Responsables** : équipe Ops (pilote : Nico), consultant DevOps.
+- **Responsables** : équipe Ops (pilote : Nico), ingénieur DevOps.
 - **Livrables** : runner opérationnel (test de fumée réussi) ; SonarQube
   accessible depuis la CI ; secrets enregistrés hors du dépôt.
 
@@ -333,7 +333,7 @@ attendus, comparés aux mesures de départ du document 1 :
   back lancés une seule fois, rapports JUnit, couverture JaCoCo et lcov,
   cache npm et Gradle. Les ajouts au code (ESLint, JaCoCo) passent par des
   tickets à l'équipe Dev.
-- **Responsables** : équipe Dev (pilote : Roubina), consultant DevOps.
+- **Responsables** : équipe Dev (pilote : Roubina), ingénieur DevOps.
 - **Livrables** : workflow de CI ; rapports de tests et de couverture
   visibles dans chaque PR.
 
@@ -361,14 +361,14 @@ attendus, comparés aux mesures de départ du document 1 :
 - **Description** : mesurer le pipeline et comparer aux mesures de départ ;
   compléter le README (chaque script : but, fonctionnement, paramètres) ;
   animer un atelier Dev/Ops sur l'utilisation de la chaîne.
-- **Responsables** : consultant DevOps, Roubina, Nico.
+- **Responsables** : ingénieur DevOps, Roubina, Nico.
 - **Livrables** : mesures avant/après ; README à jour ; atelier réalisé.
 
 ### 3.3 Ressources nécessaires
 
 | Ressource | Détail |
 | --- | --- |
-| Personnes | Équipe Dev (4), équipe Ops (2), consultant DevOps ; Maria (CTO) pour les arbitrages |
+| Personnes | Équipe Dev (4), équipe Ops (2), ingénieur DevOps ; Maria (CTO) pour les arbitrages |
 | Serveur | Machine Ubuntu de l'équipe (8 cœurs, 14 Gio de RAM) : Minikube (4 cœurs et 7 Go alloués) avec le runner local et SonarQube (environ 2 Gio mesurés) ; runners hébergés par GitHub, gratuits pour un dépôt public |
 | Services | Dépôt GitHub public : GitHub Actions, Dependabot et registre d'images gratuits pour un dépôt public |
 | Logiciels | SonarQube Community Build, Trivy, hadolint, gitleaks, ESLint, semantic-release : gratuits et open source |
