@@ -216,8 +216,8 @@ jobs:
           --color=never scripts/*.sh
 
   # Failles connues dans les dépendances (npm, Gradle) : bloque sur les
-  # failles critiques, affiche toutes les autres ; seuil à passer à HIGH
-  # après la montée d'Angular (R4) ; ticket #20
+  # failles hautes et critiques, sauf exceptions justifiées et datées dans
+  # .trivyignore (docs/02, section 2.7) ; ticket #20
   trivy:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -229,25 +229,28 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Toutes les failles, sans bloquer : dans le journal et dans le
-      # résumé du job ; la base de failles est gardée dans /cache
+      # Toutes les failles, sans bloquer, y compris celles acceptées dans
+      # .trivyignore (--ignorefile "" désactive ce fichier) : dans le
+      # journal et dans le résumé du job ; base de failles gardée dans /cache
       - name: List all vulnerabilities
         run: |
           mkdir -p "$RUNNER_TEMP/trivy"
           docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD":/src:ro -w /src -v "$RUNNER_TEMP/trivy":/cache \
             "$TRIVY_IMAGE" fs --scanners vuln --cache-dir /cache \
-            --no-progress . | tee "$RUNNER_TEMP/trivy-report.txt"
+            --no-progress --ignorefile "" . \
+            | tee "$RUNNER_TEMP/trivy-report.txt"
           {
             echo '```'
             cat "$RUNNER_TEMP/trivy-report.txt"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      # Seuil bloquant : code 1 (job rouge) s'il existe une faille
-      # critique ; réutilise la base déjà téléchargée
-      - name: Fail on critical vulnerabilities
+      # Seuil bloquant : code 1 (job rouge) s'il existe une faille haute
+      # ou critique, sauf celles acceptées et datées dans .trivyignore
+      # (lu automatiquement à la racine) ; réutilise la base téléchargée
+      - name: Fail on high and critical vulnerabilities
         run: >-
           docker run --rm --user "$(id -u):$(id -g)"
           -v "$PWD":/src:ro -w /src -v "$RUNNER_TEMP/trivy":/cache
           "$TRIVY_IMAGE" fs --scanners vuln --cache-dir /cache
-          --no-progress --quiet --severity CRITICAL --exit-code 1 .
+          --no-progress --quiet --severity HIGH,CRITICAL --exit-code 1 .

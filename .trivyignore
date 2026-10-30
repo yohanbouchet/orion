@@ -1,0 +1,35 @@
+# Fichier  : .trivyignore
+# Rôle     : failles acceptées temporairement par la CI, chacune justifiée
+#            et datée : à sa date d'expiration (exp:), la faille bloque de
+#            nouveau la CI.
+# Utilise  : identifiants CVE du rapport Trivy (résumé du job trivy)
+# Utilisé par : .github/workflows/ci.yml (job trivy, étape bloquante)
+#
+# Règle (docs/02, section 2.7) : une faille n'est acceptée ici que si elle
+# n'a pas de correctif utilisable, avec sa justification et une date
+# d'expiration.
+
+# Angular 17.3.8 (front), fin de support : ces failles hautes ne sont
+# corrigées qu'à partir d'Angular 19.2, aucun correctif en 17.x.
+# Correction : montée de version majeure d'Angular (recommandation R4).
+# Exposition réduite : le front n'utilise ni rendu serveur (SSR,
+# hydratation) ni traduction (i18n) (recherche dans le code, 30/10/2026).
+# Acceptées le 30/10/2026 par l'ingénieur DevOps, jusqu'au 31/01/2027.
+
+# @angular/common
+CVE-2025-66035 exp:2027-01-31
+CVE-2026-50170 exp:2027-01-31
+CVE-2026-50171 exp:2027-01-31
+CVE-2026-54266 exp:2027-01-31
+CVE-2026-54268 exp:2027-01-31
+CVE-2026-68945 exp:2027-01-31
+# @angular/compiler et @angular/core
+CVE-2025-66412 exp:2027-01-31
+CVE-2026-22610 exp:2027-01-31
+CVE-2026-27970 exp:2027-01-31
+CVE-2026-32635 exp:2027-01-31
+CVE-2026-54267 exp:2027-01-31
+CVE-2026-69151 exp:2027-01-31
+# @angular/router
+CVE-2026-101896 exp:2027-01-31
+CVE-2026-111752 exp:2027-01-31
