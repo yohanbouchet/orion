@@ -260,8 +260,10 @@ Règles :
 - **Exceptions** : une faille non corrigeable est acceptée seulement dans un
   fichier `.trivyignore`, avec sa justification et une **date d'expiration**.
 - **Secrets** : jamais dans Git (`.gitignore`, modèles `.env.example` sans
-  valeur) ; stockés dans les secrets GitHub Actions ; un secret exposé est
-  **révoqué et remplacé immédiatement**.
+  valeur) ; stockés dans les secrets GitHub Actions (pipeline) ou dans des
+  Secrets Kubernetes générés aléatoirement par les scripts de déploiement,
+  jamais affichés (infrastructure) ; un secret exposé est **révoqué et
+  remplacé immédiatement**.
 - **Chaîne d'approvisionnement** : images officielles figées par empreinte
   (`@sha256`), actions figées par SHA, suivi des fins de support sur
   endoflife.date. L'attaque subie par Trivy en mars 2026 a montré le risque

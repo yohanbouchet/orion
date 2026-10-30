@@ -69,7 +69,7 @@ outils de travail sont ceux décrits dans la méthodologie de l'audit (3.2).
 | Runner | Actions Runner Controller (ARC) | Exécuteur de tâches dans Kubernetes | Runners jetables (un par tâche), mise à l'échelle automatique jusqu'à zéro | Exécuter les tâches qui exigent l'accès local (SonarQube, Minikube) ; le reste tourne sur les runners hébergés par GitHub | `gha-runner-scale-set` 0.15.1 (23/10/2026) |
 | Qualité du code | SonarQube Community Build | Analyse statique (SAST) | Notes de qualité, couverture, duplication, Quality Gate | Bloquer le code de mauvaise qualité, mesurer la couverture | 26.10 (conteneur officiel) |
 | Scan des images | Trivy | Scanner de failles | Images, dépendances, configuration (IaC), secrets, SBOM | Bloquer une image vulnérable avant sa publication | v0.76.1 (21/10/2026), Apache-2.0 |
-| Registre d'images | GitHub Container Registry (GHCR) ou Harbor | Registre d'images OCI | Stockage versionné des images, droits d'accès | Livrer des images traçables aux Ops | Choix en phase 3 |
+| Registre d'images | GitHub Container Registry (GHCR) ou Harbor | Registre d'images OCI | Stockage versionné des images, droits d'accès | Livrer des images traçables aux Ops | GHCR retenu (29/10/2026) ; Harbor en évolution |
 | Orchestration | Kubernetes (Minikube) | Orchestrateur de conteneurs | Redémarrage automatique, sondes de santé, mise à jour progressive et retour arrière | Déployer MicroCRM sans intervention manuelle | 1.37, supporté jusqu'au 28/10/2027 |
 | Supervision | ELK (Elasticsearch, Logstash, Kibana) | Centralisation des journaux et tableaux de bord | Recherche dans les journaux, tableaux de bord, alertes | Suivre la disponibilité, les erreurs et les indicateurs DORA | Elastic 8.19 supporté jusqu'au 15/07/2027 ; 9.5 actuelle |
 | Base de données | PostgreSQL | Base relationnelle | Persistance, transactions, sauvegardes | Conserver les données de MicroCRM | 18, supportée jusqu'au 14/11/2030 |
@@ -144,8 +144,11 @@ d'étiquette mobile comme `latest`. Les versions utilisées pour l'audit
 | Exploitation | Rien à maintenir | Un service de plus à mettre à jour et sauvegarder |
 | Version | — | v2.14.6 (23/10/2026) |
 
-**Décision reportée à la phase 3**, en fonction des ressources de la machine
-locale.
+**Choix : GHCR** (décision du 29/10/2026). Les images doivent être
+consultables par les parties prenantes depuis le dépôt public, et la machine
+locale manque de mémoire pour Harbor en plus de SonarQube et d'ELK. Harbor,
+registre interne demandé par les Ops, reste la cible d'entreprise (évolution) ;
+le scan en amont qu'ils demandent est assuré par Trivy dans la CI.
 
 #### 2.3.6 Orchestration : Kubernetes contre Docker Compose
 
@@ -440,7 +443,8 @@ support publiées sur **endoflife.date** (maintenance).
   et tags Git ; publication dans un registre.
 - **Raisonnement** : images lourdes, en root, sur une base Alpine non
   maintenue et impossibles à tracer (3.3.5).
-- **Implémentation** : phase 3 ; registre GHCR ou Harbor à décider (2.3.5) ;
+- **Implémentation** : phase 3 ; registre GHCR (2.3.5), images construites
+  par les runners hébergés par GitHub ;
   image PostgreSQL durcie déjà réalisée (86 failles → 0, sans root).
 - **Impacts** : chaque version déployée est identifiable, rejouable et
   contrôlée.
