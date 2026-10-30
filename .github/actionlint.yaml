@@ -1,7 +1,9 @@
 # Fichier  : .github/actionlint.yaml
 # Rôle     : configuration d'actionlint (vérification des workflows) :
 #            déclare l'étiquette de notre runner auto-hébergé.
-# Utilisé par : actionlint (en local, puis dans la CI)
+# Utilise  : rien
+# Utilisé par : actionlint, lancé en local avant chaque commit d'un
+#               workflow (.github/workflows/*.yml)
 
 self-hosted-runner:
   # Étiquette du groupe de runners ARC (infra/arc/values-orion-runners.yaml)

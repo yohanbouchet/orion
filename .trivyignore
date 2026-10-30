@@ -10,7 +10,8 @@
 # d'expiration.
 
 # Angular 17.3.8 (front), fin de support : ces failles hautes ne sont
-# corrigées qu'à partir d'Angular 19.2, aucun correctif en 17.x.
+# corrigées qu'en Angular 19.2 ou 20.3 et au-delà selon la faille,
+# aucun correctif en 17.x.
 # Correction : montée de version majeure d'Angular (recommandation R4).
 # Exposition réduite : le front n'utilise ni rendu serveur (SSR,
 # hydratation) ni traduction (i18n) (recherche dans le code, 30/10/2026).

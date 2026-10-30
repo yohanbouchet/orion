@@ -104,7 +104,7 @@ rejoués à l'étape `build`, aucun rapport ni analyse, aucune image publiée.
 | --- | --- | --- |
 | Front (TypeScript, Angular) | Guide de style Angular : fichiers en `kebab-case` (`person-details.component.ts`), classes en `PascalCase` | **ESLint** (angular-eslint) |
 | Back (Java, Spring Boot) | Conventions Java : classes en `PascalCase`, méthodes et variables en `camelCase`, paquets en minuscules ; injection par constructeur | **SonarQube** (règles Java « Sonar way ») |
-| Dockerfile | Image de base figée, utilisateur non root, une sonde de santé | **hadolint** |
+| Dockerfile | Image de base figée, utilisateur non root, une sonde de santé (`HEALTHCHECK` ; dans Kubernetes, qui l'ignore, sondes du pod) | **hadolint** |
 | Scripts Bash | `set -euo pipefail`, variables entre guillemets | **ShellCheck** |
 
 Côté Java, SonarQube suffit au départ : les Dev débutent en Java, et un
