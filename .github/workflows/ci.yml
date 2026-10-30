@@ -2,9 +2,13 @@
 # Rôle     : intégration continue de MicroCRM : à chaque PR et à chaque
 #            fusion sur main, lance les tests du front et du back en
 #            parallèle sur les runners hébergés par GitHub, puis l'analyse
-#            SonarQube et son Quality Gate sur le runner local.
+#            SonarQube et son Quality Gate sur le runner local ; en
+#            parallèle, les scans de sécurité (gitleaks, hadolint,
+#            ShellCheck, Trivy).
 # Utilise  : actions officielles de GitHub et de SonarSource, figées par SHA
-#            de commit ; sonar-project.properties ; environnement sonarqube
+#            de commit ; images officielles des outils de sécurité, figées
+#            par digest ; sonar-project.properties ; environnement sonarqube ;
+#            .github/actionlint.yaml (vérification du fichier)
 # Utilisé par : GitHub Actions (PR, fusions sur main, lancement manuel)
 
 name: CI
@@ -149,3 +153,104 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+
+  # Secrets oubliés (mots de passe, jetons, clés) dans tout l'historique
+  # Git ; ticket #20
+  gitleaks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Historique complet : un secret effacé reste lisible dans les
+      # anciens commits
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Image officielle figée par empreinte (digest), sans réseau, sans
+      # droits root, code en lecture seule ; --redact masque les secrets
+      # trouvés dans le journal (qui est public)
+      - name: Scan for secrets
+        run: >-
+          docker run --rm --network none --user "$(id -u):$(id -g)"
+          -v "$PWD":/repo:ro
+          zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git /repo --no-banner --redact --no-color
+
+  # Bonnes pratiques des Dockerfiles ; le Dockerfile racine est exclu
+  # jusqu'à sa réécriture (R3) ; ticket #20
+  hadolint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Même durcissement que gitleaks ; infra/*/Dockerfile prend tous les
+      # Dockerfiles de infra/, y compris ceux ajoutés plus tard
+      - name: Lint Dockerfiles
+        run: >-
+          docker run --rm --network none --user "$(id -u):$(id -g)"
+          -v "$PWD":/src:ro -w /src
+          hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+          hadolint --no-color infra/*/Dockerfile
+
+  # Pièges des scripts shell (variables vides, guillemets oubliés…) ;
+  # ticket #20
+  shellcheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Même durcissement que gitleaks ; scripts/*.sh prend tous les
+      # scripts, y compris ceux ajoutés plus tard
+      - name: Lint shell scripts
+        run: >-
+          docker run --rm --network none --user "$(id -u):$(id -g)"
+          -v "$PWD":/src:ro -w /src
+          koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+          --color=never scripts/*.sh
+
+  # Failles connues dans les dépendances (npm, Gradle) : bloque sur les
+  # failles hautes et critiques, sauf exceptions justifiées et datées dans
+  # .trivyignore (docs/02, section 2.7) ; ticket #20
+  trivy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Image écrite une seule fois, réutilisée par les deux analyses
+    env:
+      TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Toutes les failles, sans bloquer, y compris celles acceptées dans
+      # .trivyignore (--ignorefile "" désactive ce fichier) : dans le
+      # journal et dans le résumé du job ; base de failles gardée dans /cache
+      - name: List all vulnerabilities
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD":/src:ro -w /src -v "$RUNNER_TEMP/trivy":/cache \
+            "$TRIVY_IMAGE" fs --scanners vuln --cache-dir /cache \
+            --no-progress --ignorefile "" . \
+            | tee "$RUNNER_TEMP/trivy-report.txt"
+          {
+            echo '```'
+            cat "$RUNNER_TEMP/trivy-report.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      # Seuil bloquant : code 1 (job rouge) s'il existe une faille haute
+      # ou critique, sauf celles acceptées et datées dans .trivyignore
+      # (lu automatiquement à la racine) ; réutilise la base téléchargée
+      - name: Fail on high and critical vulnerabilities
+        run: >-
+          docker run --rm --user "$(id -u):$(id -g)"
+          -v "$PWD":/src:ro -w /src -v "$RUNNER_TEMP/trivy":/cache
+          "$TRIVY_IMAGE" fs --scanners vuln --cache-dir /cache
+          --no-progress --quiet --severity HIGH,CRITICAL --exit-code 1 .
