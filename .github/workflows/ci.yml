@@ -2,9 +2,13 @@
 # Rôle     : intégration continue de MicroCRM : à chaque PR et à chaque
 #            fusion sur main, lance les tests du front et du back en
 #            parallèle sur les runners hébergés par GitHub, puis l'analyse
-#            SonarQube et son Quality Gate sur le runner local.
+#            SonarQube et son Quality Gate sur le runner local ; en
+#            parallèle, les scans de sécurité (gitleaks, hadolint,
+#            ShellCheck, Trivy).
 # Utilise  : actions officielles de GitHub et de SonarSource, figées par SHA
-#            de commit ; sonar-project.properties ; environnement sonarqube
+#            de commit ; images officielles des outils de sécurité, figées
+#            par digest ; sonar-project.properties ; environnement sonarqube ;
+#            .github/actionlint.yaml (vérification du fichier)
 # Utilisé par : GitHub Actions (PR, fusions sur main, lancement manuel)
 
 name: CI
@@ -210,3 +214,40 @@ jobs:
           -v "$PWD":/src:ro -w /src
           koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
           --color=never scripts/*.sh
+
+  # Failles connues dans les dépendances (npm, Gradle) : bloque sur les
+  # failles critiques, affiche toutes les autres ; seuil à passer à HIGH
+  # après la montée d'Angular (R4) ; ticket #20
+  trivy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Image écrite une seule fois, réutilisée par les deux analyses
+    env:
+      TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Toutes les failles, sans bloquer : dans le journal et dans le
+      # résumé du job ; la base de failles est gardée dans /cache
+      - name: List all vulnerabilities
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD":/src:ro -w /src -v "$RUNNER_TEMP/trivy":/cache \
+            "$TRIVY_IMAGE" fs --scanners vuln --cache-dir /cache \
+            --no-progress . | tee "$RUNNER_TEMP/trivy-report.txt"
+          {
+            echo '```'
+            cat "$RUNNER_TEMP/trivy-report.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      # Seuil bloquant : code 1 (job rouge) s'il existe une faille
+      # critique ; réutilise la base déjà téléchargée
+      - name: Fail on critical vulnerabilities
+        run: >-
+          docker run --rm --user "$(id -u):$(id -g)"
+          -v "$PWD":/src:ro -w /src -v "$RUNNER_TEMP/trivy":/cache
+          "$TRIVY_IMAGE" fs --scanners vuln --cache-dir /cache
+          --no-progress --quiet --severity CRITICAL --exit-code 1 .
