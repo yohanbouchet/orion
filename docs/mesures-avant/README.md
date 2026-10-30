@@ -27,7 +27,7 @@ Exécuté en local avec gitlab-ci-local 4.77.0, cache froid.
 | Lignes de code    | 960 (Java 226, TypeScript 332, HTML 401) |
 | Problèmes         | 37 (fiabilité 33, sécurité 4, maintenabilité 5) |
 | Notes             | sécurité C, fiabilité D, maintenabilité A |
-| Couverture        | 0,0 % sur 166 lignes à couvrir (non mesurée : aucun rapport fourni) |
+| Couverture        | 0,0 % sur 166 lignes à couvrir (non mesurée : aucun rapport fourni ; mesurée le 30/10 : back 60 %, front 31 % des lignes) |
 | Duplication       | 2,5 %                           |
 | Dette technique   | 49 min (voir l'audit, 3.3.3)    |
 | Quality Gate      | « Passed », sans condition vérifiée |
