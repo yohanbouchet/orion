@@ -301,7 +301,7 @@ attendus, comparés aux mesures de départ du document 1 :
 | Résultat attendu | Départ | Cible |
 | --- | --- | --- |
 | Contrôles automatiques par PR | tests seulement | style, tests, couverture, Quality Gate, failles, secrets |
-| Couverture des tests | 0 %, non mesurée | mesurée et publiée à chaque PR |
+| Couverture des tests | non mesurée (0 % affiché par SonarQube) | mesurée et publiée à chaque PR |
 | Failles critiques ou hautes corrigeables dans une image publiée | 8 critiques et 33 hautes (image back) | 0 |
 | Images livrées | aucune | versionnées (SemVer) et publiées dans un registre |
 | Durée du pipeline | 4,67 min, sans contrôle de sécurité | suivie à chaque exécution, gain mesuré |
