@@ -1,0 +1,48 @@
+# Fichier  : .github/ISSUE_TEMPLATE/demande-ops.yml
+# Rôle     : formulaire d'issue pour une demande sur l'infrastructure, la CI/CD
+#            ou l'exploitation, adressée à l'équipe Ops.
+# Utilise  : étiquette team:ops (créée dans GitHub)
+# Utilisé par : GitHub (Issues → New issue)
+
+name: Demande à l'équipe Ops
+description: Infrastructure, pipeline CI/CD, déploiement ou supervision
+title: "[Ops] "
+labels: ["team:ops"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexte
+      description: >-
+        Pourquoi cette demande ? Citer la source : audit, recommandation (R1 à
+        R7), alerte de sécurité, incident.
+    validations:
+      required: true
+  - type: textarea
+    id: request
+    attributes:
+      label: Demande
+      description: Ce qui doit changer (fichiers d'infra, workflow, cluster…).
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critères d'acceptation
+      description: >-
+        Comment vérifier que c'est fait (une case par critère, vérifiable par
+        la CI ou par une commande).
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priorité
+      options:
+        - Haute (sécurité ou blocage)
+        - Normale
+        - Basse
+    validations:
+      required: true
