@@ -1,0 +1,22 @@
+# Fichier  : infra/arc/namespace.yaml
+# Rôle     : espace de noms « arc-runners » des runners locaux, verrouillé par
+#            les Pod Security Standards au niveau « restricted » (aucun pod
+#            root ou privilégié ne peut y démarrer).
+# Utilise  : rien
+# Utilisé par : infra/arc/values-orion-runners.yaml (helm … -n arc-runners) ;
+#               infra/sonarqube/network-policy.yaml (accès à SonarQube)
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-runners
+  labels:
+    # Refuse tout pod qui ne respecte pas le niveau « restricted »
+    pod-security.kubernetes.io/enforce: restricted
+    # Règles figées sur la version 1.37 : une montée de version de
+    # Kubernetes ne peut pas changer le règlement par surprise
+    pod-security.kubernetes.io/enforce-version: v1.37
+    # Affiche aussi un avertissement à l'auteur et l'écrit dans le
+    # journal d'audit du cluster
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

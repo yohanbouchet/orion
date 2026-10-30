@@ -66,10 +66,10 @@ outils de travail sont ceux décrits dans la méthodologie de l'audit (3.2).
 | Brique | Technologie | Catégorie | Fonctionnalités clés | Cas d'usage chez Orion | Référence (29/10/2026) |
 | --- | --- | --- | --- | --- | --- |
 | CI/CD | GitHub Actions | Orchestrateur de pipelines | Workflows en YAML, déclenchement sur push et PR, marketplace d'actions | Tester, analyser, construire et livrer MicroCRM | Gratuit pour un dépôt public |
-| Runner | Actions Runner Controller (ARC) | Exécuteur de tâches dans Kubernetes | Runners jetables (un par tâche), mise à l'échelle automatique jusqu'à zéro | Exécuter le pipeline en local, au plus près de Minikube et de SonarQube | `gha-runner-scale-set` 0.15.1 (23/10/2026) |
+| Runner | Actions Runner Controller (ARC) | Exécuteur de tâches dans Kubernetes | Runners jetables (un par tâche), mise à l'échelle automatique jusqu'à zéro | Exécuter les tâches qui exigent l'accès local (SonarQube, Minikube) ; le reste tourne sur les runners hébergés par GitHub | `gha-runner-scale-set` 0.15.1 (23/10/2026) |
 | Qualité du code | SonarQube Community Build | Analyse statique (SAST) | Notes de qualité, couverture, duplication, Quality Gate | Bloquer le code de mauvaise qualité, mesurer la couverture | 26.10 (conteneur officiel) |
 | Scan des images | Trivy | Scanner de failles | Images, dépendances, configuration (IaC), secrets, SBOM | Bloquer une image vulnérable avant sa publication | v0.76.1 (21/10/2026), Apache-2.0 |
-| Registre d'images | GitHub Container Registry (GHCR) ou Harbor | Registre d'images OCI | Stockage versionné des images, droits d'accès | Livrer des images traçables aux Ops | Choix en phase 3 |
+| Registre d'images | GitHub Container Registry (GHCR) ou Harbor | Registre d'images OCI | Stockage versionné des images, droits d'accès | Livrer des images traçables aux Ops | GHCR retenu (29/10/2026) ; Harbor en évolution |
 | Orchestration | Kubernetes (Minikube) | Orchestrateur de conteneurs | Redémarrage automatique, sondes de santé, mise à jour progressive et retour arrière | Déployer MicroCRM sans intervention manuelle | 1.37, supporté jusqu'au 28/10/2027 |
 | Supervision | ELK (Elasticsearch, Logstash, Kibana) | Centralisation des journaux et tableaux de bord | Recherche dans les journaux, tableaux de bord, alertes | Suivre la disponibilité, les erreurs et les indicateurs DORA | Elastic 8.19 supporté jusqu'au 15/07/2027 ; 9.5 actuelle |
 | Base de données | PostgreSQL | Base relationnelle | Persistance, transactions, sauvegardes | Conserver les données de MicroCRM | 18, supportée jusqu'au 14/11/2030 |
@@ -97,8 +97,14 @@ gratuitement les fonctions de sécurité qui seraient payantes sur GitLab.
 | Coût | Gratuit, mais consomme la machine locale | Gratuit pour un dépôt public |
 | Point d'attention | À protéger : un dépôt public ne doit pas lancer de code de PR externe sur ce runner | Aucun accès aux secrets locaux |
 
-**Choix : ARC**, imposé par l'exécution 100 % locale. Runner jetable et limité
-aux branches protégées.
+**Choix : les deux, chacun pour son rôle** (décision du 30/10/2026). Les
+runners hébergés par GitHub exécutent tout ce qui construit, installe des
+dépendances ou lance des tests : du code venu d'Internet s'y exécute dans une
+machine virtuelle jetable, hors de l'infrastructure d'Orion. Le runner ARC
+local ne sert qu'aux tâches qui exigent l'accès local (analyse SonarQube, puis
+déploiement) : sans Docker, sans sudo et sans conteneur privilégié (le mode
+« Docker dans Docker » exigerait un conteneur privilégié, même en version
+rootless).
 
 #### 2.3.3 Qualité du code : SonarQube Community Build contre CodeQL
 
@@ -138,8 +144,11 @@ d'étiquette mobile comme `latest`. Les versions utilisées pour l'audit
 | Exploitation | Rien à maintenir | Un service de plus à mettre à jour et sauvegarder |
 | Version | — | v2.14.6 (23/10/2026) |
 
-**Décision reportée à la phase 3**, en fonction des ressources de la machine
-locale.
+**Choix : GHCR** (décision du 29/10/2026). Les images doivent être
+consultables par les parties prenantes depuis le dépôt public, et la machine
+locale manque de mémoire pour Harbor en plus de SonarQube et d'ELK. Harbor,
+registre interne demandé par les Ops, reste la cible d'entreprise (évolution) ;
+le scan en amont qu'ils demandent est assuré par Trivy dans la CI.
 
 #### 2.3.6 Orchestration : Kubernetes contre Docker Compose
 
@@ -395,7 +404,8 @@ support publiées sur **endoflife.date** (maintenance).
 
 #### R1. Fiabiliser et accélérer le pipeline CI
 
-- **Description** : réécrire le pipeline en GitHub Actions sur le runner ARC :
+- **Description** : réécrire le pipeline en GitHub Actions (runners hébergés
+  par GitHub ; runner ARC local réservé à SonarQube et au déploiement) :
   images d'outils figées par empreinte, cache des dépendances npm et Gradle,
   tests lancés une seule fois, rapports de tests (JUnit) et de couverture
   (JaCoCo côté back, lcov côté front) conservés.
@@ -403,8 +413,9 @@ support publiées sur **endoflife.date** (maintenance).
   rejoués et aucun rapport (3.3.2) ; une étiquette mobile comme `latest` est
   la porte d'entrée de l'attaque subie par Trivy en mars 2026 (2.3.4).
 - **Implémentation** : phase 3 ; actions GitHub figées par SHA de commit ;
-  runner jetable, limité aux branches protégées (risque OWASP CICD-SEC-4,
-  « Poisoned Pipeline Execution », sur un dépôt public).
+  runner local jetable et non privilégié, jamais utilisé par une PR venant
+  d'un fork (risque OWASP CICD-SEC-4, « Poisoned Pipeline Execution », sur un
+  dépôt public).
 - **Impacts** : pipeline reproductible et plus court ; résultats de tests
   visibles par les Dev dans chaque PR.
 
@@ -432,7 +443,8 @@ support publiées sur **endoflife.date** (maintenance).
   et tags Git ; publication dans un registre.
 - **Raisonnement** : images lourdes, en root, sur une base Alpine non
   maintenue et impossibles à tracer (3.3.5).
-- **Implémentation** : phase 3 ; registre GHCR ou Harbor à décider (2.3.5) ;
+- **Implémentation** : phase 3 ; registre GHCR (2.3.5), images construites
+  par les runners hébergés par GitHub ;
   image PostgreSQL durcie déjà réalisée (86 failles → 0, sans root).
 - **Impacts** : chaque version déployée est identifiable, rejouable et
   contrôlée.
@@ -502,7 +514,8 @@ disposent pourtant des compétences de base (Docker, Bash, Ansible, Trivy) et
 demandent elles-mêmes l'automatisation.
 
 Les technologies retenues sont gratuites, maintenues et adaptées à ces
-compétences : GitHub Actions avec un runner local jetable, SonarQube, Trivy,
+compétences : GitHub Actions (runners hébergés et runner local non
+privilégié), SonarQube, Trivy,
 Kubernetes, PostgreSQL et ELK. Les 7 recommandations installent d'abord des
 **contrôles automatiques** (R1 à R3), puis le **déploiement automatisé**
 (R5) et la **supervision** (R6), en s'appuyant sur des référentiels reconnus

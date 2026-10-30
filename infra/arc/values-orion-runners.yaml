@@ -2,8 +2,10 @@
 # Rôle     : réglages Helm du groupe de runners GitHub Actions auto-hébergés
 #            (ARC, chart gha-runner-scale-set 0.15.1) qui exécutent la CI
 #            du dépôt orion dans Minikube.
-# Utilise  : le secret Kubernetes orion-arc-github-app (namespace arc-runners)
-# Utilisé par : helm install orion-local …
+# Utilise  : le secret Kubernetes orion-arc-github-app (namespace arc-runners) ;
+#            l'image orion/actions-runner:2.338.2-hardened (infra/arc/Dockerfile,
+#            chargée dans Minikube)
+# Utilisé par : helm upgrade --install orion-local …
 #               -f infra/arc/values-orion-runners.yaml
 
 # Dépôt servi par ces runners (un seul dépôt : moindre privilège)
@@ -22,9 +24,25 @@ minRunners: 0
 # 2 runners maximum en même temps : limite la RAM prise dans Minikube.
 maxRunners: 2
 
-# Mode « Docker-in-Docker » : chaque runner reçoit un démon Docker à lui
-# pour construire les images. Ce conteneur est en mode privilégié :
-# risque accepté car il reste enfermé dans Minikube et le runner est
-# détruit après chaque job (à documenter dans le plan de sécurité).
-containerMode:
-  type: "dind"
+# Modèle du pod de chaque runner. Ce runner ne construit aucune image (fait
+# par les runners hébergés de GitHub) : ni Docker, ni conteneur privilégié.
+template:
+  spec:
+    # Le runner n'a pas besoin de parler à l'API Kubernetes : pas de jeton
+    automountServiceAccountToken: false
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+      runAsGroup: 1001
+      seccompProfile:
+        type: RuntimeDefault
+    containers:
+      - name: runner
+        image: orion/actions-runner:2.338.2-hardened
+        # Image durcie chargée dans Minikube, jamais téléchargée
+        imagePullPolicy: Never
+        command: ["/home/runner/run.sh"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]

@@ -3,8 +3,8 @@
 #            Pod Security Standards au niveau « restricted » (aucun pod
 #            root ou privilégié ne peut y démarrer).
 # Utilise  : rien
-# Utilisé par : infra/sonarqube/postgres.yaml, infra/sonarqube/values.yaml
-#               (chart Helm SonarQube), infra/sonarqube/network-policy.yaml
+# Utilisé par : scripts/deploy-sonarqube.sh ; infra/sonarqube/postgres.yaml,
+#               values.yaml (chart Helm SonarQube), network-policy.yaml
 
 apiVersion: v1
 kind: Namespace
