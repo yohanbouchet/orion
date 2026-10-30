@@ -171,15 +171,19 @@ chemin de la demande à la livraison reste tracé.
 
 ### 2.5 Intégration continue
 
-- **Outil** : GitHub Actions, exécuté sur le runner auto-hébergé ARC, un
-  runner jetable par tâche.
+- **Outils** : GitHub Actions. Les tâches qui construisent, installent des
+  dépendances ou lancent des tests tournent sur les **runners hébergés par
+  GitHub** (machines virtuelles jetables) ; seule l'analyse SonarQube (puis le
+  déploiement) tourne sur le **runner local ARC**, sans Docker, sans sudo et
+  sans conteneur privilégié. Les rapports passent de l'un à l'autre par des
+  artefacts.
 - **Pipeline cible** :
 
 ```mermaid
 flowchart TB
     issue["Issue<br/>team:dev / team:ops"] --> pr["Branche courte<br/>+ pull request"]
-    pr --> runner
-    subgraph runner["GitHub Actions sur le runner ARC jetable"]
+    pr --> hosted
+    subgraph hosted["Runners hébergés par GitHub (machines virtuelles jetables)"]
         direction LR
         subgraph checks["Contrôles en parallèle"]
             direction TB
@@ -188,17 +192,18 @@ flowchart TB
             sca["Dépendances<br/>Trivy"]
             secrets["Secrets<br/>gitleaks"]
         end
-        qg["Quality Gate<br/>SonarQube"]
         img["Images Docker<br/>construites + scan Trivy"]
-        checks --> qg --> img
+        checks --> img
     end
-    runner --> ok{"Tout est<br/>vert ?"}
+    hosted -->|"rapports de tests et de couverture<br/>(artefacts)"| qg
+    qg["Runner local ARC (Minikube, sans privilège)<br/>analyse SonarQube + Quality Gate"]
+    qg --> ok{"Tout est<br/>vert ?"}
     ok -->|non| bloque["PR bloquée<br/>correction sur la branche"]
     ok -->|oui| livraison
     subgraph livraison["Livraison"]
         direction LR
         merge["Fusion<br/>sur main"] --> rel["semantic-release<br/>version vX.Y.Z"]
-        rel --> reg[("Registre<br/>images version + SHA")]
+        rel --> reg[("GHCR<br/>images version + SHA")]
         reg --> cd["Déploiement continu<br/>(plan de CD)"]
     end
 ```
@@ -224,7 +229,8 @@ flowchart TB
 - **Protection du runner** (risque OWASP CICD-SEC-4, « Poisoned Pipeline
   Execution ») : une PR venant d'une copie extérieure du dépôt (fork) ne
   s'exécute jamais sur le runner local, et le pipeline d'un contributeur
-  extérieur demande une approbation.
+  extérieur demande une approbation. Le runner local tourne dans un espace de
+  noms soumis aux Pod Security Standards « restricted ».
 
 ### 2.6 Tests
 
@@ -311,8 +317,9 @@ attendus, comparés aux mesures de départ du document 1 :
 
 #### Étape 2 — Runner et outils de la chaîne
 
-- **Description** : installer le runner auto-hébergé ARC (jetable, protégé
-  contre les forks) ; rendre SonarQube joignable depuis le runner ; créer
+- **Description** : installer le runner auto-hébergé ARC (jetable, non
+  privilégié, protégé contre les forks) ; rendre SonarQube joignable depuis
+  ce runner ; créer
   les secrets du pipeline dans GitHub.
 - **Responsables** : équipe Ops (pilote : Nico), consultant DevOps.
 - **Livrables** : runner opérationnel (test de fumée réussi) ; SonarQube
@@ -360,7 +367,7 @@ attendus, comparés aux mesures de départ du document 1 :
 | Ressource | Détail |
 | --- | --- |
 | Personnes | Équipe Dev (4), équipe Ops (2), consultant DevOps ; Maria (CTO) pour les arbitrages |
-| Serveur | Machine Ubuntu de l'équipe (8 cœurs, 14 Gio de RAM) : Minikube (4 cœurs et 7 Go alloués) avec le runner et SonarQube (environ 2 Gio mesurés) |
+| Serveur | Machine Ubuntu de l'équipe (8 cœurs, 14 Gio de RAM) : Minikube (4 cœurs et 7 Go alloués) avec le runner local et SonarQube (environ 2 Gio mesurés) ; runners hébergés par GitHub, gratuits pour un dépôt public |
 | Services | Dépôt GitHub public : GitHub Actions, Dependabot et registre d'images gratuits pour un dépôt public |
 | Logiciels | SonarQube Community Build, Trivy, hadolint, gitleaks, ESLint, semantic-release : gratuits et open source |
 | Budget | 0 € de licence ; le coût est le temps des équipes et la machine existante |
@@ -392,8 +399,8 @@ et équipes formées.
 | Le Quality Gate bloque l'équipe dès le départ | moyenne | moyen | Conditions sur le code nouveau seulement, durcies ensuite |
 | Les Dev, débutants en Java, peinent à écrire les tests back | forte | moyen | Petits tickets, travail en binôme, exemples fournis |
 | Le pipeline s'allonge avec les contrôles | moyenne | moyen | Cache, tâches en parallèle, durée suivie à chaque exécution |
-| Le runner local est indisponible (machine arrêtée) | moyenne | fort | Redémarrage automatique des services ; procédure de relance documentée |
-| Code malveillant exécuté sur le runner (conteneur privilégié) | faible | fort | Aucune PR de fork sur le runner, approbation, 2FA ; étude d'un runner non privilégié |
+| Le runner local est indisponible (machine arrêtée) : plus d'analyse SonarQube ni de déploiement | moyenne | moyen | Redémarrage automatique des services ; procédure de relance documentée |
+| Code malveillant exécuté sur le runner local | faible | fort | Runner sans Docker, sans sudo ni privilège (PSS restricted) ; aucune PR de fork sur ce runner, approbation, 2FA ; le code non maîtrisé (dépendances, tests) tourne sur les runners hébergés |
 | Outil de la chaîne compromis (cas de Trivy en mars 2026) | faible | fort | Outils figés par empreinte ; veille sur les avis de sécurité |
 | Retour aux habitudes (e-mail, déploiement manuel) | moyenne | moyen | Atelier, documentation, tickets obligatoires |
 
@@ -422,5 +429,5 @@ Après la mise en œuvre, pour que la démarche dure :
   l'ensemble du code ;
 - **rétrospective** Dev/Ops après chaque release, pour ajuster les normes ;
 - **déploiement continu** et **supervision**, décrits dans le plan de CD ;
-- évolutions étudiées : analyse CodeQL, runner sans conteneur privilégié,
-  contrôles CIS Benchmark.
+- évolutions étudiées : analyse CodeQL, contrôles CIS Benchmark, registre
+  interne Harbor.
