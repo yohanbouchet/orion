@@ -1,0 +1,29 @@
+# Fichier  : .editorconfig
+# Rôle     : mise en forme commune à tous les éditeurs (encodage, fins de
+#            ligne, indentation) pour tout le dépôt sauf front/, qui a le sien.
+# Utilise  : rien (lu par les éditeurs : https://editorconfig.org)
+# Utilisé par : VS Code (extension EditorConfig) et la plupart des éditeurs
+
+# Fichier racine : les éditeurs ne cherchent pas plus haut
+root = true
+
+# Règles par défaut pour tous les fichiers
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Java : 4 espaces (convention Java, déjà utilisée par le back)
+[*.java]
+indent_size = 4
+
+# build.gradle est indenté avec des tabulations à l'origine : on le respecte
+[*.gradle]
+indent_style = tab
+
+# Markdown : deux espaces en fin de ligne = retour à la ligne voulu
+[*.md]
+trim_trailing_whitespace = false

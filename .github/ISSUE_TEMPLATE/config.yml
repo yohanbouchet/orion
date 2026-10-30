@@ -1,0 +1,7 @@
+# Fichier  : .github/ISSUE_TEMPLATE/config.yml
+# Rôle     : réglages des formulaires d'issue : pas d'issue « vierge », chaque
+#            demande passe par un formulaire (contexte, demande, critères).
+# Utilise  : demande-dev.yml, demande-ops.yml
+# Utilisé par : GitHub (Issues → New issue)
+
+blank_issues_enabled: false

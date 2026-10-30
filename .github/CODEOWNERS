@@ -1,0 +1,19 @@
+# Fichier  : .github/CODEOWNERS
+# Rôle     : relecteurs obligatoires par dossier : GitHub les ajoute
+#            automatiquement aux PR qui touchent leurs fichiers.
+# Utilise  : comptes GitHub des relecteurs
+# Utilisé par : GitHub (relecteurs automatiques des PR)
+#
+# Cible en entreprise : équipes @orion/dev et @orion/ops. Dépôt de
+# démonstration à un seul contributeur : compte de l'ingénieur DevOps
+# partout (limite connue, documentée dans la normalisation, section 2.4).
+
+# Par défaut, tout le dépôt
+*               @yohanbouchet
+# Code de l'application : équipe Dev (cible : @orion/dev)
+/front/         @yohanbouchet
+/back/          @yohanbouchet
+# Infrastructure, scripts et CI : équipe Ops (cible : @orion/ops)
+/infra/         @yohanbouchet
+/scripts/       @yohanbouchet
+/.github/       @yohanbouchet
