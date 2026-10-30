@@ -1,8 +1,10 @@
 # Fichier  : .github/workflows/ci.yml
 # Rôle     : intégration continue de MicroCRM : à chaque PR et à chaque
 #            fusion sur main, lance les tests du front et du back en
-#            parallèle sur les runners hébergés par GitHub.
-# Utilise  : actions officielles de GitHub, figées par SHA de commit
+#            parallèle sur les runners hébergés par GitHub, puis l'analyse
+#            SonarQube et son Quality Gate sur le runner local.
+# Utilise  : actions officielles de GitHub et de SonarSource, figées par SHA
+#            de commit ; sonar-project.properties ; environnement sonarqube
 # Utilisé par : GitHub Actions (PR, fusions sur main, lancement manuel)
 
 name: CI
@@ -57,7 +59,17 @@ jobs:
         run: npm ci --no-audit --no-fund
       # Tests une seule fois (pas de surveillance), Chrome préinstallé
       - name: Run unit tests
-        run: npx ng test --no-watch --no-progress --browsers=ChromeHeadlessNoSandbox
+        run: >-
+          npx ng test --no-watch --no-progress
+          --browsers=ChromeHeadlessNoSandbox
+      # Garde le rapport de couverture pour le job sonarqube
+      - name: Upload coverage report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: front-reports
+          path: front/coverage/microcrm/lcov.info
+          retention-days: 7
+          if-no-files-found: error
 
   # Tests du back (Spring Boot, JUnit 5)
   test-back:
@@ -82,3 +94,58 @@ jobs:
       # Tests seulement : la compilation des livrables viendra à part
       - name: Run unit and integration tests
         run: ./gradlew test --no-daemon
+      # Garde le code compilé et les rapports (JaCoCo, JUnit) pour le job
+      # sonarqube
+      - name: Upload test reports
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: back-reports
+          path: |
+            back/build/classes/java
+            back/build/reports/jacoco/test/jacocoTestReport.xml
+            back/build/test-results/test
+          retention-days: 7
+          if-no-files-found: error
+
+  # Analyse SonarQube et Quality Gate, sur le runner local (Minikube) :
+  # SonarQube n'est joignable que depuis le cluster
+  sonarqube:
+    # Attend les deux tests : il a besoin de leurs rapports
+    needs: [test-front, test-back]
+    # Jamais pour une PR venant d'un fork : son code ne doit pas tourner
+    # sur notre runner (OWASP CICD-SEC-4)
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: orion-local
+    timeout-minutes: 15
+    # Seul ce job a accès aux secrets de l'environnement sonarqube
+    environment: sonarqube
+    steps:
+      # Historique complet : SonarQube s'en sert pour repérer le code
+      # nouveau
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Rapports du front, remis à l'endroit prévu par
+      # sonar-project.properties
+      - name: Download front reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: front-reports
+          path: front/coverage/microcrm
+      # Code compilé et rapports du back
+      - name: Download back reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: back-reports
+          path: back/build
+      # Analyse (réglages dans sonar-project.properties) puis attente du
+      # Quality Gate ; le jeton n'est donné qu'à cette étape
+      - name: SonarQube analysis
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}

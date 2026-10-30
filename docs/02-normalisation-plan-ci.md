@@ -248,7 +248,9 @@ Règles :
   le test qui l'aurait détecté ;
 - le Quality Gate exige au moins **80 % de couverture sur le code nouveau**
   (valeur de « Sonar way »), ce qui fait progresser la couverture sans
-  bloquer l'équipe sur l'existant ;
+  bloquer l'équipe sur l'existant. Point de départ, mesuré par la première
+  analyse de la CI (PR #19, 30/10/2026) : **37,4 %** de couverture (lignes
+  41,1 %, branches 13,8 %), contre 0 % affiché avant (non mesurée) ;
 - le détail (cas testés, tests de charge et de sécurité) figure dans le plan
   de tests.
 
@@ -260,7 +262,9 @@ Règles :
 - **Exceptions** : une faille non corrigeable est acceptée seulement dans un
   fichier `.trivyignore`, avec sa justification et une **date d'expiration**.
 - **Secrets** : jamais dans Git (`.gitignore`, modèles `.env.example` sans
-  valeur) ; stockés dans les secrets GitHub Actions (pipeline) ou dans des
+  valeur) ; stockés dans les secrets GitHub Actions (pipeline), rangés dans
+  un **environnement** quand seul un job en a besoin (le jeton SonarQube,
+  limité au projet, n'est visible que du job d'analyse), ou dans des
   Secrets Kubernetes générés aléatoirement par les scripts de déploiement,
   jamais affichés (infrastructure) ; un secret exposé est **révoqué et
   remplacé immédiatement**.
@@ -410,6 +414,20 @@ et équipes formées.
 au moins deux contributeurs ; GitHub n'autorise pas l'auteur d'une PR à
 l'approuver. Sur le dépôt de démonstration, à un seul contributeur, seules
 la PR et les contrôles de la CI sont donc imposés.
+
+**Limite connue (SonarQube Community Build)** : l'édition gratuite n'analyse
+que la branche principale ; l'analyse de branche et le commentaire des PR
+sont réservés à la Developer Edition, payante. Chaque PR est tout de même
+analysée et son Quality Gate la bloque, mais cette analyse remplace les
+résultats de `main` dans le tableau de bord jusqu'à la fusion suivante, dont
+l'analyse les rétablit. Évolutions possibles : Developer Edition, ou plugin
+communautaire non supporté par SonarSource (écarté pour cette raison).
+
+**Limite connue (rapport JUnit du front)** : Karma, abandonné par ses
+auteurs, n'a plus de module JUnit maintenu ; SonarQube voit donc la
+couverture du front, mais pas le détail de ses 8 tests. Le passage à Vitest,
+lanceur de tests par défaut d'Angular, est prévu avec la montée de version
+du socle (recommandation R4).
 
 ## 4. Conclusion
 
