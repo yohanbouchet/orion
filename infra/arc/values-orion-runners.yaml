@@ -38,7 +38,7 @@ template:
         type: RuntimeDefault
     containers:
       - name: runner
-        image: orion/actions-runner:2.338.2-hardened
+        image: orion/actions-runner:2.338.2-hardened.2
         # Image durcie chargée dans Minikube, jamais téléchargée
         imagePullPolicy: Never
         command: ["/home/runner/run.sh"]

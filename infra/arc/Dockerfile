@@ -2,6 +2,8 @@
 # Rôle     : image durcie du runner local (ARC) : l'officielle, SANS sudo,
 #            sans Docker, sans Node 20 (fin de support) ni npm. Ce runner ne
 #            construit rien : il sert à l'analyse SonarQube et au déploiement.
+#            dirmngr ajouté : l'action SonarQube vérifie la signature GPG de
+#            l'analyseur qu'elle télécharge.
 #            trivy : 181 failles (1 critique, 38 hautes) → 71 (0 critique,
 #            0 haute) le 30/10/2026.
 # Utilise  : image officielle ghcr.io/actions/actions-runner:2.338.2
@@ -18,6 +20,8 @@ USER 0
 # des droits ou ne sert pas à ce runner
 RUN apt-get update \
     && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+       dirmngr=2.4.4-2ubuntu17.6 \
     && SUDO_FORCE_REMOVE=yes apt-get purge -y sudo \
     && gpasswd -d runner sudo \
     && gpasswd -d runner docker \
