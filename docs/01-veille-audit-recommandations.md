@@ -268,8 +268,11 @@ chiffre étant vérifié par l'auteur.
 - **Forces** : maintenabilité notée **A**, duplication faible (2,5 %), dette
   technique estimée à 49 min seulement ; tous les tests existants passent.
 - **Faiblesses** :
-  - couverture des tests : **0 %** mesurée (aucun outil de couverture
-    branché : ni JaCoCo côté back, ni rapport lcov côté front) ;
+  - couverture des tests **non mesurée** : SonarQube affiche **0 %** parce
+    qu'aucun rapport de couverture ne lui est fourni (ni JaCoCo côté back, ni
+    lcov côté front), pas parce qu'aucun test ne s'exécute. Mesure faite
+    après l'audit (30/10/2026, ticket #13) : les tests du back couvrent
+    **60 % des lignes** (42 sur 70) mais seulement **2 branches sur 8** ;
   - **37 problèmes** relevés : fiabilité notée **D** (33 problèmes, dont
     12 appels asynchrones dont l'échec n'est jamais traité en TypeScript et
     2 risques de `NullPointerException` en Java), sécurité notée **C**
@@ -361,7 +364,7 @@ chiffre étant vérifié par l'auteur.
 
 | Forces                                      | Faiblesses                                   |
 | ------------------------------------------- | -------------------------------------------- |
-| Application petite et lisible (960 lignes)  | Tests quasi absents, couverture 0 %          |
+| Application petite et lisible (960 lignes)  | Tests peu nombreux, couverture non mesurée   |
 | Maintenabilité notée A                      | 95 failles dans l'image back, 91 côté npm    |
 | Pipeline existant et fonctionnel            | Socle hors maintenance (Spring Boot 3.2, Angular 17, Alpine 3.19) |
 | Ops compétents (Bash, Ansible, Docker, Trivy) | Déploiement manuel, base en mémoire, aucune supervision |
@@ -390,7 +393,7 @@ résultat **mesurable**, comparé aux mesures de départ
 | --- | --- | --- |
 | Aucune faille connue livrée sans décision | 95 failles dans l'image back (8 critiques) | 0 faille critique ou haute corrigeable dans une image publiée |
 | Qualité contrôlée à chaque modification | Quality Gate sans condition | Quality Gate bloquant sur chaque PR |
-| Tests mesurés | Couverture 0 % | Couverture mesurée et publiée à chaque PR |
+| Tests mesurés | Couverture non mesurée (0 % affiché par SonarQube) | Couverture mesurée et publiée à chaque PR |
 | Pipeline plus rapide malgré plus de contrôles | 4,67 min (cache froid) | Durée suivie à chaque exécution ; gain mesuré dans le rapport de performance |
 | Livraison traçable | Aucune image publiée, version `0.0.1-SNAPSHOT` | Chaque image liée à une version et à un commit |
 | Déploiement sans action manuelle | Déploiement manuel par les Ops | Déploiement et retour arrière automatisés |
@@ -508,7 +511,7 @@ support publiées sur **endoflife.date** (maintenance).
 
 MicroCRM est une petite application, lisible et bien structurée, mais sa
 chaîne de production ne protège ni la qualité ni la sécurité : couverture des
-tests nulle, 95 failles dans l'image back dont 8 critiques, socle hors
+tests non mesurée, 95 failles dans l'image back dont 8 critiques, socle hors
 maintenance, déploiement manuel et aucune supervision. Les deux équipes
 disposent pourtant des compétences de base (Docker, Bash, Ansible, Trivy) et
 demandent elles-mêmes l'automatisation.
