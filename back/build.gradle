@@ -18,6 +18,12 @@ repositories {
 	mavenCentral()
 }
 
+// Versions exactes de toutes les dépendances figées dans gradle.lockfile :
+// builds reproductibles, dépendances visibles par Trivy (ticket #21)
+dependencyLocking {
+	lockAllConfigurations()
+}
+
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
