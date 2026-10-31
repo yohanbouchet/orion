@@ -239,7 +239,7 @@ flowchart TB
 | Style et erreurs courantes | ESLint, hadolint, ShellCheck | oui |
 | Tests et couverture | Karma, JUnit, JaCoCo | oui |
 | Quality Gate | SonarQube | oui |
-| Failles des dépendances et des images | Trivy | oui (critiques et hautes corrigeables) |
+| Failles des dépendances (production et outillage) et des images | Trivy | oui (critiques et hautes corrigeables) |
 | Secrets | gitleaks | oui |
 | Construction des images | Docker | oui |
 
@@ -279,6 +279,13 @@ Règles :
 - **Contrôles automatiques** à chaque PR : analyse du code (SonarQube),
   dépendances et images (Trivy), Dockerfiles (hadolint), secrets (gitleaks).
   Dependabot propose les mises à jour des dépendances.
+- **Toutes les dépendances sont analysées**, y compris celles de
+  développement (outillage de build et de test), que Trivy ignore par
+  défaut : elles ne sont pas livrées dans les images, mais s'exécutent dans
+  la CI et sur les postes (risque de chaîne d'approvisionnement). Constat
+  et correction du 31/10/2026 (tickets #33 et #35) : 103 failles hautes ou
+  critiques non vues, ramenées à 33 par une mise à jour compatible, les
+  autres acceptées jusqu'à la montée de version d'Angular (R4).
 - **Exceptions** : une faille non corrigeable est acceptée seulement dans un
   fichier `.trivyignore`, avec sa justification et une **date d'expiration**.
 - **Secrets** : jamais dans Git (`.gitignore`, modèles `.env.example` sans

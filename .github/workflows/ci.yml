@@ -235,7 +235,8 @@ jobs:
         with:
           persist-credentials: false
       # Toutes les failles, sans bloquer, y compris celles acceptées dans
-      # .trivyignore (--ignorefile "" désactive ce fichier) : dans le
+      # .trivyignore (--ignorefile "" désactive ce fichier) et celles des
+      # devDependencies (--include-dev-deps, ignorées par défaut) : dans le
       # journal et dans le résumé du job ; base de failles gardée dans /cache
       - name: List all vulnerabilities
         run: |
@@ -243,7 +244,7 @@ jobs:
           docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD":/src:ro -w /src -v "$RUNNER_TEMP/trivy":/cache \
             "$TRIVY_IMAGE" fs --scanners vuln --cache-dir /cache \
-            --no-progress --ignorefile "" . \
+            --no-progress --include-dev-deps --ignorefile "" . \
             | tee "$RUNNER_TEMP/trivy-report.txt"
           {
             echo '```'
@@ -251,14 +252,16 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       # Seuil bloquant : code 1 (job rouge) s'il existe une faille haute
-      # ou critique, sauf celles acceptées et datées dans .trivyignore
-      # (lu automatiquement à la racine) ; réutilise la base téléchargée
+      # ou critique, devDependencies comprises (outillage exécuté dans la
+      # CI et sur les postes), sauf celles acceptées et datées dans
+      # .trivyignore (lu automatiquement à la racine) ; #35
       - name: Fail on high and critical vulnerabilities
         run: >-
           docker run --rm --user "$(id -u):$(id -g)"
           -v "$PWD":/src:ro -w /src -v "$RUNNER_TEMP/trivy":/cache
           "$TRIVY_IMAGE" fs --scanners vuln --cache-dir /cache
-          --no-progress --quiet --severity HIGH,CRITICAL --exit-code 1 .
+          --no-progress --quiet --include-dev-deps
+          --severity HIGH,CRITICAL --exit-code 1 .
 
   # Images Docker du front et du back : construites et analysées à chaque
   # PR et à chaque fusion ; sur main, gardées pour le job publish ; #27
