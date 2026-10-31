@@ -352,10 +352,11 @@ attendus, comparés aux mesures de départ du document 1 :
 
 #### Étape 5 — Images durcies, versionnées et publiées
 
-- **Description** : corriger le `Dockerfile` (versions maintenues, non root,
-  sonde de santé, bon port) ; construire les images dans la CI, les scanner
-  avec Trivy, les publier dans le registre ; publier la première version
-  avec semantic-release.
+- **Description** : un Dockerfile par composant, `front/` et `back/`
+  (versions maintenues, non root, sonde de santé, bon port ; image « tout en
+  un » abandonnée) ; construire les images dans la CI, les scanner avec Trivy
+  sans accès à Docker, publier sur `main` l'image analysée, et elle seule ;
+  publier la première version avec semantic-release.
 - **Responsables** : équipe Ops (pilote : Nico), équipe Dev.
 - **Livrables** : images publiées et traçables ; première release
   (`v1.0.0`) et ses notes.

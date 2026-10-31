@@ -1,0 +1,15 @@
+# Fichier  : back/.dockerignore
+# Rôle     : fichiers exclus du contexte de construction de l'image back :
+#            construction plus rapide, aucun fichier local ou secret copié.
+# Utilise  : rien
+# Utilisé par : docker build (contexte back/)
+
+# Fichiers générés sur la machine : l'image les produit elle-même
+.gradle
+build
+bin
+# Secrets éventuels : jamais dans une image
+.env
+.env.*
+# Documentation inutile dans l'image
+HELP.md

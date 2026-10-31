@@ -1,0 +1,16 @@
+# Fichier  : front/.dockerignore
+# Rôle     : fichiers exclus du contexte de construction de l'image front :
+#            construction plus rapide, aucun fichier local ou secret copié.
+# Utilise  : rien
+# Utilisé par : docker build (contexte front/)
+
+# Dépendances et fichiers générés : l'image les produit elle-même
+node_modules
+dist
+coverage
+.angular
+# Réglages de l'éditeur
+.vscode
+# Secrets éventuels : jamais dans une image
+.env
+.env.*

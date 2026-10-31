@@ -4,11 +4,14 @@
 #            parallèle sur les runners hébergés par GitHub, puis l'analyse
 #            SonarQube et son Quality Gate sur le runner local ; en
 #            parallèle, les scans de sécurité (gitleaks, hadolint,
-#            ShellCheck, Trivy).
+#            ShellCheck, Trivy) et la construction des images Docker
+#            analysées ; après une fusion sur main, si tout est vert,
+#            publication des images sur GHCR.
 # Utilise  : actions officielles de GitHub et de SonarSource, figées par SHA
 #            de commit ; images officielles des outils de sécurité, figées
 #            par digest ; sonar-project.properties ; environnement sonarqube ;
-#            .trivyignore (failles acceptées et datées)
+#            .trivyignore (failles acceptées et datées) ; front/Dockerfile,
+#            back/Dockerfile ; jeton automatique GITHUB_TOKEN (publication)
 # Utilisé par : GitHub Actions (PR, fusions sur main, lancement manuel)
 
 name: CI
@@ -177,8 +180,7 @@ jobs:
           zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
           git /repo --no-banner --redact --no-color
 
-  # Bonnes pratiques des Dockerfiles ; le Dockerfile racine est exclu
-  # jusqu'à sa réécriture (R3) ; ticket #20
+  # Bonnes pratiques des Dockerfiles (front, back, infra) ; ticket #20
   hadolint:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -187,14 +189,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Même durcissement que gitleaks ; infra/*/Dockerfile prend tous les
-      # Dockerfiles de infra/, y compris ceux ajoutés plus tard
+      # Même durcissement que gitleaks ; ./*/Dockerfile et ./infra/*/Dockerfile
+      # prennent tous les Dockerfiles, y compris ceux ajoutés plus tard
       - name: Lint Dockerfiles
         run: >-
           docker run --rm --network none --user "$(id -u):$(id -g)"
           -v "$PWD":/src:ro -w /src
           hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
-          hadolint --no-color infra/*/Dockerfile
+          hadolint --no-color ./*/Dockerfile ./infra/*/Dockerfile
 
   # Pièges des scripts shell (variables vides, guillemets oubliés…) ;
   # ticket #20
@@ -254,3 +256,114 @@ jobs:
           -v "$PWD":/src:ro -w /src -v "$RUNNER_TEMP/trivy":/cache
           "$TRIVY_IMAGE" fs --scanners vuln --cache-dir /cache
           --no-progress --quiet --severity HIGH,CRITICAL --exit-code 1 .
+
+  # Images Docker du front et du back : construites et analysées à chaque
+  # PR et à chaque fusion ; sur main, gardées pour le job publish ; #27
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Le même job, lancé deux fois en parallèle : une fois par image
+    strategy:
+      # Si une image échoue, l'autre va quand même au bout
+      fail-fast: false
+      matrix:
+        component: [front, back]
+    env:
+      COMPONENT: ${{ matrix.component }}
+      TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Étiquettes OCI : lien vers le dépôt (GHCR rattache l'image au dépôt)
+      # et commit exact (traçabilité)
+      - name: Build image
+        env:
+          REPO_URL: https://github.com/${{ github.repository }}
+        run: >-
+          docker build
+          --label "org.opencontainers.image.source=$REPO_URL"
+          --label "org.opencontainers.image.revision=$GITHUB_SHA"
+          -t "orion-$COMPONENT:$GITHUB_SHA" "$COMPONENT"
+      # Image enregistrée dans un fichier : analysée sans accès à Docker,
+      # puis transmise telle quelle au job publish
+      - name: Save image to a file
+        run: >-
+          docker save "orion-$COMPONENT:$GITHUB_SHA"
+          -o "$RUNNER_TEMP/image.tar"
+      # Seuil bloquant : code 1 s'il existe une faille haute ou critique
+      - name: Scan image
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$RUNNER_TEMP/image.tar":/image.tar:ro \
+            -v "$RUNNER_TEMP/trivy":/cache \
+            "$TRIVY_IMAGE" image --input /image.tar --scanners vuln \
+            --cache-dir /cache --no-progress \
+            --severity HIGH,CRITICAL --exit-code 1
+      # Sur main seulement : l'image analysée est gardée 1 jour pour publish
+      - name: Keep image for publication
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-${{ matrix.component }}
+          path: ${{ runner.temp }}/image.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  # Publication sur GHCR : seulement après une fusion sur main, et seulement
+  # si tous les contrôles sont verts ; l'image publiée est celle analysée
+  publish:
+    needs:
+      - test-front
+      - test-back
+      - sonarqube
+      - gitleaks
+      - hadolint
+      - shellcheck
+      - trivy
+      - images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Seul job autorisé à écrire dans le registre (moindre privilège)
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        component: [front, back]
+    env:
+      COMPONENT: ${{ matrix.component }}
+    steps:
+      - name: Download image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-${{ matrix.component }}
+          path: ${{ runner.temp }}
+      - name: Load image
+        run: docker load -i "$RUNNER_TEMP/image.tar"
+      # Jeton automatique du pipeline, passé par l'entrée standard : il
+      # n'apparaît ni dans la commande ni dans le journal
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          echo "$GHCR_TOKEN" |
+          docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      # Étiquette du commit (sha-xxxxxxx) ; l'empreinte publiée est écrite
+      # dans le résumé du run (traçabilité, réutilisée par Helm)
+      - name: Push image
+        run: |
+          registry="ghcr.io/$GITHUB_REPOSITORY_OWNER"
+          target="$registry/orion-$COMPONENT:sha-${GITHUB_SHA::7}"
+          docker tag "orion-$COMPONENT:$GITHUB_SHA" "$target"
+          docker push "$target"
+          digest="$(docker inspect \
+            --format '{{index .RepoDigests 0}}' "$target")"
+          echo "Published: \`$digest\`" >> "$GITHUB_STEP_SUMMARY"
+      # Retire l'identifiant de la machine, même si une étape a échoué
+      - name: Log out of GHCR
+        if: always()
+        run: docker logout ghcr.io
