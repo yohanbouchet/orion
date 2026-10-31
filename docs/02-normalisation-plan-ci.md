@@ -291,9 +291,22 @@ Règles :
   s'applique **jamais** aux mises à jour de sécurité, proposées tout de
   suite. Les versions majeures d'Angular (et TypeScript, zone.js, qui en
   dépendent) sont exclues : elles se font pas à pas avec `ng update`
-  (recommandation R4). Une mise à jour de sécurité qui saute plusieurs
-  versions majeures d'un coup (PR #36, Angular 17 → 22) est bloquée par la
-  CI, puis fermée et reprise dans R4.
+  (recommandation R4), comme les versions majeures de Jasmine. Pour les
+  images Docker, les changements de version de Java, de Node et de
+  PostgreSQL (migration des données) se décident et ne sont pas proposés ;
+  nginx reste sur sa branche stable. Une mise à jour de sécurité qui saute
+  plusieurs versions majeures d'un coup (PR #36, Angular 17 → 22) est
+  bloquée par la CI, puis fermée et reprise dans R4. Ces règles ont été
+  ajustées après la première exécution de Dependabot (ticket #49), qui
+  proposait notamment Java 24, hors support.
+- **PR de Dependabot** : GitHub ne leur donne aucun secret ; l'analyse
+  SonarQube (qui a besoin de son jeton) est donc sautée pour elles, sans
+  ajouter de secret : Dependabot ne modifie que des numéros de version, pas
+  le code analysé. Tests, Trivy et construction des images s'appliquent
+  comme pour toute PR. L'image du runner local (ghcr.io) n'est pas suivie
+  par Dependabot (accès au registre refusé sans jeton) : elle est mise à
+  jour avec les versions du runner GitHub, suivies par abonnement aux
+  publications du dépôt `actions/runner`.
 - **Toutes les dépendances sont analysées**, y compris celles de
   développement (outillage de build et de test), que Trivy ignore par
   défaut : elles ne sont pas livrées dans les images, mais s'exécutent dans
