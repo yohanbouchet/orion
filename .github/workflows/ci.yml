@@ -123,10 +123,13 @@ jobs:
     # Attend les deux tests : il a besoin de leurs rapports
     needs: [test-front, test-back]
     # Jamais pour une PR venant d'un fork : son code ne doit pas tourner
-    # sur notre runner (OWASP CICD-SEC-4)
+    # sur notre runner (OWASP CICD-SEC-4) ; ni pour Dependabot, qui n'a pas
+    # accès aux secrets et ne change que des versions, pas le code analysé
+    # (un job sauté compte comme réussi pour la protection de main) ; #49
     if: >-
+      github.actor != 'dependabot[bot]' && (
       github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: orion-local
     timeout-minutes: 15
     # Seul ce job a accès aux secrets de l'environnement sonarqube
