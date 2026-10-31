@@ -406,7 +406,7 @@ et équipes formées.
 | Le Quality Gate bloque l'équipe dès le départ | moyenne | moyen | Conditions sur le code nouveau seulement, durcies ensuite |
 | Les Dev, débutants en Java, peinent à écrire les tests back | forte | moyen | Petits tickets, travail en binôme, exemples fournis |
 | Le pipeline s'allonge avec les contrôles | moyenne | moyen | Cache, tâches en parallèle, durée suivie à chaque exécution |
-| Le runner local est indisponible (machine arrêtée) : plus d'analyse SonarQube ni de déploiement | moyenne | moyen | Redémarrage automatique des services ; procédure de relance documentée |
+| Le runner local est indisponible (machine arrêtée) : plus d'analyse SonarQube ni de déploiement | moyenne | moyen | Service systemd qui démarre le cluster après Docker et l'arrête proprement (en place depuis le 31/10, ticket #29) ; procédure de relance : [infra/systemd/README.md](../infra/systemd/README.md) |
 | Code malveillant exécuté sur le runner local | faible | fort | Runner sans Docker, sans sudo ni privilège (PSS restricted) ; aucune PR de fork sur ce runner, approbation, 2FA ; le code non maîtrisé (dépendances, tests) tourne sur les runners hébergés |
 | Outil de la chaîne compromis (cas de Trivy en mars 2026) | faible | fort | Outils figés par empreinte ; veille sur les avis de sécurité |
 | Retour aux habitudes (e-mail, déploiement manuel) | moyenne | moyen | Atelier, documentation, tickets obligatoires |

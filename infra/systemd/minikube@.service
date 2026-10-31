@@ -1,0 +1,36 @@
+# Fichier      : infra/systemd/minikube@.service
+# Rôle         : modèle de service : démarre le cluster Minikube « orion »
+#                (runner CI + SonarQube) au démarrage de la machine, après
+#                Docker, et l'arrête proprement à l'extinction.
+# Utilise      : Docker (pilote de Minikube), minikube dans ~/.local/bin
+# Utilisé par  : systemd, instance minikube@<utilisateur>.service
+#                (installation : voir infra/systemd/README.md)
+
+[Unit]
+Description=Minikube cluster "orion" (CI runner and SonarQube)
+Documentation=https://minikube.sigs.k8s.io/docs/
+# Ordre : démarre après Docker et le réseau, s'arrête avant eux.
+After=docker.service network-online.target
+# Dépendance forte : sans Docker, pas de cluster.
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+# oneshot : la commande lance le cluster puis se termine ;
+# RemainAfterExit garde le service « actif » pour exécuter ExecStop.
+Type=oneshot
+RemainAfterExit=yes
+# Moindre privilège : tourne sous l'utilisateur écrit après « @ » (%i),
+# pas root. Aucun nom propre à une machine n'est versionné.
+User=%i
+# Journaux sans émojis dans journalctl.
+Environment=MINIKUBE_IN_STYLE=false
+ExecStart=/home/%i/.local/bin/minikube -p orion start
+ExecStop=/home/%i/.local/bin/minikube -p orion stop
+# oneshot n'a pas de délai par défaut : on borne pour ne pas rester bloqué.
+TimeoutStartSec=10min
+TimeoutStopSec=5min
+
+[Install]
+# Activé au démarrage normal du système (multi-utilisateur).
+WantedBy=multi-user.target
