@@ -116,7 +116,9 @@ apparaît.
 **Stratégie de branches : GitHub Flow**
 
 - La branche `main` est **protégée** et toujours livrable : pas de poussée
-  directe, passage obligatoire par une PR dont tous les contrôles sont verts.
+  directe, passage obligatoire par une PR dont tous les contrôles sont verts
+  et **à jour avec `main`** : après chaque fusion, les autres PR intègrent le
+  nouveau `main` et repassent la CI, pour tester le code combiné.
 - Chaque changement se fait sur une **branche courte** (quelques jours au
   plus), nommée `<type>/<description>` : `feat/configurable-api-url`,
   `fix/null-organization`, `docs/veille-audit`.
@@ -146,6 +148,24 @@ calcule la version (`MAJEUR.MINEUR.CORRECTIF`), crée le tag Git `vX.Y.Z` et
 la release GitHub avec ses notes. Les images Docker portent ce numéro de
 version et l'empreinte du commit ; l'étiquette `latest` n'est jamais utilisée
 pour un déploiement.
+
+Mise en œuvre (ticket #31) :
+
+- configuration dans `.github/release/` (`.releaserc.yml`, versions figées
+  par `package-lock.json`) ; job `release` du pipeline, seulement après une
+  fusion sur `main` et si tous les contrôles sont verts ;
+- **aucun commit poussé sur `main`** : seuls l'étiquette et la release sont
+  créées, avec le jeton automatique limité à `contents: write` pour ce seul
+  job ; l'historique des versions se lit dans les releases GitHub (pas de
+  fichier CHANGELOG) ;
+- le **type le plus fort** parmi les commits depuis la dernière version
+  décide du numéro, avec un seul saut par version (deux `feat!` → une seule
+  version majeure) ;
+- **fusions rapprochées** : les pipelines de `main` passent l'un après
+  l'autre (jamais d'annulation en cours de version ou de publication), et
+  semantic-release refuse de publier depuis un commit qui n'est plus le
+  dernier de `main` : le pipeline suivant produit une seule version pour
+  l'ensemble des commits.
 
 **Tickets : GitHub Issues**
 
@@ -451,4 +471,5 @@ Après la mise en œuvre, pour que la démarche dure :
 - **rétrospective** Dev/Ops après chaque release, pour ajuster les normes ;
 - **déploiement continu** et **supervision**, décrits dans le plan de CD ;
 - évolutions étudiées : analyse CodeQL, contrôles CIS Benchmark, registre
-  interne Harbor.
+  interne Harbor, commitlint (vérifier en CI le format des messages de
+  commit, puisque leur type décide de la version).
