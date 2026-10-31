@@ -445,10 +445,11 @@ support publiées sur **endoflife.date** (maintenance).
 
 #### R3. Construire des images durcies, versionnées et publiées
 
-- **Description** : corriger le `Dockerfile` (versions figées et maintenues,
-  utilisateur non root, sonde de santé, bon port exposé, image `standalone`
-  sans copie du système de fichiers entier) ; numérotation sémantique (semver)
-  et tags Git ; publication dans un registre.
+- **Description** : remplacer le `Dockerfile` unique par un Dockerfile par
+  composant (versions figées et maintenues, utilisateur non root, sonde de
+  santé, bon port exposé) et abandonner l'image `standalone` (un conteneur,
+  un processus : Kubernetes assemble les conteneurs) ; numérotation
+  sémantique (semver) et tags Git ; publication dans un registre.
 - **Raisonnement** : images lourdes, en root, sur une base Alpine non
   maintenue et impossibles à tracer (3.3.5).
 - **Implémentation** : phase 3 ; registre GHCR (2.3.5), images construites
