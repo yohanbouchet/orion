@@ -1,0 +1,9 @@
+{
+  "name": "orion-release",
+  "private": true,
+  "description": "Release tooling (semantic-release, see .releaserc.yml)",
+  "dependencies": {
+    "semantic-release": "25.0.9",
+    "conventional-changelog-conventionalcommits": "9.3.1"
+  }
+}
