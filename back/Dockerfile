@@ -9,7 +9,7 @@
 
 # --- Étape 1 : compilation (image jetée à la fin) ---
 # JDK 17 (outils de compilation), version et empreinte figées
-FROM eclipse-temurin:17.0.20.1_1-jdk-alpine-3.24@sha256:5a7fe9fcd65085bbf218a4060f08f1346b8bfd13d9f9942e2db6719cc8a11e22 AS build
+FROM eclipse-temurin:24-jdk-alpine-3.22@sha256:8fdbcb6bc6b846640cea7058e6eeb56c311fae4efaa506a213789134065c6b90 AS build
 WORKDIR /src
 # Fichiers de Gradle d'abord : tant qu'ils ne changent pas, Docker réutilise
 # la couche des dépendances déjà téléchargées (construction plus rapide)
@@ -23,7 +23,7 @@ RUN ./gradlew bootJar --no-daemon \
 
 # --- Étape 2 : exécution (l'image livrée) ---
 # JRE 17 seul : aucun outil de compilation dans l'image livrée
-FROM eclipse-temurin:17.0.20.1_1-jre-alpine-3.24@sha256:c4a33e6ddb738fe4be0a28a613ea0940cec42d25d7263c3e2238c43354cb19b0
+FROM eclipse-temurin:24-jre-alpine-3.22@sha256:4044b6c87cb088885bcd0220f7dc7a8a4aab76577605fa471945d2e98270741f
 # Correctifs Alpine publiés depuis la sortie de l'image (ex. brotli-libs,
 # faille critique corrigée, le 31/10/2026)
 RUN apk upgrade --no-cache
