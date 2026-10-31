@@ -1,0 +1,114 @@
+# Fichier  : .github/dependabot.yml
+# Rôle     : mises à jour de version proposées par Dependabot (une PR
+#            relue et testée par la CI) : paquets npm, Gradle, actions
+#            GitHub, images Docker ; chaque lundi, après un délai de
+#            refroidissement. Les mises à jour de SÉCURITÉ ne dépendent pas
+#            de ce fichier : elles arrivent tout de suite (docs/02, 2.7).
+# Utilise  : front/, .github/release/, back/, .github/workflows/,
+#            Dockerfiles du front, du back et de infra/
+# Utilisé par : GitHub Dependabot ; ticket #38
+
+version: 2
+updates:
+  # Front (Angular) et outil de version (semantic-release)
+  - package-ecosystem: npm
+    directories:
+      - /front
+      - /.github/release
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    # Refroidissement (docs/02, 2.7) : 3 jours, 7 pour une majeure ;
+    # jamais appliqué aux mises à jour de sécurité
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    # Mineures et correctifs dans une seule PR : moins de PR, testées ensemble
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+    # Montent avec Angular, pas à pas avec ng update (recommandation R4) :
+    # Angular en version majeure ; TypeScript et zone.js imposés par
+    # Angular 17, même en version mineure
+    ignore:
+      - dependency-name: "@angular/*"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@angular-devkit/*"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: zone.js
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+    # Conventional Commits : build(deps): … et build(deps-dev): …
+    commit-message:
+      prefix: build
+      prefix-development: build
+      include: scope
+  # Back (Spring Boot) : versions verrouillées par gradle.lockfile
+  - package-ecosystem: gradle
+    directory: /back
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    groups:
+      gradle-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: build
+      include: scope
+
+  # Actions des workflows, figées par SHA : Dependabot met à jour le SHA
+  # et le commentaire de version
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: ci
+      include: scope
+  # Images de base des Dockerfiles, figées par étiquette et empreinte
+  - package-ecosystem: docker
+    directories:
+      - /front
+      - /back
+      - /infra/postgres
+      - /infra/arc
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    commit-message:
+      prefix: build
+      include: scope
