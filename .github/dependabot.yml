@@ -83,9 +83,9 @@ updates:
       day: monday
       time: "06:00"
       timezone: Europe/Paris
+    # Pas de SemVer garanti pour les actions : un seul délai, 3 jours
     cooldown:
       default-days: 3
-      semver-major-days: 7
     groups:
       actions-minor-patch:
         update-types:
@@ -106,9 +106,10 @@ updates:
       day: monday
       time: "06:00"
       timezone: Europe/Paris
+    # Pas de SemVer garanti pour les étiquettes d'images : un seul délai,
+    # 3 jours
     cooldown:
       default-days: 3
-      semver-major-days: 7
     commit-message:
       prefix: build
       include: scope
