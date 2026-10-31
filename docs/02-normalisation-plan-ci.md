@@ -279,6 +279,19 @@ Règles :
 - **Contrôles automatiques** à chaque PR : analyse du code (SonarQube),
   dépendances et images (Trivy), Dockerfiles (hadolint), secrets (gitleaks).
   Dependabot propose les mises à jour des dépendances.
+- **Mises à jour des dépendances** (`.github/dependabot.yml`, ticket #38) :
+  Dependabot surveille les paquets npm (front, outil de version), Gradle
+  (back), les actions GitHub et les images de base des Dockerfiles ; une PR
+  chaque lundi, mineures et correctifs groupés, relue et testée par la CI
+  comme toute autre PR. **Délai de refroidissement** : une version publiée
+  depuis moins de 3 jours (7 pour une version majeure) n'est pas encore
+  proposée, le temps qu'un paquet piégé soit détecté ; ce délai ne
+  s'applique **jamais** aux mises à jour de sécurité, proposées tout de
+  suite. Les versions majeures d'Angular (et TypeScript, zone.js, qui en
+  dépendent) sont exclues : elles se font pas à pas avec `ng update`
+  (recommandation R4). Une mise à jour de sécurité qui saute plusieurs
+  versions majeures d'un coup (PR #36, Angular 17 → 22) est bloquée par la
+  CI, puis fermée et reprise dans R4.
 - **Toutes les dépendances sont analysées**, y compris celles de
   développement (outillage de build et de test), que Trivy ignore par
   défaut : elles ne sont pas livrées dans les images, mais s'exécutent dans
