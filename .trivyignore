@@ -34,3 +34,15 @@ CVE-2026-69151 exp:2027-01-31
 # @angular/router
 CVE-2026-101896 exp:2027-01-31
 CVE-2026-111752 exp:2027-01-31
+
+# undici 6.29.0, embarqué dans npm 11.21.1, lui-même dépendance de
+# @semantic-release/npm (installé avec semantic-release dans
+# .github/release/) : contournement de la validation TLS et 2 dénis de
+# service, corrigés en undici 6.29.1 ; aucune version de npm 11 ne
+# l'embarque encore (dernière : 11.21.1 du 15/10/2026).
+# Exposition nulle : le plugin @semantic-release/npm n'est pas chargé
+# (.github/release/.releaserc.yml), ce code ne s'exécute jamais.
+# Acceptées le 31/10/2026 par l'ingénieur DevOps, jusqu'au 31/12/2026.
+CVE-2026-109383 exp:2026-12-31
+CVE-2026-109869 exp:2026-12-31
+CVE-2026-87018 exp:2026-12-31

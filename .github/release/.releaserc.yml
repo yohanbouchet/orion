@@ -1,0 +1,30 @@
+# Fichier  : .github/release/.releaserc.yml
+# Rôle     : configuration de semantic-release : à chaque fusion sur main,
+#            calcule la version (SemVer) à partir des commits conventionnels,
+#            crée l'étiquette Git vX.Y.Z et la Release GitHub avec ses
+#            notes. Aucun commit n'est poussé sur main (branche protégée).
+# Utilise  : package.json et package-lock.json de ce dossier (versions
+#            figées) ; jeton automatique GITHUB_TOKEN (contents: write)
+# Utilisé par : .github/workflows/ci.yml (job release)
+
+# Seule la branche main produit des versions
+branches:
+  - main
+# Format des étiquettes Git : v1.2.3
+tagFormat: "v${version}"
+
+# Étapes, dans cet ordre ; un plugin avec réglages s'écrit en paire :
+# [nom du plugin, réglages]
+plugins:
+  # 1. Lit les commits : fix → correctif, feat → mineure, ! → majeure
+  - - "@semantic-release/commit-analyzer"
+    - preset: conventionalcommits
+  # 2. Rédige les notes de version à partir des mêmes commits
+  - - "@semantic-release/release-notes-generator"
+    - preset: conventionalcommits
+  # 3. Crée la Release GitHub ; sans commentaire ni étiquette sur les
+  #    tickets et PR : le jeton n'a besoin que de contents: write
+  - - "@semantic-release/github"
+    - successComment: false
+      failComment: false
+      releasedLabels: false
