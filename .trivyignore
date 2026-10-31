@@ -46,3 +46,58 @@ CVE-2026-111752 exp:2027-01-31
 CVE-2026-109383 exp:2026-12-31
 CVE-2026-109869 exp:2026-12-31
 CVE-2026-87018 exp:2026-12-31
+
+# Outillage du front (devDependencies : build, serveur de dev, tests),
+# analysé depuis le 31/10/2026 (--include-dev-deps, ticket #35). Après la
+# mise à jour compatible (#33), ces failles restent : versions figées par
+# l'outillage d'Angular 17 (@angular-devkit/build-angular 17.3.x), aucun
+# correctif sans montée de version majeure d'Angular (R4).
+# Exposition réduite : ces paquets ne sont pas dans l'image livrée (scan
+# de l'image : 0) ; ils s'exécutent seulement dans la CI et sur les postes.
+# Acceptées le 31/10/2026 par l'ingénieur DevOps, jusqu'au 31/01/2027
+# (même échéance et même cause que les failles d'Angular ci-dessus).
+# brace-expansion 1.1.11
+CVE-2026-102276 exp:2027-01-31
+CVE-2026-102278 exp:2027-01-31
+CVE-2026-13149 exp:2027-01-31
+CVE-2026-14257 exp:2027-01-31
+CVE-2026-69152 exp:2027-01-31
+# http-proxy-middleware 2.0.6
+CVE-2024-21536 exp:2027-01-31
+# pacote 17.0.6
+CVE-2026-9496 exp:2027-01-31
+# picomatch 4.0.1
+CVE-2026-33671 exp:2027-01-31
+# piscina 4.4.0 (critique)
+CVE-2026-102992 exp:2027-01-31
+CVE-2026-55388 exp:2027-01-31
+# postcss 8.4.35
+CVE-2026-45623 exp:2027-01-31
+CVE-2026-73646 exp:2027-01-31
+# serialize-javascript 6.0.2
+GHSA-5c6j-r48x-rmvq exp:2027-01-31
+# sigstore 2.3.1
+CVE-2026-48815 exp:2027-01-31
+# tar 6.2.1 (critique)
+CVE-2026-23745 exp:2027-01-31
+CVE-2026-23950 exp:2027-01-31
+CVE-2026-24842 exp:2027-01-31
+CVE-2026-26960 exp:2027-01-31
+CVE-2026-29786 exp:2027-01-31
+CVE-2026-31802 exp:2027-01-31
+CVE-2026-59873 exp:2027-01-31
+CVE-2026-59874 exp:2027-01-31
+CVE-2026-73566 exp:2027-01-31
+# tmp 0.0.33
+CVE-2026-44705 exp:2027-01-31
+# undici 6.11.1
+CVE-2026-12151 exp:2027-01-31
+CVE-2026-1526 exp:2027-01-31
+CVE-2026-1528 exp:2027-01-31
+CVE-2026-19534 exp:2027-01-31
+CVE-2026-2229 exp:2027-01-31
+# vite 5.1.7
+CVE-2024-52011 exp:2027-01-31
+CVE-2026-112942 exp:2027-01-31
+# webpack-dev-middleware 5.3.4, 6.1.2
+CVE-2026-76844 exp:2027-01-31
