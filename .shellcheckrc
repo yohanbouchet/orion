@@ -1,0 +1,8 @@
+# Fichier  : .shellcheckrc
+# Rôle     : réglages de ShellCheck pour tout le dépôt (CI et éditeur)
+# Utilisé par : job shellcheck de ci.yml, extension ShellCheck de VS Code
+
+# Suit les fichiers chargés par « source » (ex. scripts/lib/common.sh) et
+# cherche leur chemin à partir du dossier du script
+external-sources=true
+source-path=SCRIPTDIR
