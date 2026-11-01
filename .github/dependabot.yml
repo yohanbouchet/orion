@@ -58,6 +58,12 @@ updates:
       - dependency-name: "@types/jasmine"
         update-types:
           - version-update:semver-major
+      # Outil de version (.github/release) : la v10 exige un générateur de
+      # notes plus récent que celui de semantic-release 25 (essai du 01/11 :
+      # job release en échec) ; à monter avec release-notes-generator 15
+      - dependency-name: conventional-changelog-conventionalcommits
+        update-types:
+          - version-update:semver-major
     # Conventional Commits : build(deps): … et build(deps-dev): …
     commit-message:
       prefix: build
