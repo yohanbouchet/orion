@@ -3,7 +3,8 @@
 # Rôle     : fonctions partagées par les scripts (journal, arrêt sur erreur,
 #            vérification des outils) ; chargé avec « source », jamais lancé
 # Utilise  : date (coreutils)
-# Utilisé par : scripts/*.sh ; tests : scripts/tests/common_test.sh ; #56
+# Utilisé par : scripts/install-deps.sh et les scripts suivants du ticket
+#               #56 ; tests : scripts/tests/common_test.sh
 
 # Garde : ce fichier se charge (source), il ne s'exécute pas seul
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
@@ -20,11 +21,18 @@ log() {
     "${SCRIPT_NAME:-$(basename "$0")}" "$*" >&2
 }
 
-# Arrêt : journal ERROR puis sortie avec un code d'erreur (1 par défaut)
+# Arrêt : journal ERROR puis sortie avec le code 1 ; le message peut être
+# donné en plusieurs morceaux (lignes courtes), recollés par log
 die() {
-  local message="$1"
-  local code="${2:-1}"
-  log ERROR "$message"
+  log ERROR "$@"
+  exit 1
+}
+
+# Comme die, avec un code de sortie choisi : die_with CODE message…
+die_with() {
+  local code="$1"
+  shift
+  log ERROR "$@"
   exit "$code"
 }
 
@@ -34,7 +42,7 @@ require_cmd() {
   local cmd
   for cmd in "$@"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-      die "missing required command: $cmd" 127
+      die_with 127 "missing required command: $cmd"
     fi
   done
 }

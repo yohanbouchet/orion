@@ -24,16 +24,23 @@ function test_log_writes_nothing_on_stdout() {
   assert_empty "$(bash -c "source '$COMMON'; log INFO hello" 2>/dev/null)"
 }
 
-function test_die_stops_with_given_code_and_error_message() {
+function test_die_with_stops_with_given_code_and_error_message() {
   local output
-  output="$(run_with_common 'die boom 3; echo not-reached')"
+  output="$(run_with_common 'die_with 3 boom; echo not-reached')"
   assert_exit_code "3"
   assert_contains "ERROR" "$output"
   assert_contains "boom" "$output"
   assert_not_contains "not-reached" "$output"
 }
 
-function test_die_uses_code_1_by_default() {
+function test_die_joins_message_parts() {
+  local output
+  output="$(run_with_common 'die "part one;" "part two"')"
+  assert_exit_code "1"
+  assert_contains "part one; part two" "$output"
+}
+
+function test_die_always_uses_code_1() {
   run_with_common 'die boom' >/dev/null
   assert_exit_code "1"
 }

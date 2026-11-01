@@ -13,8 +13,9 @@
 #            de commit ; images officielles des outils de sécurité, figées
 #            par digest ; sonar-project.properties ; environnement sonarqube ;
 #            .trivyignore (failles acceptées et datées) ; front/Dockerfile,
-#            back/Dockerfile ; .github/release/ (semantic-release) ; jeton
-#            automatique GITHUB_TOKEN (version, publication)
+#            back/Dockerfile ; .github/release/ (semantic-release) ;
+#            scripts/ (install-deps.sh, tests bashunit) ; jeton automatique
+#            GITHUB_TOKEN (version, publication)
 # Utilisé par : GitHub Actions (PR, fusions sur main, lancement manuel)
 
 name: CI
@@ -65,9 +66,10 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: front/package-lock.json
-      # Installation exacte des versions de package-lock.json
+      # Installation exacte des versions de package-lock.json, sans les
+      # scripts d'installation des paquets (scripts/install-deps.sh)
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: ../scripts/install-deps.sh front
       # Tests une seule fois (pas de surveillance), Chrome préinstallé
       - name: Run unit tests
         run: >-
@@ -102,6 +104,10 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: gradle
+      # Dépendances résolues et comparées à gradle.lockfile : arrêt si une
+      # version ne correspond pas (scripts/install-deps.sh)
+      - name: Install dependencies
+        run: ../scripts/install-deps.sh back
       # Tests seulement : la compilation des livrables viendra à part
       - name: Run unit and integration tests
         run: ./gradlew test --no-daemon

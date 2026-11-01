@@ -105,7 +105,7 @@ rejoués à l'étape `build`, aucun rapport ni analyse, aucune image publiée.
 | Front (TypeScript, Angular) | Guide de style Angular : fichiers en `kebab-case` (`person-details.component.ts`), classes en `PascalCase` | **ESLint** (angular-eslint) |
 | Back (Java, Spring Boot) | Conventions Java : classes en `PascalCase`, méthodes et variables en `camelCase`, paquets en minuscules ; injection par constructeur | **SonarQube** (règles Java « Sonar way ») |
 | Dockerfile | Image de base figée, utilisateur non root, une sonde de santé (`HEALTHCHECK` ; dans Kubernetes, qui l'ignore, sondes du pod) | **hadolint** |
-| Scripts Bash | `set -euo pipefail`, variables entre guillemets | **ShellCheck** |
+| Scripts Bash | `set -Eeuo pipefail`, variables entre guillemets, bibliothèque commune `scripts/lib/common.sh` (journal, arrêt avec code de sortie et message « fix: ») | **ShellCheck** (`.shellcheckrc`) |
 
 Côté Java, SonarQube suffit au départ : les Dev débutent en Java, et un
 outil de style supplémentaire (Checkstyle) ne serait ajouté que si le besoin
@@ -259,7 +259,7 @@ flowchart TB
 | Unitaires front | Karma + Jasmine (existant) | chaque PR | oui |
 | Unitaires et d'intégration back | JUnit 5 + Spring Boot Test (existant) | chaque PR | oui |
 | Couverture | JaCoCo (back), lcov (front), envoyés à SonarQube | chaque PR | oui, via le Quality Gate |
-| Scripts | bashunit (Bash), pytest (Python) | chaque PR qui touche un script | oui |
+| Scripts | bashunit (Bash, version figée et vérifiée par empreinte), pytest (Python) | chaque PR (job `script-tests`) | oui |
 | Fumée après déploiement | Appel du point de santé de l'API | chaque déploiement | oui (retour arrière) |
 
 Règles :
