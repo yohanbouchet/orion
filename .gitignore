@@ -43,3 +43,8 @@ reports/
 # Paquets npm téléchargés par npm ci (ex. outil de version dans
 # .github/release/) : régénérés depuis le package-lock.json.
 node_modules/
+
+# --- Python ---
+# Fichiers compilés et cache de pytest, recréés à chaque exécution
+__pycache__/
+.pytest_cache/

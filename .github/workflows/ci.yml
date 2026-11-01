@@ -4,18 +4,19 @@
 #            parallèle sur les runners hébergés par GitHub, puis l'analyse
 #            SonarQube et son Quality Gate sur le runner local ; en
 #            parallèle, les scans de sécurité (gitleaks, hadolint,
-#            ShellCheck, Trivy), les tests des scripts (bashunit) et la
-#            construction des images Docker analysées ; après une fusion
+#            ShellCheck, Trivy), les tests des scripts (bashunit, pytest) et
+#            la construction des images Docker analysées ; après une fusion
 #            sur main, si tout est vert, numéro de version (semantic-release :
 #            étiquette vX.Y.Z et Release GitHub) puis publication des images
-#            sur GHCR.
+#            sur GHCR ; enfin, sur main, notification du résultat (notify).
 # Utilise  : actions officielles de GitHub et de SonarSource, figées par SHA
 #            de commit ; images officielles des outils de sécurité, figées
 #            par digest ; sonar-project.properties ; environnement sonarqube ;
 #            .trivyignore (failles acceptées et datées) ; front/Dockerfile,
 #            back/Dockerfile ; .github/release/ (semantic-release) ;
-#            scripts/ (install-deps.sh, run-tests.sh, tests bashunit) ;
-#            jeton automatique GITHUB_TOKEN (version, publication)
+#            scripts/ (install-deps.sh, run-tests.sh, notify.py, tests) ;
+#            jeton automatique GITHUB_TOKEN (version, publication,
+#            notification)
 # Utilisé par : GitHub Actions (PR, fusions sur main, lancement manuel)
 
 name: CI
@@ -28,8 +29,14 @@ on:
   # À chaque fusion sur main
   push:
     branches: [main]
-  # À la main, depuis l'onglet Actions
+  # À la main, depuis l'onglet Actions ; la case permet un exercice
+  # d'alerte : notify fait comme si un job avait échoué (ticket + e-mail)
   workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: "Notification drill: report a simulated failure"
+        type: boolean
+        default: false
 
 # Moindre privilège : le jeton du pipeline peut seulement lire le code
 permissions:
@@ -233,7 +240,8 @@ jobs:
           koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
           --color=never scripts/*.sh scripts/lib/*.sh scripts/tests/*.sh
 
-  # Tests unitaires des scripts d'automatisation (bashunit) ; ticket #56
+  # Tests unitaires des scripts d'automatisation (bashunit pour Bash,
+  # pytest pour Python) ; ticket #56
   script-tests:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -260,6 +268,20 @@ jobs:
       # Code de sortie 1 si un test échoue : le job passe au rouge
       - name: Run script tests
         run: '"$RUNNER_TEMP/bashunit" scripts/tests'
+      # Python 3.14 (supporté jusqu'au 31/10/2030), comme en local
+      - name: Set up Python 3.14
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      # pytest et ses dépendances : versions figées, empreintes vérifiées
+      # par pip, paquets déjà construits seulement (aucun code exécuté à
+      # l'installation)
+      - name: Install pytest
+        run: >-
+          python -m pip install --require-hashes --only-binary :all:
+          -r scripts/tests/requirements.txt
+      - name: Run Python script tests
+        run: python -m pytest -p no:cacheprovider scripts/tests
 
   # Failles connues dans les dépendances (npm, Gradle) : bloque sur les
   # failles hautes et critiques, sauf exceptions justifiées et datées dans
@@ -482,3 +504,45 @@ jobs:
       - name: Log out of GHCR
         if: always()
         run: docker logout ghcr.io
+
+  # Notification du résultat sur main (ticket de panne, e-mail par GitHub),
+  # même si un job a échoué (always) ; ticket #56
+  notify:
+    needs:
+      - test-front
+      - test-back
+      - sonarqube
+      - gitleaks
+      - hadolint
+      - shellcheck
+      - script-tests
+      - trivy
+      - images
+      - release
+      - publish
+    if: >-
+      always() && github.ref == 'refs/heads/main' &&
+      github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # Ouvrir, commenter et fermer le ticket de panne, rien d'autre
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python 3.14
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      # Résultat de chaque job (needs) et case de l'exercice d'alerte
+      # (vide hors lancement manuel, donc false)
+      - name: Notify the result
+        run: python scripts/notify.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          SIMULATE_FAILURE: ${{ inputs.simulate_failure || false }}
