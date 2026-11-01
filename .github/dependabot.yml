@@ -1,12 +1,13 @@
 # Fichier  : .github/dependabot.yml
 # Rôle     : mises à jour de version proposées par Dependabot (une PR
-#            relue et testée par la CI) : paquets npm, Gradle, actions
+#            relue et testée par la CI) : paquets npm, Gradle, pip, actions
 #            GitHub, images Docker ; chaque lundi, après un délai de
 #            refroidissement. Les mises à jour de SÉCURITÉ ne dépendent pas
 #            de ce fichier : elles arrivent tout de suite (docs/02, 2.7).
-# Utilise  : front/, .github/release/, back/, .github/workflows/,
-#            Dockerfiles du front, du back et de infra/postgres
-# Utilisé par : GitHub Dependabot ; ticket #38
+# Utilise  : front/, .github/release/, scripts/tests/, back/,
+#            .github/workflows/, Dockerfiles du front, du back et de
+#            infra/postgres
+# Utilisé par : GitHub Dependabot ; tickets #38 et #56
 
 version: 2
 updates:
@@ -61,6 +62,26 @@ updates:
     commit-message:
       prefix: build
       prefix-development: build
+      include: scope
+  # Outils de test des scripts Python : pytest et ses dépendances,
+  # empreintes comprises (scripts/tests/requirements.txt)
+  - package-ecosystem: pip
+    directory: /scripts/tests
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    groups:
+      pip-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: build
       include: scope
   # Back (Spring Boot) : versions verrouillées par gradle.lockfile
   - package-ecosystem: gradle
