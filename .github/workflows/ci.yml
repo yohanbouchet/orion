@@ -4,10 +4,11 @@
 #            parallèle sur les runners hébergés par GitHub, puis l'analyse
 #            SonarQube et son Quality Gate sur le runner local ; en
 #            parallèle, les scans de sécurité (gitleaks, hadolint,
-#            ShellCheck, Trivy) et la construction des images Docker
-#            analysées ; après une fusion sur main, si tout est vert,
-#            numéro de version (semantic-release : étiquette vX.Y.Z et
-#            Release GitHub) puis publication des images sur GHCR.
+#            ShellCheck, Trivy), les tests des scripts (bashunit) et la
+#            construction des images Docker analysées ; après une fusion
+#            sur main, si tout est vert, numéro de version (semantic-release :
+#            étiquette vX.Y.Z et Release GitHub) puis publication des images
+#            sur GHCR.
 # Utilise  : actions officielles de GitHub et de SonarSource, figées par SHA
 #            de commit ; images officielles des outils de sécurité, figées
 #            par digest ; sonar-project.properties ; environnement sonarqube ;
@@ -214,14 +215,43 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Même durcissement que gitleaks ; scripts/*.sh prend tous les
-      # scripts, y compris ceux ajoutés plus tard
+      # Même durcissement que gitleaks ; les 3 motifs prennent tous les
+      # scripts, la bibliothèque commune et les tests, y compris ceux
+      # ajoutés plus tard (* ne descend pas dans les sous-dossiers)
       - name: Lint shell scripts
         run: >-
           docker run --rm --network none --user "$(id -u):$(id -g)"
           -v "$PWD":/src:ro -w /src
           koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
-          --color=never scripts/*.sh
+          --color=never scripts/*.sh scripts/lib/*.sh scripts/tests/*.sh
+
+  # Tests unitaires des scripts d'automatisation (bashunit) ; ticket #56
+  script-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Version figée (bashunit n'est pas encore en 1.0) et son empreinte
+    # officielle, publiée avec la release
+    env:
+      BASHUNIT_VERSION: 0.52.0
+      BASHUNIT_SHA256: 6193370a2164abcc1e64601af461ea811505c6cefdc8fa33e579a07e2d05ffe3
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Téléchargé depuis la release officielle, puis vérifié : si
+      # l'empreinte ne correspond pas, sha256sum échoue et le job s'arrête
+      # avant d'exécuter quoi que ce soit (jamais de « curl | bash »)
+      - name: Install bashunit
+        run: |
+          base="https://github.com/TypedDevs/bashunit/releases/download"
+          curl -fsSL -o "$RUNNER_TEMP/bashunit" \
+            "$base/$BASHUNIT_VERSION/bashunit"
+          echo "$BASHUNIT_SHA256  $RUNNER_TEMP/bashunit" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bashunit"
+      # Code de sortie 1 si un test échoue : le job passe au rouge
+      - name: Run script tests
+        run: '"$RUNNER_TEMP/bashunit" scripts/tests'
 
   # Failles connues dans les dépendances (npm, Gradle) : bloque sur les
   # failles hautes et critiques, sauf exceptions justifiées et datées dans
@@ -332,6 +362,7 @@ jobs:
       - gitleaks
       - hadolint
       - shellcheck
+      - script-tests
       - trivy
       - images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -384,6 +415,7 @@ jobs:
       - gitleaks
       - hadolint
       - shellcheck
+      - script-tests
       - trivy
       - images
       - release
