@@ -89,8 +89,13 @@ arrière : `scripts/deploy.sh rollback dev`. Détails :
 - La taille du disque de la base ne se change plus après la création
   (champ figé d'un StatefulSet).
 - Les sondes du back testent la racine de l'API (`/`) : elle ne vérifie
-  pas la base. Spring Boot Actuator donnerait un vrai contrôle de santé.
-- L'application utilise le compte propriétaire de la base ; un compte aux
-  droits limités serait plus sûr.
+  pas la base (le test de fumée de `scripts/deploy.sh`, lui, va jusqu'à
+  la base). Spring Boot Actuator donnerait un vrai contrôle de santé.
+- Le compte `microcrm` de l'application est **superutilisateur**
+  PostgreSQL (réglage par défaut de l'image officielle) ; un compte aux
+  droits limités, propriétaire du seul schéma de l'application, serait
+  plus sûr.
+- Sauvegardes : par `scripts/backup.sh`, avec leurs propres limites
+  ([détails](../../../scripts/README.md#backupsh)).
 - Ressources (`requests`, `limits`) : valeurs de départ, à ajuster après
   mesure avec metrics-server.

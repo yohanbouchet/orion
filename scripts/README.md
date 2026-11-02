@@ -13,9 +13,8 @@ marche dans la CI, et inversement.
 | [`notify.py`](#notifypy) | Signaler par ticket et e-mail une CI en échec sur `main` | job `notify` |
 | [`lib/common.sh`](#libcommonsh) | Fonctions partagées : journal, arrêt, outils requis | les scripts Bash |
 | [`deploy.sh`](#deploysh) | Déployer MicroCRM, le vérifier, revenir en arrière | l'opérateur ; job de déploiement (à venir) |
+| [`backup.sh`](#backupsh) | Sauvegarder, vérifier et restaurer la base | l'opérateur ; tâche planifiée quotidienne (à venir) |
 | [`deploy-sonarqube.sh`](#deploy-sonarqubesh) | Déployer SonarQube dans le cluster Minikube | l'opérateur, à la main |
-
-À venir : la sauvegarde et la restauration de la base (`backup.sh`).
 
 ## Règles communes
 
@@ -215,6 +214,101 @@ une révision choisie. Le 1er essai a montré que, dans le conteneur,
 `localhost` désigne d'abord l'IPv6 (`::1`), où nginx n'écoute pas : le
 test de fumée vise donc `127.0.0.1`.
 
+## backup.sh
+
+**But** : sauvegarder la base PostgreSQL de MicroCRM d'un environnement,
+**prouver que la sauvegarde se restaure**, et restaurer toute la base ou
+seulement les lignes disparues d'une table.
+
+```shell
+# Sauvegarder
+scripts/backup.sh dev
+# Restaurer la dernière sauvegarde dans une base temporaire (vérification)
+scripts/backup.sh verify dev
+# Restaurer toute la base
+scripts/backup.sh restore dev <fichier>
+# Remettre seulement les lignes disparues d'une table
+scripts/backup.sh restore dev <fichier> --table person
+```
+
+**Fonctionnement** :
+
+- **sauvegarde** : `pg_dump` au format « custom » (compressé, restauration
+  d'une table possible), lancé **dans le pod de la base** : aucun outil
+  PostgreSQL à installer sur le poste. Écriture dans un fichier
+  temporaire, renommé seulement si tout a réussi ; empreinte SHA-256 dans
+  un fichier `.sha256` ; contenu relu par `pg_restore --list` ; seules les
+  `KEEP` sauvegardes les plus récentes sont gardées. Nom :
+  `microcrm-<env>-<date UTC>.dump` ;
+- **verify** : la dernière sauvegarde (ou celle donnée) est restaurée
+  dans une base temporaire `microcrm_verify`, ses lignes sont comptées,
+  puis la base est supprimée. La vraie base n'est pas touchée ;
+- **restore** : contrôles d'abord (nom de table, clé primaire, empreinte
+  du fichier), puis **sauvegarde de sécurité** de l'état actuel, puis :
+  - toute la base : `pg_restore --clean --single-transaction`, tout ou
+    rien ;
+  - une table (`--table`) : sur place, c'est impossible sans casser les
+    liens (clés étrangères). La sauvegarde est donc restaurée dans une
+    base annexe, puis seules les lignes **absentes** sont recopiées
+    (`INSERT … ON CONFLICT DO NOTHING`, en une transaction) : les lignes
+    actuelles ne sont pas modifiées. Une table sans clé primaire est
+    refusée, car un doublon n'y serait pas détecté.
+
+**Paramètres** : `BACKUP_DIR`, dossier des sauvegardes, hors du dépôt et
+du cluster (défaut `~/backups/microcrm`, un sous-dossier par
+environnement) ; `KEEP`, nombre de sauvegardes gardées par environnement
+(défaut 7).
+
+**Conditions d'exécution** : `kubectl` et `sha256sum` ; accès au cluster
+avec le droit `pods/exec` dans le namespace (il donne accès à la base :
+PostgreSQL fait confiance aux connexions locales du pod, les connexions
+réseau exigent le mot de passe) ; pod `microcrm-postgres-0` démarré.
+
+**Sécurité** :
+
+- fichiers en 600 et dossiers en 700 (`umask 077`) : une sauvegarde
+  contient des données personnelles ;
+- transport chiffré (API Kubernetes en TLS) ; au repos, disque de la
+  machine chiffré (LUKS) ;
+- un fichier dont l'empreinte ne correspond plus n'est jamais restauré ;
+- nom de table limité aux minuscules et `_` : il entre dans une requête
+  SQL (injection impossible).
+
+**Arrêts expliqués** :
+
+| Cas | Code | Correction proposée |
+|---|---|---|
+| Action, environnement ou nom de table invalide | 2 | syntaxe rappelée |
+| `kubectl` ou `sha256sum` absent | 127 | installer l'outil |
+| `pg_dump` en échec | 1 | état du pod ; aucun fichier partiel gardé |
+| Aucune sauvegarde pour `verify` | 1 | lancer `scripts/backup.sh ENV` |
+| Fichier ou `.sha256` absent, empreinte différente | 1 | choisir un autre fichier |
+| Table absente ou sans clé primaire | 1 | restaurer toute la base |
+| Restauration en échec | 1 | base inchangée ; chemin de la sauvegarde de sécurité affiché |
+
+**Vérifié le 02/11/2026** dans le namespace `dev` : sauvegarde (8 Ko) et
+`verify` ; personne supprimée puis remise par `--table person` sans
+toucher aux autres ; lien et personne supprimés puis base entière
+restaurée, application fonctionnelle ; fichier modifié refusé ; rotation.
+**Temps de restauration (RTO) mesuré : 0,6 s**, sauvegarde de sécurité
+comprise (base de 7 Ko).
+
+**Objectifs actuels** : sauvegarde **quotidienne** (tâche planifiée
+installée par Ansible, à venir), soit une perte de données maximale
+(**RPO**) de 24 h ; 7 sauvegardes gardées, soit une semaine d'historique.
+
+**Limites connues et évolutions** :
+
+| Limite | Évolution |
+|---|---|
+| RPO de 24 h, pas de retour à une minute précise | Archivage continu des journaux de transactions (WAL) et restauration à un instant donné (PITR) : opérateur CloudNativePG ou service managé (AWS RDS) |
+| Sauvegarde complète à chaque fois | Complète hebdomadaire et incrémentale quotidienne (pgBackRest, ou `pg_basebackup --incremental` de PostgreSQL 17+), utile quand la base grossit ; la base fait 7 Ko |
+| Une seule copie, sur la machine du cluster | Règle 3-2-1 : 3 copies, 2 supports, 1 hors site (stockage S3 dans la cible cloud) |
+| Fichiers non chiffrés un par un (protégés par le chiffrement du disque et les droits) | Chiffrement de chaque fichier (gpg ou age) dès que la sauvegarde quitte la machine, clé gardée hors de la machine |
+| Aucune alerte si la sauvegarde ne se fait plus | Alerte « dernière sauvegarde de plus de 26 h » dans la supervision (ELK, à venir) |
+| Le compte `microcrm` de l'application est superutilisateur PostgreSQL (réglage par défaut de l'image officielle) | Compte applicatif aux droits limités, propriétaire du seul schéma de l'application |
+| La table de liens `organization_persons` n'a pas de clé primaire : restauration par table impossible, liens en double possibles | Clé primaire `(organizations_id, persons_id)` par une migration Flyway (demande à l'équipe Dev) |
+
 ## lib/common.sh
 
 Fonctions partagées, **chargées** par les scripts Bash
@@ -282,6 +376,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/common_test.sh` | bashunit | journal, codes de `die` / `die_with`, outils requis, garde contre l'exécution directe |
 | `tests/install_deps_test.sh` | bashunit | usage, `package-lock.json` absent, commandes npm et Gradle, « FAILED » détecté |
 | `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Karma lancé une fois, `KARMA_BROWSER`, tests rouges, rapport absent |
+| `tests/backup_test.sh` | bashunit | usage, fichier privé (600/700) et empreinte, rotation, `pg_dump` en échec sans fichier partiel, `verify` (base temporaire), fichier abîmé refusé, sauvegarde de sécurité avant restauration, table : lignes absentes seulement, table sans clé refusée, nom de table piégé |
 | `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, échec de Helm, test de fumée raté → retour arrière, `rollback` |
 | `tests/test_notify.py` | pytest | jobs en échec, exercice, ouverture / commentaire / fermeture, résumé, paramètres |
 

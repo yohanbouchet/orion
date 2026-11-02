@@ -30,7 +30,9 @@ DevOps » (OpenClassrooms, option B), à partir de
 - [Images Docker](#images-docker)
 - [Déployer sur Kubernetes](#déployer-sur-kubernetes)
 - [Installer la chaîne sur le poste Ops](#installer-la-chaîne-sur-le-poste-ops)
+- [Sauvegarder la base](#sauvegarder-la-base)
 - [Sécurité](#sécurité)
+- [Limites connues et évolutions](#limites-connues-et-évolutions)
 - [Contribuer](#contribuer)
 - [Documentation](#documentation)
 - [Versions des outils](#versions-des-outils)
@@ -48,7 +50,7 @@ Au 02/11/2026 :
 | Chart Helm de l'application (testé dans `dev`) | ✅ [`infra/helm/microcrm/`](infra/helm/microcrm/README.md) |
 | Script de déploiement avec test de fumée et retour arrière | ✅ [`scripts/deploy.sh`](scripts/README.md#deploysh) |
 | Job de déploiement, environnements `staging` et `prod` | ⏳ en cours |
-| Sauvegarde et restauration de la base | ⏳ à venir |
+| Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) (planification quotidienne : avec Ansible) |
 | Terraform et Ansible | ⏳ à venir |
 | Supervision (ELK), alertes, indicateurs DORA, tests de charge | ⏳ à venir |
 
@@ -289,6 +291,20 @@ Enfin, dans GitHub (**Settings** → **Environments** → `sonarqube`) : le
 secret `SONAR_TOKEN` (jeton d'analyse du projet) et la variable
 `SONAR_HOST_URL` (adresse de SonarQube vue depuis le runner).
 
+## Sauvegarder la base
+
+```shell
+scripts/backup.sh dev                          # ~/backups/microcrm/dev/
+scripts/backup.sh verify dev                   # se restaure-t-elle ?
+scripts/backup.sh restore dev <fichier>        # toute la base
+scripts/backup.sh restore dev <fichier> --table person
+```
+
+Chaque restauration est précédée d'une sauvegarde de sécurité de l'état
+actuel. Objectifs : perte de données maximale (RPO) de 24 h avec une
+sauvegarde quotidienne ; temps de restauration (RTO) mesuré à 0,6 s.
+Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#backupsh).
+
 ## Sécurité
 
 - **Aucun secret dans le dépôt** : gitleaks à chaque PR ; détection et
@@ -305,6 +321,21 @@ secret `SONAR_TOKEN` (jeton d'analyse du projet) et la variable
   (NetworkPolicy, refus par défaut).
 - **CI** : actions figées par empreinte, droits minimaux par job, runner
   local jetable et non privilégié, jamais utilisé par un fork.
+- **Sauvegardes** : fichiers en 600, dossiers en 700, empreinte SHA-256
+  contrôlée avant toute restauration ; disque de la machine chiffré.
+
+## Limites connues et évolutions
+
+Ce qui reste à améliorer, détaillé dans chaque README :
+
+| Limite | Évolution | Détails |
+|---|---|---|
+| Tout tourne sur une seule machine (Minikube) | Cible cloud (schéma AWS, à venir) | — |
+| Sauvegarde quotidienne complète, sur la machine, non chiffrée fichier par fichier | Restauration à un instant donné (WAL, CloudNativePG ou RDS), incrémental, copie hors site chiffrée (règle 3-2-1) | [scripts](scripts/README.md#backupsh) |
+| Compte `microcrm` superutilisateur PostgreSQL | Compte applicatif aux droits limités | [chart](infra/helm/microcrm/README.md#limites-connues) |
+| Sondes de santé sur `/`, sans Spring Boot Actuator | Point de santé dédié (`/actuator/health`) | [chart](infra/helm/microcrm/README.md#limites-connues) |
+| Table de liens sans clé primaire | Migration Flyway (équipe Dev) | [scripts](scripts/README.md#backupsh) |
+| Angular 17 hors maintenance, pas d'ESLint | Montée de version et ESLint (équipe Dev) | [audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance) |
 
 ## Contribuer
 
