@@ -4,8 +4,8 @@
 #            root. trivy : 0 faille haute ou critique le 31/10/2026.
 # Utilise  : le dossier back/ (code, Gradle Wrapper, gradle.lockfile) ;
 #            images officielles eclipse-temurin 17 sur Alpine 3.24
-# Utilisé par : .github/workflows/ci.yml (job des images) ; plus tard le
-#               chart Helm (phase 5)
+# Utilisé par : .github/workflows/ci.yml (jobs images et publish) ; chart
+#               infra/helm/microcrm (image publiée sur GHCR)
 
 # --- Étape 1 : compilation (image jetée à la fin) ---
 # JDK 17 (outils de compilation), version et empreinte figées

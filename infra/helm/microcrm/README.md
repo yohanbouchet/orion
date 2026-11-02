@@ -53,8 +53,9 @@ Le HPA a besoin de l'addon **metrics-server** de Minikube
   CI (tests ZAP). La base ne peut joindre personne, le back n'a pas accès
   à Internet.
 - **Mises à jour sans coupure** : un nouveau pod doit être prêt avant
-  qu'un ancien soit arrêté (`maxUnavailable: 0`) ; sondes de démarrage,
-  de disponibilité et de vie sur chaque composant.
+  qu'un ancien soit arrêté (`maxUnavailable: 0`) ; sondes de
+  disponibilité et de vie sur chaque composant, plus une sonde de
+  démarrage pour le back (Spring Boot démarre lentement).
 
 ## Installation à la main (dev)
 
