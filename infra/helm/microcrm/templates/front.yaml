@@ -1,0 +1,93 @@
+{{- /*
+Fichier  : infra/helm/microcrm/templates/front.yaml
+Rôle     : front Angular servi par nginx : adresse fixe (Service) et
+           Deployment, qui monte le relais /api (front-nginx-config.yaml)
+Utilise  : values.yaml (front.*) ; image GHCR orion-front ;
+           front-nginx-config.yaml ; _helpers.tpl
+Utilisé par : les utilisateurs (kubectl port-forward), ZAP ; ticket #64
+*/}}
+{{- $ctx := dict "root" $ "component" "front" }}
+{{- $name := include "microcrm.name" $ctx }}
+{{- $nginxFile := print $.Template.BasePath "/front-nginx-config.yaml" }}
+{{- $nginx := include $nginxFile $ }}
+{{- with .Values.front }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "microcrm.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "microcrm.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "microcrm.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ .replicas }}
+  selector:
+    matchLabels:
+      {{- include "microcrm.selectorLabels" $ctx | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "microcrm.labels" $ctx | nindent 8 }}
+      annotations:
+        # Empreinte du relais : si le ConfigMap change, les pods sont
+        # recréés (nginx ne relit pas sa configuration tout seul)
+        checksum/nginx: {{ $nginx | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        # Compte « nginx » de l'image (numéro 101)
+        {{- include "microcrm.podSecurityContext" 101 | nindent 8 }}
+      containers:
+        - name: front
+          image: {{ include "microcrm.image" (dict "root" $ "image" .image) }}
+          imagePullPolicy: {{ .image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            {{- include "microcrm.containerSecurityContext" . | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          volumeMounts:
+            # Relais /api, en lecture seule
+            - name: nginx-extra
+              mountPath: /etc/nginx/extra
+              readOnly: true
+            # Seul dossier inscriptible : pid et fichiers temporaires de nginx
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: nginx-extra
+          configMap:
+            name: {{ $name }}-nginx
+        - name: tmp
+          emptyDir: {}
+{{- end }}

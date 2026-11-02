@@ -1,0 +1,5 @@
+# Fichier  : infra/helm/microcrm/values-dev.yaml
+# Rôle     : différences de l'environnement dev par rapport à values.yaml
+#            (aucune pour l'instant : réglages par défaut, une réplique)
+# Utilisé par : scripts/deploy.sh dev ; ticket #64
+{}

@@ -1,0 +1,6 @@
+# Fichier  : infra/helm/microcrm/values-staging.yaml
+# Rôle     : différences de l'environnement staging (recette, tests ZAP)
+#            par rapport à values.yaml : proche de la prod, une réplique
+# Utilisé par : scripts/deploy.sh staging ; ticket #64
+postgres:
+  storage: 2Gi

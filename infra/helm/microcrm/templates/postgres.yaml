@@ -1,0 +1,119 @@
+{{- /*
+Fichier  : infra/helm/microcrm/templates/postgres.yaml
+Rôle     : base PostgreSQL de MicroCRM : adresse fixe (Service) et
+           StatefulSet avec un disque persistant (les données survivent
+           au redémarrage du pod)
+Utilise  : values.yaml (postgres.*) ; Secret postgres.existingSecret créé
+           hors du chart ; _helpers.tpl
+Utilisé par : le back (templates/back.yaml, adresse JDBC) ; ticket #64
+*/}}
+{{- $ctx := dict "root" $ "component" "postgres" }}
+{{- $name := include "microcrm.name" $ctx }}
+{{- with .Values.postgres }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "microcrm.labels" $ctx | nindent 4 }}
+spec:
+  # Envoie le trafic aux pods de la base
+  selector:
+    {{- include "microcrm.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "microcrm.labels" $ctx | nindent 4 }}
+spec:
+  serviceName: {{ $name }}
+  # Une seule instance : pas de réplication de la base en local
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "microcrm.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "microcrm.labels" $ctx | nindent 8 }}
+    spec:
+      # La base ne parle pas à l'API Kubernetes : aucun jeton monté
+      automountServiceAccountToken: false
+      securityContext:
+        # Compte « postgres » de l'image (numéro 70), comme son Dockerfile
+        {{- include "microcrm.podSecurityContext" 70 | nindent 8 }}
+      containers:
+        - name: postgres
+          image: {{ include "microcrm.image" (dict "root" $ "image" .image) }}
+          imagePullPolicy: {{ .image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ .database | quote }}
+            - name: POSTGRES_USER
+              value: {{ .username | quote }}
+            # Mot de passe lu dans le Secret, jamais écrit dans le chart
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .existingSecret }}
+                  key: {{ .secretKey }}
+          securityContext:
+            {{- include "microcrm.containerSecurityContext" . | nindent 12 }}
+          # Prête quand PostgreSQL accepte les connexions
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .username | quote }}
+                - -d
+                - {{ .database | quote }}
+            periodSeconds: 10
+          # Redémarrée si elle ne répond plus pendant 1 min
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .username | quote }}
+                - -d
+                - {{ .database | quote }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          volumeMounts:
+            # Données (PostgreSQL 18 : sous-dossier 18/docker de ce volume)
+            - name: data
+              mountPath: /var/lib/postgresql
+            # Seuls dossiers inscriptibles hors données : prise de connexion
+            # locale et fichiers temporaires
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+  # Un disque par pod, conservé si le pod est recréé ou le chart mis à jour
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .storage }}
+{{- end }}

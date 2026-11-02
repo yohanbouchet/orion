@@ -1,0 +1,15 @@
+# Fichier  : infra/helm/microcrm/Chart.yaml
+# Rôle     : carte d'identité du chart Helm de MicroCRM : nom, version du
+#            chart, version de l'application déployée par défaut
+# Utilise  : templates/ et values*.yaml de ce dossier
+# Utilisé par : helm (scripts/deploy.sh, job CI deploy) ; ticket #64
+
+# Format des charts de Helm 3 et 4
+apiVersion: v2
+name: microcrm
+description: MicroCRM for Orion (Angular front, Spring Boot back, PostgreSQL)
+type: application
+# Version du CHART : à augmenter quand les modèles changent (SemVer)
+version: 0.1.0
+# Version de l'APPLICATION : étiquette des images vX.Y.Z par défaut
+appVersion: "1.1.0"

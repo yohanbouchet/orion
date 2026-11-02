@@ -1,0 +1,27 @@
+{{- /*
+Fichier  : infra/helm/microcrm/templates/front-nginx-config.yaml
+Rôle     : relais /api du front vers le back, ajouté à la configuration
+           nginx de l'image (include /etc/nginx/extra/*.conf de
+           front/nginx.conf) : c'est le chart qui connaît le nom du back
+Utilise  : _helpers.tpl
+Utilisé par : templates/front.yaml (volume en lecture seule) ; ticket #64
+*/}}
+{{- $ctx := dict "root" $ "component" "front" }}
+{{- $name := include "microcrm.name" $ctx }}
+{{- $back := include "microcrm.name" (dict "root" $ "component" "back") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-nginx
+  labels:
+    {{- include "microcrm.labels" $ctx | nindent 4 }}
+data:
+  # Inclus par front/nginx.conf (include /etc/nginx/extra/*.conf) :
+  # /api/persons → back /persons (la barre finale retire le préfixe /api)
+  api.conf: |
+    location /api/ {
+        proxy_pass http://{{ $back }}:8080/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }

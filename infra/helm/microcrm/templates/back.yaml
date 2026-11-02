@@ -1,0 +1,137 @@
+{{- /*
+Fichier  : infra/helm/microcrm/templates/back.yaml
+Rôle     : API Spring Boot : adresse fixe (Service), Deployment avec
+           mise à jour progressive sans coupure, et mise à l'échelle
+           automatique (HPA) si back.autoscaling.enabled
+Utilise  : values.yaml (back.*, postgres.*) ; image GHCR orion-back ;
+           Secret de la base ; _helpers.tpl
+Utilisé par : le front (relais /api, templates/front.yaml) ; ticket #64
+*/}}
+{{- $ctx := dict "root" $ "component" "back" }}
+{{- $name := include "microcrm.name" $ctx }}
+{{- $db := include "microcrm.name" (dict "root" $ "component" "postgres") }}
+{{- $pg := .Values.postgres }}
+{{- $url := printf "jdbc:postgresql://%s:5432/%s" $db $pg.database }}
+{{- with .Values.back }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "microcrm.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "microcrm.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "microcrm.labels" $ctx | nindent 4 }}
+spec:
+  {{- if not .autoscaling.enabled }}
+  replicas: {{ .replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "microcrm.selectorLabels" $ctx | nindent 6 }}
+  # Mise à jour progressive : un nouveau pod démarre et doit être prêt
+  # AVANT qu'un ancien soit arrêté (aucune coupure avec 2 répliques)
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "microcrm.labels" $ctx | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        # Compte « app » de l'image (numéro 1001), comme back/Dockerfile
+        {{- include "microcrm.podSecurityContext" 1001 | nindent 8 }}
+      containers:
+        - name: back
+          image: {{ include "microcrm.image" (dict "root" $ "image" .image) }}
+          imagePullPolicy: {{ .image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # Connexion à la base du même environnement (ticket #66) ; le
+            # mot de passe vient du Secret, jamais du chart
+            - name: SPRING_DATASOURCE_URL
+              value: {{ $url | quote }}
+            - name: SPRING_DATASOURCE_USERNAME
+              value: {{ $pg.username | quote }}
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pg.existingSecret }}
+                  key: {{ $pg.secretKey }}
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ .javaToolOptions | quote }}
+          securityContext:
+            {{- include "microcrm.containerSecurityContext" . | nindent 12 }}
+          # Démarrage de Spring Boot : jusqu'à 3 min avant les autres sondes
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          # Reçoit du trafic seulement quand l'API répond (racine de l'API
+          # REST ; actuator absent, voir le plan)
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          # Redémarré s'il ne répond plus pendant 1 min
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          volumeMounts:
+            # Seul dossier inscriptible : fichiers temporaires de Tomcat
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- if .autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "microcrm.labels" $ctx | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ .autoscaling.minReplicas }}
+  maxReplicas: {{ .autoscaling.maxReplicas }}
+  # Ajoute un pod quand le processeur moyen dépasse la cible (en % de la
+  # demande « requests.cpu »)
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}
