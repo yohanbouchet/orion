@@ -39,6 +39,9 @@ crash.log
 reports/
 .scannerwork/
 
+# Liste des tests en échec que bashunit garde entre deux lancements
+.bashunit/
+
 # --- Dépendances installées ---
 # Paquets npm téléchargés par npm ci (ex. outil de version dans
 # .github/release/) : régénérés depuis le package-lock.json.
