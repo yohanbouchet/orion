@@ -4,8 +4,8 @@
 #            le 31/10/2026.
 # Utilise  : le dossier front/ (code, package-lock.json, nginx.conf) ;
 #            images officielles node 24 et nginx-unprivileged 1.30 (Alpine 3.24)
-# Utilisé par : .github/workflows/ci.yml (job des images) ; plus tard le
-#               chart Helm (phase 5)
+# Utilisé par : .github/workflows/ci.yml (jobs images et publish) ; chart
+#               infra/helm/microcrm (image publiée sur GHCR)
 
 # --- Étape 1 : construction (image jetée à la fin) ---
 # Node 24 LTS, version et empreinte figées

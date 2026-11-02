@@ -5,8 +5,8 @@
 | Projet    | Démarche DevOps pour l'application MicroCRM      |
 | Client    | Orion (destinataire : Maria, CTO)                |
 | Auteur    | Yohan Bouchet                                    |
-| Version   | 1.0 (à valider) |
-| Date      | 29/10/2026                                       |
+| Version   | 1.1 (ESLint reporté, documentation des scripts) |
+| Date      | 29/10/2026, mis à jour le 02/11/2026             |
 
 ## 1. Introduction
 
@@ -102,7 +102,7 @@ rejoués à l'étape `build`, aucun rapport ni analyse, aucune image publiée.
 
 | Code | Conventions | Outil de contrôle |
 | --- | --- | --- |
-| Front (TypeScript, Angular) | Guide de style Angular : fichiers en `kebab-case` (`person-details.component.ts`), classes en `PascalCase` | **ESLint** (angular-eslint) |
+| Front (TypeScript, Angular) | Guide de style Angular : fichiers en `kebab-case` (`person-details.component.ts`), classes en `PascalCase` | **SonarQube** (règles TypeScript) ; ESLint (angular-eslint) reporté en évolution (4.2) |
 | Back (Java, Spring Boot) | Conventions Java : classes en `PascalCase`, méthodes et variables en `camelCase`, paquets en minuscules ; injection par constructeur | **SonarQube** (règles Java « Sonar way ») |
 | Dockerfile | Image de base figée, utilisateur non root, une sonde de santé (`HEALTHCHECK` ; dans Kubernetes, qui l'ignore, sondes du pod) | **hadolint** |
 | Scripts Bash | `set -Eeuo pipefail`, variables entre guillemets, bibliothèque commune `scripts/lib/common.sh` (journal, arrêt avec code de sortie et message « fix: ») | **ShellCheck** (`.shellcheckrc`) |
@@ -207,7 +207,7 @@ flowchart TB
         direction LR
         subgraph checks["Contrôles en parallèle"]
             direction TB
-            lint["Style<br/>ESLint, hadolint, ShellCheck"]
+            lint["Style<br/>hadolint, ShellCheck"]
             tests["Tests + couverture<br/>Karma + lcov, JUnit + JaCoCo"]
             sca["Dépendances<br/>Trivy"]
             secrets["Secrets<br/>gitleaks"]
@@ -236,7 +236,7 @@ flowchart TB
 
 | Contrôle | Outil | Bloquant |
 | --- | --- | --- |
-| Style et erreurs courantes | ESLint, hadolint, ShellCheck | oui |
+| Style et erreurs courantes | hadolint, ShellCheck (ESLint : évolution, 4.2) | oui |
 | Tests et couverture | Karma, JUnit, JaCoCo | oui |
 | Quality Gate | SonarQube | oui |
 | Failles des dépendances (production et outillage) et des images | Trivy | oui (critiques et hautes corrigeables) |
@@ -339,7 +339,8 @@ Règles :
 
 | Documentation | Contenu | Où |
 | --- | --- | --- |
-| README racine | Présentation, démarrage, architecture, et pour **chaque script** : but, fonctionnement, paramètres, conditions d'exécution | `README.md` |
+| README racine | Présentation, architecture, pipeline, démarrage, déploiement, installation de la chaîne | `README.md` |
+| README des scripts | Pour **chaque script** : but, fonctionnement, paramètres, conditions d'exécution, tests | `scripts/README.md` |
 | Documents de projet | Audit, normes, plans, documentation CI/CD | `docs/` (Markdown, exportés en PDF) |
 | Code | En-tête de fichier ; commentaire au-dessus des instructions importantes | dans les fichiers |
 | Historique des versions | Notes de version générées par semantic-release | releases GitHub |
@@ -388,10 +389,11 @@ attendus, comparés aux mesures de départ du document 1 :
 
 #### Étape 3 — Pipeline de base : style, tests et couverture
 
-- **Description** : premier workflow GitHub Actions : ESLint, tests front et
-  back lancés une seule fois, rapports JUnit, couverture JaCoCo et lcov,
-  cache npm et Gradle. Les ajouts au code (ESLint, JaCoCo) passent par des
-  tickets à l'équipe Dev.
+- **Description** : premier workflow GitHub Actions : tests front et back
+  lancés une seule fois, rapports JUnit, couverture JaCoCo et lcov, cache
+  npm et Gradle. Les ajouts au code (JaCoCo, lcov) passent par des tickets
+  à l'équipe Dev. ESLint, prévu à cette étape, est reporté en évolution
+  (4.2).
 - **Responsables** : équipe Dev (pilote : Roubina), ingénieur DevOps.
 - **Livrables** : workflow de CI ; rapports de tests et de couverture
   visibles dans chaque PR.
@@ -431,7 +433,7 @@ attendus, comparés aux mesures de départ du document 1 :
 | Personnes | Équipe Dev (4), équipe Ops (2), ingénieur DevOps ; Maria (CTO) pour les arbitrages |
 | Serveur | Machine Ubuntu de l'équipe (8 cœurs, 14 Gio de RAM) : Minikube (4 cœurs et 7 Go alloués) avec le runner local et SonarQube (environ 2 Gio mesurés) ; runners hébergés par GitHub, gratuits pour un dépôt public |
 | Services | Dépôt GitHub public : GitHub Actions, Dependabot et registre d'images gratuits pour un dépôt public |
-| Logiciels | SonarQube Community Build, Trivy, hadolint, gitleaks, ESLint, semantic-release : gratuits et open source |
+| Logiciels | SonarQube Community Build, Trivy, hadolint, gitleaks, ShellCheck, semantic-release : gratuits et open source |
 | Budget | 0 € de licence ; le coût est le temps des équipes et la machine existante |
 | Formation | Atelier de prise en main (étape 6) ; accompagnement des Dev sur Java et JUnit |
 
@@ -505,6 +507,9 @@ Après la mise en œuvre, pour que la démarche dure :
   l'ensemble du code ;
 - **rétrospective** Dev/Ops après chaque release, pour ajuster les normes ;
 - **déploiement continu** et **supervision**, décrits dans le plan de CD ;
+- **ESLint** pour le front (reporté le 31/10/2026 : le temps du projet est
+  donné au déploiement continu ; en attendant, SonarQube analyse le
+  TypeScript) ;
 - évolutions étudiées : analyse CodeQL, contrôles CIS Benchmark, registre
   interne Harbor, commitlint (vérifier en CI le format des messages de
   commit, puisque leur type décide de la version).

@@ -4,7 +4,8 @@
 #            root ou privilégié ne peut y démarrer).
 # Utilise  : rien
 # Utilisé par : infra/arc/values-orion-runners.yaml (helm … -n arc-runners) ;
-#               infra/sonarqube/network-policy.yaml (accès à SonarQube)
+#               infra/sonarqube/network-policy.yaml (accès à SonarQube) ;
+#               chart infra/helm/microcrm (accès au front, tests ZAP)
 
 apiVersion: v1
 kind: Namespace
