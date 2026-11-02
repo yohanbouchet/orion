@@ -11,5 +11,3 @@ bin
 # Secrets éventuels : jamais dans une image
 .env
 .env.*
-# Documentation inutile dans l'image
-HELP.md

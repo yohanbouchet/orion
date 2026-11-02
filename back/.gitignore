@@ -1,3 +1,10 @@
+# Fichier  : back/.gitignore
+# Rôle     : fichiers du back que Git ne suit pas (compilation, cache
+#            Gradle, fichiers d'éditeur) ; modèle toptal.com gradle,java
+#            complété
+# Utilise  : rien
+# Utilisé par : git, avec le .gitignore racine
+
 # Created by https://www.toptal.com/developers/gitignore/api/gradle,java
 # Edit at https://www.toptal.com/developers/gitignore?templates=gradle,java
 
@@ -49,6 +56,8 @@ gradle-app.setting
 .project
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
+# Dossier de compilation d'Eclipse (était versionné à l'origine)
+bin/
 
 ### Gradle Patch ###
 # Java heap dump
