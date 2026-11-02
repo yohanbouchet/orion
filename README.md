@@ -51,7 +51,8 @@ Au 02/11/2026 :
 | Script de déploiement avec test de fumée et retour arrière | ✅ [`scripts/deploy.sh`](scripts/README.md#deploysh) |
 | Job de déploiement, environnements `staging` et `prod` | ⏳ en cours |
 | Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) (planification quotidienne : avec Ansible) |
-| Terraform et Ansible | ⏳ à venir |
+| Socle du cluster en Terraform (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
+| Ansible (configuration de la machine) | ⏳ à venir |
 | Supervision (ELK), alertes, indicateurs DORA, tests de charge | ⏳ à venir |
 
 ## Architecture
@@ -103,6 +104,7 @@ orchestre la CI et héberge le registre d'images.
 front/                    application Angular, Dockerfile, nginx.conf
 back/                     API Spring Boot (Gradle), Dockerfile
 infra/
+  terraform/              socle du cluster (namespaces, comptes deployer)
   helm/microcrm/          chart Helm de l'application
   postgres/               image PostgreSQL durcie (sans gosu, sans root)
   sonarqube/              SonarQube dans le cluster
@@ -129,6 +131,7 @@ main depuis l'onglet **Actions**.
 | `hadolint` | Bonnes pratiques des Dockerfiles | hadolint | GitHub |
 | `shellcheck` | Erreurs courantes des scripts Bash | ShellCheck | GitHub |
 | `script-tests` | Tests des scripts | bashunit, pytest | GitHub |
+| `terraform` | Mise en forme, validité et tests du socle Terraform | Terraform (`fmt`, `validate`, `test`) | GitHub |
 | `trivy` | Failles des dépendances (production et outillage) | Trivy | GitHub |
 | `images` | Construction et scan des images front et back | Docker, Trivy | GitHub |
 | `release` | Numéro de version et Release GitHub (sur `main`) | semantic-release | GitHub |
@@ -218,8 +221,8 @@ front).
 ## Déployer sur Kubernetes
 
 Prérequis : le cluster Minikube `orion`
-([installation](#installer-la-chaîne-sur-le-poste-ops)), `kubectl` et
-`helm` 4.
+([installation](#installer-la-chaîne-sur-le-poste-ops)), `kubectl`,
+`helm` 4 et Terraform 1.17.
 
 ```shell
 # 1. Image PostgreSQL durcie, construite et chargée dans Minikube (elle
@@ -228,9 +231,10 @@ docker build -t orion/postgres:18.6-hardened infra/postgres
 minikube -p orion image load orion/postgres:18.6-hardened
 ```
 
-2. Namespaces `dev`, `staging` et `prod`, créés une seule fois au niveau
-   de sécurité « restricted » : commande dans le
-   [README du chart](infra/helm/microcrm/README.md#installation).
+2. Socle du cluster, une seule fois, par Terraform : namespaces `dev`,
+   `staging` et `prod` au niveau de sécurité « restricted », et un compte
+   de déploiement par namespace, enfermé dans celui-ci
+   ([`infra/terraform`](infra/terraform/README.md#utilisation)).
 
 3. Déploiement, vérifié par un test de fumée, avec retour arrière
    automatique en cas d'échec
@@ -318,7 +322,8 @@ Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#
   nécessaire ; image PostgreSQL sans `gosu`.
 - **Cluster** : namespaces au niveau Pod Security « restricted »,
   conteneurs en lecture seule et sans capacité Linux, pare-feu entre pods
-  (NetworkPolicy, refus par défaut).
+  (NetworkPolicy, refus par défaut) ; un compte de déploiement par
+  namespace, sans droit ailleurs (Terraform).
 - **CI** : actions figées par empreinte, droits minimaux par job, runner
   local jetable et non privilégié, jamais utilisé par un fork.
 - **Sauvegardes** : fichiers en 600, dossiers en 700, empreinte SHA-256
@@ -332,6 +337,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 |---|---|---|
 | Tout tourne sur une seule machine (Minikube) | Cible cloud (schéma AWS, à venir) | — |
 | Sauvegarde quotidienne complète, sur la machine, non chiffrée fichier par fichier | Restauration à un instant donné (WAL, CloudNativePG ou RDS), incrémental, copie hors site chiffrée (règle 3-2-1) | [scripts](scripts/README.md#backupsh) |
+| Jetons de déploiement de longue durée, état Terraform local | Fédération OIDC GitHub → cluster (jetons de quelques minutes) ; état distant chiffré et verrouillé | [Terraform](infra/terraform/README.md#limites-connues-et-évolutions) |
 | Compte `microcrm` superutilisateur PostgreSQL | Compte applicatif aux droits limités | [chart](infra/helm/microcrm/README.md#limites-connues) |
 | Sondes de santé sur `/`, sans Spring Boot Actuator | Point de santé dédié (`/actuator/health`) | [chart](infra/helm/microcrm/README.md#limites-connues) |
 | Table de liens sans clé primaire | Migration Flyway (équipe Dev) | [scripts](scripts/README.md#backupsh) |
@@ -373,6 +379,7 @@ Vérifiées le 02/11/2026 (dernière version publiée et fin de support sur
 | PostgreSQL | 18.6 |
 | Kubernetes (Minikube 1.39.0) | 1.37.0 (correctif 1.37.2 disponible) |
 | Helm | 4.3.1 |
+| Terraform / fournisseur Kubernetes | 1.17 (1.17.1 dans la CI) / 3.4.0 |
 | ARC (runner local) | 0.15.1, runner 2.338.2 |
 | SonarQube Community Build | 26.10 |
 | Trivy / hadolint / gitleaks / ShellCheck | 0.76.1 / 2.15.1 / 8.30.1 / 0.11.0 |

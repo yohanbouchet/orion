@@ -59,23 +59,16 @@ Le HPA a besoin de l'addon **metrics-server** de Minikube
 
 ## Installation
 
-```shell
-# 1. Une seule fois par environnement (droits sur tout le cluster, donc
-#    hors du script de déploiement) : namespace au niveau de sécurité
-#    « restricted »
-for env in dev staging prod; do
-  kubectl create namespace "$env" --dry-run=client -o yaml |
-    kubectl label --local -f - \
-      pod-security.kubernetes.io/enforce=restricted \
-      pod-security.kubernetes.io/enforce-version=latest -o yaml |
-    kubectl apply -f -
-done
+Les namespaces `dev`, `staging` et `prod` (niveau de sécurité
+« restricted ») et les comptes qui ont le droit d'y déployer sont créés
+une seule fois par Terraform : voir [`infra/terraform`](../../terraform/README.md).
 
-# 2. Déploiement : Secret de la base (créé une seule fois, aléatoire),
+```shell
+# 1. Déploiement : Secret de la base (créé une seule fois, aléatoire),
 #    helm lint, installation, test de fumée, retour arrière si besoin
 scripts/deploy.sh dev
 
-# 3. Accès depuis le poste : http://localhost:8080 (transfert de port
+# 2. Accès depuis le poste : http://localhost:8080 (transfert de port
 #    de VS Code)
 kubectl -n dev port-forward svc/microcrm-front 8080:8080
 ```

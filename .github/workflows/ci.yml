@@ -4,7 +4,8 @@
 #            parallèle sur les runners hébergés par GitHub, puis l'analyse
 #            SonarQube et son Quality Gate sur le runner local ; en
 #            parallèle, les scans de sécurité (gitleaks, hadolint,
-#            ShellCheck, Trivy), les tests des scripts (bashunit, pytest) et
+#            ShellCheck, Trivy), les tests des scripts (bashunit, pytest),
+#            les contrôles du socle Terraform (fmt, validate, test) et
 #            la construction des images Docker analysées ; après une fusion
 #            sur main, si tout est vert, numéro de version (semantic-release :
 #            étiquette vX.Y.Z et Release GitHub) puis publication des images
@@ -283,6 +284,36 @@ jobs:
       - name: Run Python script tests
         run: python -m pytest -p no:cacheprovider scripts/tests
 
+  # Socle Terraform du cluster (namespaces, comptes deployer) : mise en
+  # forme, validité et tests avec un faux fournisseur, sans cluster ni
+  # état ; ticket #64
+  terraform:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Version figée, la même qu'en local ; sans « wrapper » (inutile ici)
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+      # Fournisseur vérifié par .terraform.lock.hcl ; aucun état lu
+      - name: Initialize without state
+        run: terraform init -backend=false -input=false
+      - name: Validate
+        run: terraform validate
+      - name: Unit tests
+        run: terraform test
+
   # Failles connues dans les dépendances (npm, Gradle) : bloque sur les
   # failles hautes et critiques, sauf exceptions justifiées et datées dans
   # .trivyignore (docs/02, section 2.7) ; ticket #20
@@ -393,6 +424,7 @@ jobs:
       - hadolint
       - shellcheck
       - script-tests
+      - terraform
       - trivy
       - images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -446,6 +478,7 @@ jobs:
       - hadolint
       - shellcheck
       - script-tests
+      - terraform
       - trivy
       - images
       - release
@@ -516,6 +549,7 @@ jobs:
       - hadolint
       - shellcheck
       - script-tests
+      - terraform
       - trivy
       - images
       - release

@@ -5,7 +5,7 @@
 #            précédente s'il échoue ; « rollback » revient en arrière à la
 #            demande ; la même commande en local et dans la CI
 # Utilise  : scripts/lib/common.sh ; helm, kubectl, openssl ;
-#            infra/helm/microcrm ; namespace créé à l'installation
+#            infra/helm/microcrm ; namespace créé par infra/terraform
 # Utilisé par : l'opérateur ; job de déploiement de la CI ; ticket #56
 # Usage    : scripts/deploy.sh dev|staging|prod [TAG]
 #            scripts/deploy.sh rollback dev|staging|prod [REVISION]
@@ -45,20 +45,21 @@ check_env() {
   esac
 }
 
-# Le namespace est créé une seule fois, à l'installation (droits sur tout
-# le cluster) ; ici on vérifie qu'il existe et qu'il impose le niveau de
-# sécurité « restricted »
+# Le namespace est créé par Terraform (droits sur tout le cluster) ; ici
+# on vérifie qu'il existe, qu'on a le droit de le lire, et qu'il impose
+# le niveau de sécurité « restricted »
 check_namespace() {
   local ns="$1" level
   level="$(kubectl get namespace "$ns" -o \
     jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce}' \
     2>/dev/null)" ||
-    die "namespace $ns not found;" \
-      "fix: create it once, see infra/helm/microcrm/README.md"
+    die "namespace $ns not found or not allowed;" \
+      "fix: create it with Terraform (infra/terraform/README.md)" \
+      "or check the credentials (kubectl config current-context)"
   [[ "$level" == "restricted" ]] ||
     die "namespace $ns does not enforce Pod Security \"restricted\";" \
-      "fix: kubectl label namespace $ns" \
-      "pod-security.kubernetes.io/enforce=restricted"
+      "fix: run terraform apply in infra/terraform (it sets" \
+      "pod-security.kubernetes.io/enforce=restricted)"
 }
 
 # Mot de passe de la base : créé une seule fois, jamais remplacé (la base
