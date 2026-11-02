@@ -283,9 +283,14 @@ publish ──▶ deploy-dev ──▶ deploy-staging ──▶ deploy-prod
 | `production` / `prod` | `main` | à chaque version `vX.Y.Z`, **après approbation** | idem, `-n prod` | 2 répliques du back au minimum, autoscaling (HPA), mise à jour progressive sans coupure |
 
 Chaque environnement GitHub garde le secret `KUBE_TOKEN`, jeton du
-compte `deployer` de son namespace. Chaque déploiement est tracé dans
-l'onglet **Deployments** du dépôt (environnement, commit, exécution) et
-dans le résumé de l'exécution (image déployée).
+compte `deployer` de son namespace. `ci.yml` transmet ce seul secret à
+`deploy.yml` (pas `secrets: inherit`, qui transmettrait tous les
+secrets du dépôt, même ceux ajoutés plus tard) ; sans cette
+transmission, GitHub donne une valeur vide sans erreur : `deploy.yml`
+l'exige donc (`required: true`) et s'arrête avec un message clair si le
+jeton est vide. Chaque déploiement est tracé dans l'onglet
+**Deployments** du dépôt (environnement, commit, exécution) et dans le
+résumé de l'exécution (image déployée).
 
 - Chaque job ne reçoit que le jeton de **son** environnement, et ce jeton
   ne permet d'agir que dans **son** namespace
@@ -304,7 +309,11 @@ dans le résumé de l'exécution (image déployée).
 étapes de `deploy.yml`, lancées dans un pod de l'image du runner local
 avec le jeton de `dev`, ont déployé `sha-c2f1558` (révision 12, test de
 fumée réussi) ; une empreinte fausse arrête le job avant toute connexion ;
-le fichier de connexion est en 600 et supprimé à la fin.
+le fichier de connexion est en 600 et supprimé à la fin. Limite de ce
+test : le jeton y était fourni à la main ; la première exécution par
+GitHub a échoué (jeton vide, secret non transmis par `ci.yml`, ticket
+#77), corrigée ensuite. Le cluster n'a pas été modifié (`dev` resté à la
+révision 12).
 
 ## Installer la chaîne sur le poste Ops
 

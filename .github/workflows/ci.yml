@@ -552,6 +552,10 @@ jobs:
     with:
       environment: dev
       namespace: dev
+    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
+    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
+    secrets:
+      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
 
   deploy-staging:
     needs: deploy-dev
@@ -559,6 +563,10 @@ jobs:
     with:
       environment: staging
       namespace: staging
+    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
+    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
+    secrets:
+      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
 
   # Prod seulement si une version vX.Y.Z vient d'être publiée, et après
   # l'approbation demandée par l'environnement production
@@ -570,6 +578,10 @@ jobs:
       environment: production
       namespace: prod
       tag: ${{ needs.release.outputs.version }}
+    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
+    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
+    secrets:
+      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
 
   # Notification du résultat sur main (ticket de panne, e-mail par GitHub),
   # même si un job a échoué (always) ; ticket #56

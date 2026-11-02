@@ -28,6 +28,12 @@ on:
       tag:
         type: string
         default: ""
+    # Jeton du compte deployer : ci.yml doit le transmettre (sinon GitHub
+    # donne une valeur vide, sans erreur) ; required : un appel qui
+    # l'oublie échoue tout de suite
+    secrets:
+      KUBE_TOKEN:
+        required: true
 
 # Moindre privilège : lire le code, rien d'autre
 permissions:
@@ -86,6 +92,11 @@ jobs:
           KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
           NAMESPACE: ${{ inputs.namespace }}
         run: |
+          # Jeton vide (secret absent de l'environnement) : arrêt clair
+          if [ -z "$KUBE_TOKEN" ]; then
+            echo "::error::KUBE_TOKEN is empty; set it in the environment"
+            exit 1
+          fi
           umask 077
           ca="$(printf '%s\n' "$KUBE_CA" | base64 -w0)"
           cat > "$RUNNER_TEMP/kubeconfig" <<EOF
