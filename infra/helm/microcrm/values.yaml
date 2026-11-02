@@ -4,7 +4,8 @@
 #            leurs différences
 # Utilise  : images GHCR orion-front et orion-back (publiées par la CI),
 #            image PostgreSQL durcie (infra/postgres, chargée dans Minikube)
-# Utilisé par : templates/ ; scripts/deploy.sh ; ticket #64
+# Utilisé par : templates/ ; scripts/deploy.sh ; scripts/backup.sh (mêmes
+#               noms de base et de compte) ; ticket #64
 
 front:
   image:
