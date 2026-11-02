@@ -12,10 +12,10 @@ marche dans la CI, et inversement.
 | [`run-tests.sh`](#run-testssh) | Lancer les tests et vérifier le rapport de couverture | jobs `test-front`, `test-back` |
 | [`notify.py`](#notifypy) | Signaler par ticket et e-mail une CI en échec sur `main` | job `notify` |
 | [`lib/common.sh`](#libcommonsh) | Fonctions partagées : journal, arrêt, outils requis | les scripts Bash |
+| [`deploy.sh`](#deploysh) | Déployer MicroCRM, le vérifier, revenir en arrière | l'opérateur ; job de déploiement (à venir) |
 | [`deploy-sonarqube.sh`](#deploy-sonarqubesh) | Déployer SonarQube dans le cluster Minikube | l'opérateur, à la main |
 
-À venir (phase 5, avec le chart Helm de l'application) : le déploiement
-avec retour arrière (rollback) et la sauvegarde de la base.
+À venir : la sauvegarde et la restauration de la base (`backup.sh`).
 
 ## Règles communes
 
@@ -149,6 +149,72 @@ Pour vérifier que l'alerte arrive vraiment, sans rien casser :
 Ces lancements manuels ne publient aucune version. Exercice réussi le
 01/11/2026 (ticket #61 : deux e-mails reçus, mention et assignation).
 
+## deploy.sh
+
+**But** : installer ou mettre à jour MicroCRM (chart
+[`infra/helm/microcrm`](../infra/helm/microcrm/README.md)) dans un
+environnement, **vérifier que l'application répond**, et revenir à la
+version précédente si ce n'est pas le cas.
+
+```shell
+scripts/deploy.sh dev                     # version du chart (appVersion)
+scripts/deploy.sh staging v1.1.0          # image publiée vX.Y.Z
+scripts/deploy.sh dev sha-abc1234         # image d'un commit de main
+scripts/deploy.sh rollback prod           # version précédente
+scripts/deploy.sh rollback prod 3         # révision choisie (helm history)
+```
+
+**Fonctionnement** :
+
+1. contrôle des paramètres : environnement `dev`, `staging` ou `prod`
+   (c'est aussi le namespace) ; étiquette au format `vX.Y.Z` ou
+   `sha-xxxxxxx` uniquement, ce qui empêche d'injecter un réglage Helm
+   (`v1.2.3,front.replicas=9` est refusé) ;
+2. le namespace doit exister et imposer le niveau Pod Security
+   « restricted ». Le script ne le crée pas : c'est une étape
+   d'installation, qui demande des droits sur tout le cluster ;
+3. Secret `microcrm-db` : créé **une seule fois**, avec une valeur
+   aléatoire (`openssl rand`) passée à kubectl par un tube, donc jamais
+   visible dans la ligne de commande ni affichée ; jamais remplacé, car la
+   base garde le mot de passe de sa création ;
+4. `helm lint` avec les réglages de l'environnement ;
+5. `helm upgrade --install --wait --rollback-on-failure` : si les pods ne
+   sont pas prêts en 6 minutes, Helm remet lui-même la version précédente ;
+   les anciens pods servent jusqu'au bout (`maxUnavailable: 0`) ;
+6. **test de fumée** : depuis le pod du front, appel de `/api/persons`
+   (chemin complet front → back → base), 3 essais ; en cas d'échec,
+   `helm rollback`, puis arrêt en erreur.
+
+`rollback` lance `helm rollback` (révision précédente ou choisie), puis
+le même test de fumée.
+
+**Paramètres** : `TAG` (facultatif) ; `REVISION` (facultatif, pour
+`rollback`) ; `SMOKE_DELAY`, secondes entre deux essais du test de fumée
+(5 par défaut, 0 dans les tests).
+
+**Conditions d'exécution** : `helm` 4, `kubectl`, `openssl` ; accès au
+cluster (contexte `orion` sur le poste, compte de service dans la CI) ;
+namespace créé ([README du chart](../infra/helm/microcrm/README.md#installation)) ;
+image PostgreSQL durcie chargée dans Minikube
+([README racine](../README.md#déployer-sur-kubernetes)).
+
+**Arrêts expliqués** :
+
+| Cas | Code | Correction proposée |
+|---|---|---|
+| Environnement, étiquette ou révision invalide | 2 | syntaxe rappelée |
+| `helm`, `kubectl` ou `openssl` absent | 127 | installer l'outil |
+| Namespace absent ou pas « restricted » | 1 | le créer ou poser l'étiquette |
+| Pods pas prêts à temps | 1 | version précédente gardée par Helm ; `kubectl -n ENV get pods` |
+| Test de fumée en échec | 1 | version précédente remise ; journaux du back |
+
+**Vérifié le 02/11/2026** dans le cluster `orion` : déploiements de
+`dev`, 1re installation de `staging` (Secret créé, 16 s), image
+inexistante (retour automatique après 6 min, aucune coupure), retour à
+une révision choisie. Le 1er essai a montré que, dans le conteneur,
+`localhost` désigne d'abord l'IPv6 (`::1`), où nginx n'écoute pas : le
+test de fumée vise donc `127.0.0.1`.
+
 ## lib/common.sh
 
 Fonctions partagées, **chargées** par les scripts Bash
@@ -194,7 +260,8 @@ Le job `script-tests` lance tous les tests à **chaque PR**, et le job
 depuis la racine du dépôt :
 
 ```shell
-# Tests Bash (bashunit 0.52.0, avec de faux outils : aucun vrai npm ni Gradle)
+# Tests Bash (bashunit 0.52.0, avec de faux outils : ni npm, ni Gradle, ni
+# cluster)
 bashunit scripts/tests
 
 # Tests Python (pytest 9.2.0) dans un conteneur jetable : paquets installés
@@ -215,12 +282,13 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/common_test.sh` | bashunit | journal, codes de `die` / `die_with`, outils requis, garde contre l'exécution directe |
 | `tests/install_deps_test.sh` | bashunit | usage, `package-lock.json` absent, commandes npm et Gradle, « FAILED » détecté |
 | `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Karma lancé une fois, `KARMA_BROWSER`, tests rouges, rapport absent |
+| `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, échec de Helm, test de fumée raté → retour arrière, `rollback` |
 | `tests/test_notify.py` | pytest | jobs en échec, exercice, ouverture / commentaire / fermeture, résumé, paramètres |
 
-Les tests Bash remplacent `npm`, `java` ou `gradlew` par des **doublures**
-(faux programmes placés en tête du `PATH`) : ils vérifient la logique du
-script en quelques secondes. Les tests Python remplacent l'API GitHub par
-un faux client : aucun ticket réel n'est créé.
+Les tests Bash remplacent `npm`, `java`, `gradlew`, `helm` ou `kubectl`
+par des **doublures** (faux programmes placés en tête du `PATH`) : ils
+vérifient la logique du script en quelques secondes. Les tests Python
+remplacent l'API GitHub par un faux client : aucun ticket réel n'est créé.
 
 Versions des outils de test : bashunit est téléchargé dans la CI avec
 vérification de son empreinte SHA-256 ; pytest et ses dépendances sont

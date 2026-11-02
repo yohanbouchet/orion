@@ -46,7 +46,8 @@ Au 02/11/2026 :
 | Versions automatiques (semantic-release) et publication des images | ✅ |
 | Scripts : dépendances, tests, notification, avec leurs tests | ✅ [`scripts/`](scripts/README.md) |
 | Chart Helm de l'application (testé dans `dev`) | ✅ [`infra/helm/microcrm/`](infra/helm/microcrm/README.md) |
-| Script de déploiement avec retour arrière, job de déploiement, environnements `staging` et `prod` | ⏳ en cours |
+| Script de déploiement avec test de fumée et retour arrière | ✅ [`scripts/deploy.sh`](scripts/README.md#deploysh) |
+| Job de déploiement, environnements `staging` et `prod` | ⏳ en cours |
 | Sauvegarde et restauration de la base | ⏳ à venir |
 | Terraform et Ansible | ⏳ à venir |
 | Supervision (ELK), alertes, indicateurs DORA, tests de charge | ⏳ à venir |
@@ -225,12 +226,21 @@ docker build -t orion/postgres:18.6-hardened infra/postgres
 minikube -p orion image load orion/postgres:18.6-hardened
 ```
 
-2. Namespace, Secret de la base et installation du chart : étapes
-   détaillées dans le [README du chart](infra/helm/microcrm/README.md).
-   Le script `scripts/deploy.sh` (en cours) les automatisera, avec le
-   retour arrière.
+2. Namespaces `dev`, `staging` et `prod`, créés une seule fois au niveau
+   de sécurité « restricted » : commande dans le
+   [README du chart](infra/helm/microcrm/README.md#installation).
 
-3. Accès à l'application :
+3. Déploiement, vérifié par un test de fumée, avec retour arrière
+   automatique en cas d'échec
+   ([détails](scripts/README.md#deploysh)) :
+
+   ```shell
+   scripts/deploy.sh dev              # ou : staging, prod ; étiquette
+                                      # facultative : v1.1.0, sha-abc1234
+   scripts/deploy.sh rollback dev     # retour à la version précédente
+   ```
+
+4. Accès à l'application :
 
    ```shell
    kubectl -n dev port-forward svc/microcrm-front 8080:8080

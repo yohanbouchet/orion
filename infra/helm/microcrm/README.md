@@ -57,33 +57,32 @@ Le HPA a besoin de l'addon **metrics-server** de Minikube
   disponibilité et de vie sur chaque composant, plus une sonde de
   démarrage pour le back (Spring Boot démarre lentement).
 
-## Installation à la main (dev)
-
-Le script `scripts/deploy.sh` automatisera ces étapes (ticket #56).
+## Installation
 
 ```shell
-# 1. Namespace, avec le niveau de sécurité « restricted »
-kubectl create namespace dev
-kubectl label namespace dev pod-security.kubernetes.io/enforce=restricted \
-  pod-security.kubernetes.io/enforce-version=latest
+# 1. Une seule fois par environnement (droits sur tout le cluster, donc
+#    hors du script de déploiement) : namespace au niveau de sécurité
+#    « restricted »
+for env in dev staging prod; do
+  kubectl create namespace "$env" --dry-run=client -o yaml |
+    kubectl label --local -f - \
+      pod-security.kubernetes.io/enforce=restricted \
+      pod-security.kubernetes.io/enforce-version=latest -o yaml |
+    kubectl apply -f -
+done
 
-# 2. Secret de la base : valeur aléatoire, jamais affichée ni versionnée
-kubectl -n dev create secret generic microcrm-db \
-  --from-literal=password="$(openssl rand -hex 32)"
+# 2. Déploiement : Secret de la base (créé une seule fois, aléatoire),
+#    helm lint, installation, test de fumée, retour arrière si besoin
+scripts/deploy.sh dev
 
-# 3. Contrôles, puis installation ; en cas d'échec, retour automatique à
-#    la version précédente (--rollback-on-failure, Helm 4)
-helm lint infra/helm/microcrm
-helm upgrade --install microcrm infra/helm/microcrm -n dev \
-  -f infra/helm/microcrm/values-dev.yaml --rollback-on-failure --wait
-
-# 4. Accès depuis le poste : http://localhost:8080 (transfert de port
+# 3. Accès depuis le poste : http://localhost:8080 (transfert de port
 #    de VS Code)
 kubectl -n dev port-forward svc/microcrm-front 8080:8080
 ```
 
-Version d'une autre image : `--set front.image.tag=sha-abc1234` (et de même
-pour `back`).
+Autre image : `scripts/deploy.sh dev sha-abc1234` (ou `v1.1.0`) ; retour
+arrière : `scripts/deploy.sh rollback dev`. Détails :
+[`scripts/README.md`](../../../scripts/README.md#deploysh).
 
 ## Limites connues
 
