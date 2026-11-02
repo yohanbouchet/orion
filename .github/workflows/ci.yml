@@ -9,15 +9,19 @@
 #            la construction des images Docker analysées ; après une fusion
 #            sur main, si tout est vert, numéro de version (semantic-release :
 #            étiquette vX.Y.Z et Release GitHub) puis publication des images
-#            sur GHCR ; enfin, sur main, notification du résultat (notify).
+#            sur GHCR ; déploiement dans dev puis staging, et dans prod
+#            après approbation si une version vient d'être publiée
+#            (deploy.yml) ; enfin, sur main, notification du résultat
+#            (notify).
 # Utilise  : actions officielles de GitHub et de SonarSource, figées par SHA
 #            de commit ; images officielles des outils de sécurité, figées
 #            par digest ; sonar-project.properties ; environnement sonarqube ;
 #            .trivyignore (failles acceptées et datées) ; front/Dockerfile,
 #            back/Dockerfile ; .github/release/ (semantic-release) ;
 #            scripts/ (install-deps.sh, run-tests.sh, notify.py, tests) ;
-#            jeton automatique GITHUB_TOKEN (version, publication,
-#            notification)
+#            workflow réutilisable deploy.yml (environnements dev, staging,
+#            production) ; jeton automatique GITHUB_TOKEN (version,
+#            publication, notification)
 # Utilisé par : GitHub Actions (PR, fusions sur main, lancement manuel)
 
 name: CI
@@ -538,6 +542,35 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+  # Déploiement continu (workflow réutilisable deploy.yml, runner local) :
+  # dev après chaque publication sur main, puis staging avec la même image
+  # (sha-xxxxxxx) ; ticket #64
+  deploy-dev:
+    needs: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: dev
+      namespace: dev
+
+  deploy-staging:
+    needs: deploy-dev
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
+      namespace: staging
+
+  # Prod seulement si une version vX.Y.Z vient d'être publiée, et après
+  # l'approbation demandée par l'environnement production
+  deploy-prod:
+    needs: [release, deploy-staging]
+    if: needs.release.outputs.version != ''
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+      namespace: prod
+      tag: ${{ needs.release.outputs.version }}
+
   # Notification du résultat sur main (ticket de panne, e-mail par GitHub),
   # même si un job a échoué (always) ; ticket #56
   notify:
@@ -554,6 +587,10 @@ jobs:
       - images
       - release
       - publish
+      # Sans deploy-prod : il peut attendre l'approbation des jours ;
+      # son résultat est vu par la personne qui approuve
+      - deploy-dev
+      - deploy-staging
     if: >-
       always() && github.ref == 'refs/heads/main' &&
       github.event_name != 'pull_request'

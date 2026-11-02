@@ -28,7 +28,8 @@ maxRunners: 2
 # par les runners hébergés de GitHub) : ni Docker, ni conteneur privilégié.
 template:
   spec:
-    # Le runner n'a pas besoin de parler à l'API Kubernetes : pas de jeton
+    # Pas de jeton du compte du pod : le job de déploiement apporte celui
+    # du compte deployer de l'environnement visé (moindre privilège)
     automountServiceAccountToken: false
     securityContext:
       runAsNonRoot: true

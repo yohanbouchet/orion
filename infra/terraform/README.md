@@ -78,8 +78,16 @@ kubectl auth can-i patch deployments -n dev --as=$SA    # yes
 kubectl auth can-i patch deployments -n prod --as=$SA   # no
 ```
 
-Les jetons seront rangés dans les environnements GitHub (`dev`,
-`staging`, `production`) avec le job de déploiement (à venir).
+Chaque jeton est rangé, sans être affiché, dans le secret `KUBE_TOKEN`
+de l'environnement GitHub correspondant (`dev`, `staging`,
+`production`), et le certificat dans la variable de dépôt `KUBE_CA` ;
+le job de déploiement les lit
+([déploiement continu](../../README.md#déploiement-continu-ci)) :
+
+```shell
+terraform output -json deployer_tokens | jq -r .dev   # puis clear
+terraform output -raw cluster_ca
+```
 
 ## Tests
 

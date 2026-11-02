@@ -49,7 +49,8 @@ Au 02/11/2026 :
 | Scripts : dépendances, tests, notification, avec leurs tests | ✅ [`scripts/`](scripts/README.md) |
 | Chart Helm de l'application (testé dans `dev`) | ✅ [`infra/helm/microcrm/`](infra/helm/microcrm/README.md) |
 | Script de déploiement avec test de fumée et retour arrière | ✅ [`scripts/deploy.sh`](scripts/README.md#deploysh) |
-| Job de déploiement, environnements `staging` et `prod` | ⏳ en cours |
+| Déploiement continu : `dev` puis `staging` à chaque fusion, `prod` sur une version après approbation | ✅ [`deploy.yml`](.github/workflows/deploy.yml) (1er passage en `prod` : à la prochaine version) |
+| Test d'intrusion automatisé (ZAP) sur `staging` | ⏳ en cours |
 | Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) (planification quotidienne : avec Ansible) |
 | Socle du cluster en Terraform (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible (configuration de la machine) | ⏳ à venir |
@@ -68,15 +69,15 @@ orchestre la CI et héberge le registre d'images.
           ▼                                ▼
  Runners hébergés par GitHub       Runner local ARC (dans Minikube)
  tests, scans, images,             analyse SonarQube
- version, publication              (et déploiement, à venir)
+ version, publication              et déploiement (dev, staging, prod)
           │ images vX.Y.Z                  │
           ▼                                ▼
  GHCR (registre d'images) ──────▶ Cluster Minikube « orion »
                                    ├─ arc-runners : runners de la CI
                                    ├─ sonarqube   : SonarQube + PostgreSQL
-                                   └─ dev         : MicroCRM (chart Helm)
+                                   └─ dev, staging, prod : MicroCRM
 
- Dans le namespace dev :
+ Dans chaque namespace de l'application :
  navigateur ──▶ front (nginx :8080) ──/api──▶ back (Spring Boot :8080)
                                                 │ JDBC
                                                 ▼
@@ -97,6 +98,7 @@ orchestre la CI et héberge le registre d'images.
 ```text
 .github/
   workflows/ci.yml        pipeline CI
+  workflows/deploy.yml    déploiement d'un environnement (appelé par ci.yml)
   dependabot.yml          mises à jour automatiques des dépendances
   release/                semantic-release (versions figées)
   ISSUE_TEMPLATE/         formulaires de tickets [Dev] et [Ops]
@@ -136,6 +138,8 @@ main depuis l'onglet **Actions**.
 | `images` | Construction et scan des images front et back | Docker, Trivy | GitHub |
 | `release` | Numéro de version et Release GitHub (sur `main`) | semantic-release | GitHub |
 | `publish` | Publication des images sur GHCR (sur `main`) | Docker | GitHub |
+| `deploy-dev`, `deploy-staging` | Déploiement de l'image du commit (`sha-xxxxxxx`) dans `dev`, puis `staging` (sur `main`) | `deploy.yml`, `deploy.sh` | runner local |
+| `deploy-prod` | Déploiement de la version `vX.Y.Z` dans `prod`, après approbation (si une version vient d'être publiée) | `deploy.yml`, `deploy.sh` | runner local |
 | `notify` | Ticket et e-mail si la CI échoue sur `main` | `notify.py` | GitHub |
 
 **Règles** :
@@ -257,6 +261,51 @@ minikube -p orion image load orion/postgres:18.6-hardened
    puis http://localhost:8080 (depuis un autre poste : transfert de port
    de VS Code).
 
+### Déploiement continu (CI)
+
+Après une fusion sur `main`, si tous les contrôles sont verts et les
+images publiées, la CI lance la même commande `scripts/deploy.sh` sur le
+runner local, avec le workflow réutilisable
+[`deploy.yml`](.github/workflows/deploy.yml) :
+
+```text
+publish ──▶ deploy-dev ──▶ deploy-staging ──▶ deploy-prod
+            image           même image         version vX.Y.Z,
+            sha-xxxxxxx     (promotion)        seulement si release en a
+                                               publié une ; attend
+                                               l'approbation
+```
+
+| Environnement (GitHub / namespace) | Branche | Type de déploiement | Accès | Particularités |
+|---|---|---|---|---|
+| `dev` / `dev` | `main` | automatique, à chaque fusion (image `sha-xxxxxxx`) | `kubectl -n dev port-forward svc/microcrm-front 8080:8080` | 1 réplique par composant ; réglages par défaut du chart |
+| `staging` / `staging` | `main` | automatique, après la réussite de `dev` (même image) | idem, `-n staging` | 1 réplique par composant ; cible du test d'intrusion ZAP (à venir) |
+| `production` / `prod` | `main` | à chaque version `vX.Y.Z`, **après approbation** | idem, `-n prod` | 2 répliques du back au minimum, autoscaling (HPA), mise à jour progressive sans coupure |
+
+Chaque environnement GitHub garde le secret `KUBE_TOKEN`, jeton du
+compte `deployer` de son namespace. Chaque déploiement est tracé dans
+l'onglet **Deployments** du dépôt (environnement, commit, exécution) et
+dans le résumé de l'exécution (image déployée).
+
+- Chaque job ne reçoit que le jeton de **son** environnement, et ce jeton
+  ne permet d'agir que dans **son** namespace
+  ([Terraform](infra/terraform/README.md#droits-dun-compte-deployer)).
+- Les règles s'appliquent aussi aux administrateurs du dépôt
+  (contournement désactivé).
+- Le certificat public de l'autorité du cluster est la variable de dépôt
+  `KUBE_CA` : le job vérifie qu'il parle au vrai cluster
+  (`https://kubernetes.default.svc`, adresse interne).
+- `kubectl` et `helm` sont les binaires officiels, refusés si leur
+  empreinte SHA-256 diffère de celle notée dans `deploy.yml`.
+- Un seul déploiement à la fois par environnement ; un échec du test de
+  fumée remet la version précédente et fait échouer le job.
+
+**Vérifié le 02/11/2026**, avant la première exécution par GitHub : les
+étapes de `deploy.yml`, lancées dans un pod de l'image du runner local
+avec le jeton de `dev`, ont déployé `sha-c2f1558` (révision 12, test de
+fumée réussi) ; une empreinte fausse arrête le job avant toute connexion ;
+le fichier de connexion est en 600 et supprimé à la fin.
+
 ## Installer la chaîne sur le poste Ops
 
 À faire une seule fois, sur la machine qui héberge le runner local et
@@ -331,7 +380,8 @@ Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#
   `SonarSource/sonarqube-scan-action`, `hashicorp/setup-terraform`) :
   toute autre action est refusée au démarrage du pipeline ; droits
   minimaux par job ; runner local jetable et non privilégié, jamais
-  utilisé par un fork.
+  utilisé par un fork ; jetons de déploiement rangés dans les
+  environnements GitHub (`main` seulement, approbation pour la prod).
 - **Sauvegardes** : fichiers en 600, dossiers en 700, empreinte SHA-256
   contrôlée avant toute restauration ; disque de la machine chiffré.
 
@@ -344,6 +394,8 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Tout tourne sur une seule machine (Minikube) | Cible cloud (schéma AWS, à venir) | — |
 | Sauvegarde quotidienne complète, sur la machine, non chiffrée fichier par fichier | Restauration à un instant donné (WAL, CloudNativePG ou RDS), incrémental, copie hors site chiffrée (règle 3-2-1) | [scripts](scripts/README.md#backupsh) |
 | Jetons de déploiement de longue durée, état Terraform local | Fédération OIDC GitHub → cluster (jetons de quelques minutes) ; état distant chiffré et verrouillé | [Terraform](infra/terraform/README.md#limites-connues-et-évolutions) |
+| Versions de `kubectl` et `helm` du job de déploiement mises à jour à la main (Dependabot ne les suit pas) | Image du runner contenant ces outils, mise à jour par Dependabot | [CI](#déploiement-continu-ci) |
+| Une seule personne : elle approuve ses propres déploiements en prod | En équipe : une autre personne approuve (« Prevent self-review ») | [CI](#déploiement-continu-ci) |
 | Compte `microcrm` superutilisateur PostgreSQL | Compte applicatif aux droits limités | [chart](infra/helm/microcrm/README.md#limites-connues) |
 | Sondes de santé sur `/`, sans Spring Boot Actuator | Point de santé dédié (`/actuator/health`) | [chart](infra/helm/microcrm/README.md#limites-connues) |
 | Table de liens sans clé primaire | Migration Flyway (équipe Dev) | [scripts](scripts/README.md#backupsh) |
@@ -384,7 +436,7 @@ Vérifiées le 02/11/2026 (dernière version publiée et fin de support sur
 | Angular / Node.js | 17.3 / 24 |
 | PostgreSQL | 18.6 |
 | Kubernetes (Minikube 1.39.0) | 1.37.0 (correctif 1.37.2 disponible) |
-| Helm | 4.3.1 |
+| Helm / kubectl (job de déploiement) | 4.3.1 / 1.37.2 |
 | Terraform / fournisseur Kubernetes | 1.17 (1.17.1 dans la CI) / 3.4.0 |
 | ARC (runner local) | 0.15.1, runner 2.338.2 |
 | SonarQube Community Build | 26.10 |
