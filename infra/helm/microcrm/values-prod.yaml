@@ -1,0 +1,9 @@
+# Fichier  : infra/helm/microcrm/values-prod.yaml
+# Rôle     : différences de l'environnement prod par rapport à values.yaml
+# Utilisé par : scripts/deploy.sh prod (après approbation) ; ticket #64
+back:
+  # Au moins 2 répliques : une mise à jour ne coupe jamais le service
+  autoscaling:
+    enabled: true
+postgres:
+  storage: 5Gi

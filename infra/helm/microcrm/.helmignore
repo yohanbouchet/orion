@@ -1,0 +1,8 @@
+# Fichier  : infra/helm/microcrm/.helmignore
+# Rôle     : fichiers du dossier à ne pas mettre dans le paquet du chart
+# Utilisé par : helm (package, install, lint)
+README.md
+.DS_Store
+*.swp
+*.bak
+*.tmp

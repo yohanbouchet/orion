@@ -1,0 +1,96 @@
+{{- /*
+Fichier  : infra/helm/microcrm/templates/network-policy.yaml
+Rôle     : pare-feu entre pods : tout est refusé dans le namespace, sauf
+           front → back → base (et la résolution DNS) ; le front accepte
+           aussi le runner de la CI (tests ZAP)
+Utilise  : values.yaml (networkPolicy.*) ; _helpers.tpl
+Utilisé par : Kubernetes (appliqué par kindnet dans Minikube) ; ticket #64
+*/}}
+{{- if .Values.networkPolicy.enabled }}
+{{- $front := dict "root" $ "component" "front" }}
+{{- $back := dict "root" $ "component" "back" }}
+{{- $db := dict "root" $ "component" "postgres" }}
+{{- $ns := .Values.networkPolicy.allowedNamespace }}
+# 1. Refus par défaut : aucun pod du chart ne reçoit ni n'envoie rien
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $.Release.Name }}-default-deny
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+  policyTypes: ["Ingress", "Egress"]
+---
+# 2. Front : reçoit les visiteurs (port 8080) ; appelle le back et le DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "microcrm.name" $front }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "microcrm.selectorLabels" $front | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    # Seulement le runner de la CI (tests ZAP) ; kubectl port-forward
+    # entre par l'intérieur du pod et n'est pas concerné
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ns }}
+      ports:
+        - port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "microcrm.selectorLabels" $back | nindent 14 }}
+      ports:
+        - port: 8080
+    {{- include "microcrm.dnsEgress" . | nindent 4 }}
+---
+# 3. Back : reçoit seulement le front ; appelle seulement la base et le DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "microcrm.name" $back }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "microcrm.selectorLabels" $back | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "microcrm.selectorLabels" $front | nindent 14 }}
+      ports:
+        - port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "microcrm.selectorLabels" $db | nindent 14 }}
+      ports:
+        - port: 5432
+    {{- include "microcrm.dnsEgress" . | nindent 4 }}
+---
+# 4. Base : reçoit seulement le back ; n'appelle personne
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "microcrm.name" $db }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "microcrm.selectorLabels" $db | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "microcrm.selectorLabels" $back | nindent 14 }}
+      ports:
+        - port: 5432
+{{- end }}
