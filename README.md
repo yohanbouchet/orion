@@ -145,6 +145,8 @@ main depuis l'onglet **Actions**.
   failles **hautes et critiques** ;
 - les actions sont figées par empreinte de commit et les images des
   outils par empreinte (digest) ; Dependabot propose leurs mises à jour ;
+  seules les actions d'une liste d'autorisation peuvent s'exécuter
+  (Settings → Actions → General) ;
 - chaque job n'a que les droits dont il a besoin (`GITHUB_TOKEN`) ;
 - une PR venant d'une copie extérieure du dépôt (fork) ne tourne jamais
   sur le runner local.
@@ -324,8 +326,12 @@ Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#
   conteneurs en lecture seule et sans capacité Linux, pare-feu entre pods
   (NetworkPolicy, refus par défaut) ; un compte de déploiement par
   namespace, sans droit ailleurs (Terraform).
-- **CI** : actions figées par empreinte, droits minimaux par job, runner
-  local jetable et non privilégié, jamais utilisé par un fork.
+- **CI** : actions figées par empreinte et limitées par une liste
+  d'autorisation du dépôt (actions de GitHub,
+  `SonarSource/sonarqube-scan-action`, `hashicorp/setup-terraform`) :
+  toute autre action est refusée au démarrage du pipeline ; droits
+  minimaux par job ; runner local jetable et non privilégié, jamais
+  utilisé par un fork.
 - **Sauvegardes** : fichiers en 600, dossiers en 700, empreinte SHA-256
   contrôlée avant toute restauration ; disque de la machine chiffré.
 
