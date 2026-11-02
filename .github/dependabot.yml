@@ -89,6 +89,21 @@ updates:
     commit-message:
       prefix: build
       include: scope
+  # Socle Terraform : fournisseur Kubernetes (verrouillé par
+  # .terraform.lock.hcl) ; PR testée par le job terraform
+  - package-ecosystem: terraform
+    directory: /infra/terraform
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    commit-message:
+      prefix: build
+      include: scope
   # Back (Spring Boot) : versions verrouillées par gradle.lockfile
   - package-ecosystem: gradle
     directory: /back
