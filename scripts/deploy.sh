@@ -123,9 +123,12 @@ deploy() {
   log INFO "checking the chart (helm lint)"
   helm lint --quiet "$CHART_DIR" "${args[@]}"
   # --rollback-on-failure : si les pods ne sont pas prêts à temps, Helm
-  # remet lui-même la version précédente (Helm 4, ancien --atomic)
+  # remet lui-même la version précédente (Helm 4, ancien --atomic) ;
+  # --description : l'image déployée apparaît dans « helm history » (la
+  # colonne APP VERSION, figée dans Chart.yaml, ne la donne pas)
   log INFO "deploying $RELEASE to $env (image: ${tag:-chart default})"
   helm upgrade --install "$RELEASE" "$CHART_DIR" -n "$env" "${args[@]}" \
+    --description "image ${tag:-chart default}" \
     --rollback-on-failure --wait --timeout "$TIMEOUT" ||
     die "deployment to $env failed: previous version kept by Helm;" \
       "fix: look for the cause (kubectl -n $env get pods; image tag?)"

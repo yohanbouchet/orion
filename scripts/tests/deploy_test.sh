@@ -137,6 +137,8 @@ function test_tag_sets_both_images() {
   run_deploy dev v1.2.3 >/dev/null
   assert_contains "--set front.image.tag=v1.2.3" "$(calls)"
   assert_contains "--set back.image.tag=v1.2.3" "$(calls)"
+  # L'image déployée est écrite dans l'historique de Helm
+  assert_contains "--description image v1.2.3" "$(calls)"
 }
 
 function test_failed_upgrade_stops_without_smoke_test() {
