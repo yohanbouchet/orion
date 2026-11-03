@@ -42,6 +42,9 @@ reports/
 # Liste des tests en échec que bashunit garde entre deux lancements
 .bashunit/
 
+# Rapport du test d'intrusion lancé en local (scripts/zap-scan.sh)
+zap-report/
+
 # --- Dépendances installées ---
 # Paquets npm téléchargés par npm ci (ex. outil de version dans
 # .github/release/) : régénérés depuis le package-lock.json.

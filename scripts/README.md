@@ -13,6 +13,7 @@ marche dans la CI, et inversement.
 | [`notify.py`](#notifypy) | Signaler par ticket et e-mail une CI en échec sur `main` | job `notify` |
 | [`lib/common.sh`](#libcommonsh) | Fonctions partagées : journal, arrêt, outils requis | les scripts Bash |
 | [`deploy.sh`](#deploysh) | Déployer MicroCRM, le vérifier, revenir en arrière | l'opérateur ; job de déploiement de la CI (`deploy.yml`) |
+| [`zap-scan.sh`](#zap-scansh) | Test d'intrusion de `staging` avec ZAP (passif ou actif) | job `zap` de la CI (`zap.yml`) ; l'opérateur |
 | [`backup.sh`](#backupsh) | Sauvegarder, vérifier et restaurer la base | l'opérateur ; tâche planifiée quotidienne (à venir) |
 | [`deploy-sonarqube.sh`](#deploy-sonarqubesh) | Déployer SonarQube dans le cluster Minikube | l'opérateur, à la main |
 
@@ -214,6 +215,63 @@ une révision choisie. Le 1er essai a montré que, dans le conteneur,
 `localhost` désigne d'abord l'IPv6 (`::1`), où nginx n'écoute pas : le
 test de fumée vise donc `127.0.0.1`.
 
+## zap-scan.sh
+
+**But** : tester la sécurité de l'application **en fonctionnement** avec
+ZAP (OWASP), comme le ferait un attaquant, sans accès au code. Le scan
+tourne **dans le cluster**, à côté de l'application, sous les mêmes
+règles « restricted ».
+
+```shell
+scripts/zap-scan.sh baseline   # passif : visite et inspecte les réponses
+scripts/zap-scan.sh full       # actif : tente des attaques (injections, XSS)
+```
+
+**Fonctionnement** :
+
+1. les règles [`infra/zap/rules.tsv`](../infra/zap/rules.tsv) (FAIL,
+   WARN, INFO ou IGNORE pour chaque alerte) sont rangées dans la
+   ConfigMap `zap-rules` ;
+2. le Job Kubernetes `zap` est (re)créé dans `staging` avec l'image du
+   projet `orion/zap` ([`infra/zap/Dockerfile`](../infra/zap/Dockerfile) :
+   ZAP officiel corrigé, règles « bêta » ajoutées à la construction et
+   vérifiées par empreinte), utilisateur non root, aucune capacité Linux,
+   aucun jeton d'accès à l'API, mémoire limitée (4 Gio), durée limitée
+   (15 min en passif, 40 min en actif), effacé une heure après la fin ;
+3. ZAP visite le front (`http://microcrm-front:8080`), qui relaie `/api`
+   vers le back. Le pare-feu du chart ne lui ouvre **que le front** :
+   ni Internet, ni le back ou la base en direct. ZAP ne télécharge donc
+   rien au démarrage (`-silent`) : seuls les modules de l'image servent ;
+4. le rapport (Markdown) est écrit à la fin du journal du pod ; le script
+   le récupère dans `REPORT_DIR` avec la sortie complète ;
+5. code 1 si une alerte réglée sur **FAIL** est trouvée (les WARN sont
+   signalées sans bloquer) : dans la CI, la prod n'est alors pas déployée.
+
+En actif, ZAP explore 2 minutes puis attaque 10 minutes au plus. Il
+**envoie des formulaires** : des données de test restent dans la base de
+`staging`. C'est pour cela qu'il ne se lance qu'à la demande
+(Actions → ZAP → Run workflow).
+
+**Paramètres** : `REPORT_DIR`, dossier du rapport (`./zap-report` par
+défaut, ignoré par Git) ; `NAMESPACE` (`staging` par défaut : seul
+namespace où le pare-feu laisse passer ZAP).
+
+**Conditions d'exécution** : `kubectl` ; accès au namespace avec le droit
+de gérer des `jobs` (deployer de `staging` dans la CI, contexte `orion`
+sur le poste) ; application déployée dans `staging` ; image
+`orion/zap:2.17.0-hardened` chargée dans Minikube
+([README racine](../README.md#déployer-sur-kubernetes)).
+
+**Arrêts expliqués** :
+
+| Cas | Code | Correction proposée |
+|---|---|---|
+| Mode inconnu | 2 | syntaxe rappelée |
+| `kubectl` absent | 127 | installer l'outil |
+| Fichier de règles absent | 1 | `infra/zap/rules.tsv` |
+| Alerte réglée sur FAIL trouvée | 1 | lire le rapport, corriger, ou justifier et dater un changement de règle |
+| Job pas fini à temps | 1 | `kubectl -n staging describe job zap` |
+
 ## backup.sh
 
 **But** : sauvegarder la base PostgreSQL de MicroCRM d'un environnement,
@@ -378,6 +436,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Karma lancé une fois, `KARMA_BROWSER`, tests rouges, rapport absent |
 | `tests/backup_test.sh` | bashunit | usage, fichier privé (600/700) et empreinte, rotation, `pg_dump` en échec sans fichier partiel, `verify` (base temporaire), fichier abîmé refusé, sauvegarde de sécurité avant restauration, table : lignes absentes seulement, table sans clé refusée, nom de table piégé |
 | `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, échec de Helm, test de fumée raté → retour arrière, `rollback` |
+| `tests/zap_scan_test.sh` | bashunit | usage, mode inconnu, règles absentes, commandes passive et active (durée limitée), pod sans privilège ni jeton, rapport extrait du journal, échec (règle FAIL) avec rapport conservé |
 | `tests/test_notify.py` | pytest | jobs en échec, exercice, ouverture / commentaire / fermeture, résumé, paramètres |
 
 Les tests Bash remplacent `npm`, `java`, `gradlew`, `helm` ou `kubectl`

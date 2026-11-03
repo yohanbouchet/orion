@@ -3,10 +3,11 @@
 #            avec scripts/deploy.sh, sur le runner local, avec le jeton du
 #            compte deployer de cet environnement ; workflow réutilisable,
 #            appelé trois fois par ci.yml (une fois par environnement)
-# Utilise  : scripts/deploy.sh, infra/helm/microcrm ; environnements GitHub
-#            dev, staging, production (secret KUBE_TOKEN, règle « main
-#            seulement », approbation pour production) ; variable de dépôt
-#            KUBE_CA ; kubectl et helm officiels, empreinte vérifiée
+# Utilise  : scripts/deploy.sh, infra/helm/microcrm ; action
+#            .github/actions/kube-access (kubectl, helm, kubeconfig) ;
+#            environnements GitHub dev, staging, production (secret
+#            KUBE_TOKEN, règle « main seulement », approbation pour
+#            production) ; variable de dépôt KUBE_CA
 # Utilisé par : jobs deploy-dev, deploy-staging, deploy-prod de ci.yml ;
 #               ticket #64
 
@@ -51,75 +52,21 @@ jobs:
     concurrency:
       group: deploy-${{ inputs.namespace }}
       cancel-in-progress: false
-    # Versions figées et empreintes SHA-256 publiées par Kubernetes et
-    # Helm (relevées le 02/11/2026) ; à mettre à jour à la main
-    env:
-      KUBECTL_VERSION: v1.37.2
-      KUBECTL_SHA256: c04487523e7aa7d1493f7808174c899db93d7a9cf57531420cd76b9bd415f8f4
-      HELM_VERSION: v4.3.1
-      HELM_SHA256: 0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b
     steps:
       # Code du dépôt (script et chart) ; identifiant GitHub non gardé
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Binaires officiels, refusés si leur empreinte ne correspond pas à
-      # celle notée ici (fichier modifié en route) ; rangés dans un dossier
-      # du job, ajouté au PATH des étapes suivantes
-      - name: Install kubectl and helm
-        run: |
-          bin="$RUNNER_TEMP/bin"
-          mkdir -p "$bin"
-          cd "$RUNNER_TEMP"
-          curl -fsSLo kubectl \
-            "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl"
-          echo "$KUBECTL_SHA256  kubectl" | sha256sum --check --strict
-          install -m 755 kubectl "$bin/kubectl"
-          curl -fsSLo helm.tar.gz \
-            "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz"
-          echo "$HELM_SHA256  helm.tar.gz" | sha256sum --check --strict
-          tar -xzf helm.tar.gz linux-amd64/helm
-          install -m 755 linux-amd64/helm "$bin/helm"
-          echo "$bin" >> "$GITHUB_PATH"
-      # Fichier de connexion (kubeconfig) lisible par ce seul compte :
-      # adresse interne du cluster, certificat public de son autorité
-      # (vérifie qu'on parle au vrai cluster), jeton du deployer ; le
-      # jeton passe par une variable, jamais dans une commande
-      - name: Write kubeconfig
-        env:
-          KUBE_CA: ${{ vars.KUBE_CA }}
-          KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
-          NAMESPACE: ${{ inputs.namespace }}
-        run: |
-          # Jeton vide (secret absent de l'environnement) : arrêt clair
-          if [ -z "$KUBE_TOKEN" ]; then
-            echo "::error::KUBE_TOKEN is empty; set it in the environment"
-            exit 1
-          fi
-          umask 077
-          ca="$(printf '%s\n' "$KUBE_CA" | base64 -w0)"
-          cat > "$RUNNER_TEMP/kubeconfig" <<EOF
-          apiVersion: v1
-          kind: Config
-          clusters:
-            - name: orion
-              cluster:
-                server: https://kubernetes.default.svc
-                certificate-authority-data: $ca
-          users:
-            - name: deployer
-              user:
-                token: $KUBE_TOKEN
-          contexts:
-            - name: $NAMESPACE
-              context:
-                cluster: orion
-                user: deployer
-                namespace: $NAMESPACE
-          current-context: $NAMESPACE
-          EOF
-          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+      # kubectl et helm à l'empreinte vérifiée, kubeconfig du deployer
+      # de cet environnement (action composite du dépôt)
+      - name: Kubernetes access
+        uses: ./.github/actions/kube-access
+        with:
+          namespace: ${{ inputs.namespace }}
+          ca: ${{ vars.KUBE_CA }}
+          token: ${{ secrets.KUBE_TOKEN }}
+          helm: "true"
       # La même commande qu'en local : contrôles, helm upgrade, test de
       # fumée, retour arrière automatique s'il échoue
       - name: Deploy

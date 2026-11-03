@@ -32,7 +32,8 @@ Helm (scripts/deploy.sh, avec le jeton du deployer de l'environnement)
 ## Droits d'un compte `deployer`
 
 Chaque compte n'agit que dans **son** namespace, avec les seuls droits
-dont `scripts/deploy.sh` a besoin :
+dont `scripts/deploy.sh` (et, en `staging`, `scripts/zap-scan.sh`) a
+besoin :
 
 | Droit | Pourquoi |
 |---|---|
@@ -41,10 +42,11 @@ dont `scripts/deploy.sh` a besoin :
 | Lire `pods`, `pods/log`, `events`, `persistentvolumeclaims`, `replicasets` | Attente des pods (`helm --wait`), diagnostic |
 | Créer `pods/exec` | Test de fumée de `deploy.sh` |
 | Lire **son** namespace (rôle de cluster limité à ce seul nom) | `deploy.sh` vérifie le niveau « restricted » |
+| Gérer `jobs` (**`staging` seulement**) | Test d'intrusion ZAP (`scripts/zap-scan.sh`) |
 
 Il ne peut pas : agir dans un autre namespace, créer des rôles ou des
-comptes, lire les autres namespaces. Aucun joker `*` (vérifié par les
-tests). Son jeton n'est monté dans aucun pod.
+comptes, lire les autres namespaces. Aucun joker `*`, droit `jobs`
+réservé au deployer de `staging` (vérifiés par les tests). Son jeton n'est monté dans aucun pod.
 
 ## Utilisation
 

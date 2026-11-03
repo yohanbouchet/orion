@@ -1,8 +1,8 @@
 {{- /*
 Fichier  : infra/helm/microcrm/templates/network-policy.yaml
 Rôle     : pare-feu entre pods : tout est refusé dans le namespace, sauf
-           front → back → base (et la résolution DNS) ; le front accepte
-           aussi le runner de la CI (tests ZAP)
+           front → back → base (et la résolution DNS) ; en staging, le
+           pod du test d'intrusion ZAP peut joindre le front, et lui seul
 Utilise  : values.yaml (networkPolicy.*) ; _helpers.tpl
 Utilisé par : Kubernetes (appliqué par kindnet dans Minikube) ; ticket #64
 */}}
@@ -10,16 +10,16 @@ Utilisé par : Kubernetes (appliqué par kindnet dans Minikube) ; ticket #64
 {{- $front := dict "root" $ "component" "front" }}
 {{- $back := dict "root" $ "component" "back" }}
 {{- $db := dict "root" $ "component" "postgres" }}
-{{- $ns := .Values.networkPolicy.allowedNamespace }}
-# 1. Refus par défaut : aucun pod du chart ne reçoit ni n'envoie rien
+{{- $zap := .Values.networkPolicy.allowZap }}
+# 1. Refus par défaut : aucun pod du namespace (ceux du chart, ZAP, ou
+# tout autre pod lancé plus tard) ne reçoit ni n'envoie rien ; les règles
+# suivantes ouvrent seulement le nécessaire
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ $.Release.Name }}-default-deny
 spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/instance: {{ $.Release.Name }}
+  podSelector: {}
   policyTypes: ["Ingress", "Egress"]
 ---
 # 2. Front : reçoit les visiteurs (port 8080) ; appelle le back et le DNS
@@ -32,15 +32,19 @@ spec:
     matchLabels:
       {{- include "microcrm.selectorLabels" $front | nindent 6 }}
   policyTypes: ["Ingress", "Egress"]
+  # Aucun autre pod, sauf ZAP si allowZap ; kubectl port-forward entre
+  # par l'intérieur du pod et n'est pas concerné
+  {{- if $zap }}
   ingress:
-    # Seulement le runner de la CI (tests ZAP) ; kubectl port-forward
-    # entre par l'intérieur du pod et n'est pas concerné
     - from:
-        - namespaceSelector:
+        - podSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ $ns }}
+              app.kubernetes.io/name: zap
       ports:
         - port: 8080
+  {{- else }}
+  ingress: []
+  {{- end }}
   egress:
     - to:
         - podSelector:
@@ -93,4 +97,26 @@ spec:
               {{- include "microcrm.selectorLabels" $back | nindent 14 }}
       ports:
         - port: 5432
+{{- if $zap }}
+---
+# 5. ZAP (scripts/zap-scan.sh) : ne reçoit rien ; ne joint que le front
+# et le DNS (pas Internet, pas le back ni la base en direct)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $.Release.Name }}-zap
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: zap
+  policyTypes: ["Ingress", "Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "microcrm.selectorLabels" $front | nindent 14 }}
+      ports:
+        - port: 8080
+    {{- include "microcrm.dnsEgress" . | nindent 4 }}
+{{- end }}
 {{- end }}

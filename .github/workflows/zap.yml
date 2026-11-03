@@ -1,0 +1,88 @@
+# Fichier  : .github/workflows/zap.yml
+# Rôle     : test d'intrusion de staging avec ZAP (OWASP) : « baseline »
+#            (passif) après chaque déploiement de staging, appelé par
+#            ci.yml ; « full » (actif : injections, XSS…) lancé à la main
+#            (Actions → ZAP → Run workflow) ; rapport dans le résumé de
+#            l'exécution et en artefact
+# Utilise  : scripts/zap-scan.sh, infra/zap/rules.tsv ; action
+#            .github/actions/kube-access ; environnement GitHub staging
+#            (secret KUBE_TOKEN, main seulement) ; variable KUBE_CA
+# Utilisé par : job zap de ci.yml ; lancement manuel ; ticket #64
+
+name: ZAP
+
+on:
+  # Appelé par ci.yml (baseline) ; le jeton doit être transmis
+  workflow_call:
+    inputs:
+      mode:
+        type: string
+        default: baseline
+    secrets:
+      KUBE_TOKEN:
+        required: true
+  # Lancement manuel : scan actif par défaut
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [full, baseline]
+        default: full
+
+# Moindre privilège : lire le code, rien d'autre
+permissions:
+  contents: read
+
+jobs:
+  zap:
+    # Runner local : le seul qui atteint le cluster Minikube
+    runs-on: orion-local
+    timeout-minutes: 45
+    # Jeton du deployer de staging (droit de lancer le Job ZAP) ; branche
+    # main seulement
+    environment: staging
+    # Jamais pendant un déploiement de staging (même groupe que deploy.yml)
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      # Code du dépôt (script et règles) ; identifiant GitHub non gardé
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # kubectl à l'empreinte vérifiée, kubeconfig du deployer de staging
+      - name: Kubernetes access
+        uses: ./.github/actions/kube-access
+        with:
+          namespace: staging
+          ca: ${{ vars.KUBE_CA }}
+          token: ${{ secrets.KUBE_TOKEN }}
+      # Échoue si une alerte réglée sur FAIL dans rules.tsv est trouvée
+      - name: Scan
+        env:
+          MODE: ${{ inputs.mode }}
+          REPORT_DIR: ${{ runner.temp }}/zap-report
+        run: scripts/zap-scan.sh "$MODE"
+      # Rapport lisible dans le résumé de l'exécution, même en cas d'échec
+      - name: Write summary
+        if: always()
+        env:
+          REPORT: ${{ runner.temp }}/zap-report/report.md
+        run: |
+          if [ -s "$REPORT" ]; then
+            cat "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      # Rapport et sortie complète de ZAP, téléchargeables 30 jours
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zap-${{ inputs.mode }}-report
+          path: ${{ runner.temp }}/zap-report/
+          if-no-files-found: ignore
+          retention-days: 30
+      # Le jeton ne reste pas sur le disque, même si une étape a échoué
+      - name: Remove kubeconfig
+        if: always()
+        run: rm -f "$RUNNER_TEMP/kubeconfig"

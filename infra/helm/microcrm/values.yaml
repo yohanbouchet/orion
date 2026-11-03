@@ -68,5 +68,5 @@ postgres:
 networkPolicy:
   # Pare-feu entre pods : tout est interdit sauf front → back → base
   enabled: true
-  # Namespace autorisé à joindre le front (runner de la CI : tests ZAP)
-  allowedNamespace: arc-runners
+  # Pod du test d'intrusion ZAP autorisé à joindre le front (staging)
+  allowZap: false
