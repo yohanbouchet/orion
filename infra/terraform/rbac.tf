@@ -1,11 +1,11 @@
 # Fichier  : infra/terraform/rbac.tf
 # Rôle     : un compte de service « deployer » par environnement, avec
-#            les seuls droits nécessaires à scripts/deploy.sh dans SON
-#            namespace, et son jeton (rangé ensuite dans l'environnement
-#            GitHub correspondant)
+#            les seuls droits nécessaires à scripts/deploy.sh (et, en
+#            staging, à scripts/zap-scan.sh) dans SON namespace, et son
+#            jeton (rangé ensuite dans l'environnement GitHub correspondant)
 # Utilise  : main.tf (namespaces)
-# Utilisé par : jobs de déploiement de la CI (jeton) ; outputs.tf ;
-#               ticket #64
+# Utilisé par : jobs de déploiement et de test d'intrusion (ZAP) de la
+#               CI (jeton) ; outputs.tf ; ticket #64
 
 locals {
   # Droits complets sur un type d'objet du chart
@@ -26,7 +26,8 @@ resource "kubernetes_service_account_v1" "deployer" {
 }
 
 # Droits limités au namespace : objets créés par le chart, historique
-# Helm (Secrets), lecture des pods, test de fumée (exec) ; rien d'autre
+# Helm (Secrets), lecture des pods, test de fumée (exec), Job ZAP en
+# staging ; rien d'autre
 resource "kubernetes_role_v1" "deployer" {
   for_each = kubernetes_namespace_v1.env
 
@@ -70,6 +71,16 @@ resource "kubernetes_role_v1" "deployer" {
     api_groups = ["networking.k8s.io"]
     resources  = ["networkpolicies"]
     verbs      = local.manage
+  }
+  # Test d'intrusion ZAP (scripts/zap-scan.sh, Job Kubernetes) : staging
+  # seulement ; ailleurs, la liste est vide et la règle n'existe pas
+  dynamic "rule" {
+    for_each = each.key == "staging" ? ["jobs"] : []
+    content {
+      api_groups = ["batch"]
+      resources  = [rule.value]
+      verbs      = local.manage
+    }
   }
 }
 

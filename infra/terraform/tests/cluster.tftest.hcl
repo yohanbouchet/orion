@@ -53,6 +53,15 @@ run "deployer_rights_stay_in_their_namespace" {
     ])
     error_message = "A deployer may only read its own namespace."
   }
+  # Jobs (test d'intrusion ZAP) : seulement le deployer de staging
+  assert {
+    condition = alltrue([
+      for env, role in kubernetes_role_v1.deployer :
+      anytrue([for rule in role.rule : contains(rule.resources, "jobs")])
+      == (env == "staging")
+    ])
+    error_message = "Only the staging deployer may manage jobs (ZAP)."
+  }
 }
 
 run "unknown_environment_is_refused" {

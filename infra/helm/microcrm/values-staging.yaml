@@ -4,3 +4,6 @@
 # Utilisé par : scripts/deploy.sh staging ; ticket #64
 postgres:
   storage: 2Gi
+networkPolicy:
+  # Cible du test d'intrusion : le pod ZAP peut joindre le front
+  allowZap: true

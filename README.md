@@ -39,7 +39,7 @@ DevOps » (OpenClassrooms, option B), à partir de
 
 ## État d'avancement
 
-Au 02/11/2026 :
+Au 03/11/2026 :
 
 | Étape | État |
 |---|---|
@@ -50,7 +50,7 @@ Au 02/11/2026 :
 | Chart Helm de l'application (testé dans `dev`) | ✅ [`infra/helm/microcrm/`](infra/helm/microcrm/README.md) |
 | Script de déploiement avec test de fumée et retour arrière | ✅ [`scripts/deploy.sh`](scripts/README.md#deploysh) |
 | Déploiement continu : `dev` puis `staging` à chaque fusion, `prod` sur une version après approbation | ✅ [`deploy.yml`](.github/workflows/deploy.yml) (1er passage en `prod` : à la prochaine version) |
-| Test d'intrusion automatisé (ZAP) sur `staging` | ⏳ en cours |
+| Test d'intrusion automatisé (ZAP) : passif à chaque déploiement de `staging` (bloque la prod), actif à la demande | ✅ [`zap.yml`](.github/workflows/zap.yml), [règles](infra/zap/rules.tsv) |
 | Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) (planification quotidienne : avec Ansible) |
 | Socle du cluster en Terraform (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible (configuration de la machine) | ⏳ à venir |
@@ -68,14 +68,15 @@ orchestre la CI et héberge le registre d'images.
           ┌─────────────┴──────────────────┐
           ▼                                ▼
  Runners hébergés par GitHub       Runner local ARC (dans Minikube)
- tests, scans, images,             analyse SonarQube
- version, publication              et déploiement (dev, staging, prod)
+ tests, scans, images,             analyse SonarQube, déploiement
+ version, publication              (dev, staging, prod), test ZAP
           │ images vX.Y.Z                  │
           ▼                                ▼
  GHCR (registre d'images) ──────▶ Cluster Minikube « orion »
                                    ├─ arc-runners : runners de la CI
                                    ├─ sonarqube   : SonarQube + PostgreSQL
                                    └─ dev, staging, prod : MicroCRM
+                                      (+ pod ZAP éphémère en staging)
 
  Dans chaque namespace de l'application :
  navigateur ──▶ front (nginx :8080) ──/api──▶ back (Spring Boot :8080)
@@ -92,6 +93,8 @@ orchestre la CI et héberge le registre d'images.
   créées par **Flyway** (`back/src/main/resources/db/migration/`).
 - Le runner local n'a ni Docker, ni sudo, ni droits élevés : tout ce qui
   construit ou exécute du code tourne sur les machines jetables de GitHub.
+  Le test d'intrusion tourne dans un pod jetable de `staging`, lancé par
+  le runner avec les droits du deployer de `staging`.
 
 ## Contenu du dépôt
 
@@ -99,6 +102,8 @@ orchestre la CI et héberge le registre d'images.
 .github/
   workflows/ci.yml        pipeline CI
   workflows/deploy.yml    déploiement d'un environnement (appelé par ci.yml)
+  workflows/zap.yml       test d'intrusion de staging (ci.yml ou à la main)
+  actions/kube-access/    accès au cluster des jobs du runner local
   dependabot.yml          mises à jour automatiques des dépendances
   release/                semantic-release (versions figées)
   ISSUE_TEMPLATE/         formulaires de tickets [Dev] et [Ops]
@@ -107,6 +112,7 @@ front/                    application Angular, Dockerfile, nginx.conf
 back/                     API Spring Boot (Gradle), Dockerfile
 infra/
   terraform/              socle du cluster (namespaces, comptes deployer)
+  zap/                    règles du test d'intrusion (bloquant ou non)
   helm/microcrm/          chart Helm de l'application
   postgres/               image PostgreSQL durcie (sans gosu, sans root)
   sonarqube/              SonarQube dans le cluster
@@ -139,7 +145,8 @@ main depuis l'onglet **Actions**.
 | `release` | Numéro de version et Release GitHub (sur `main`) | semantic-release | GitHub |
 | `publish` | Publication des images sur GHCR (sur `main`) | Docker | GitHub |
 | `deploy-dev`, `deploy-staging` | Déploiement de l'image du commit (`sha-xxxxxxx`) dans `dev`, puis `staging` (sur `main`) | `deploy.yml`, `deploy.sh` | runner local |
-| `deploy-prod` | Déploiement de la version `vX.Y.Z` dans `prod`, après approbation (si une version vient d'être publiée) | `deploy.yml`, `deploy.sh` | runner local |
+| `zap` | Test d'intrusion passif de `staging` ; une alerte réglée sur FAIL bloque la prod | `zap.yml`, `zap-scan.sh` (ZAP) | runner local |
+| `deploy-prod` | Déploiement de la version `vX.Y.Z` dans `prod`, après approbation (si une version vient d'être publiée et si ZAP n'a rien trouvé de bloquant) | `deploy.yml`, `deploy.sh` | runner local |
 | `notify` | Ticket et e-mail si la CI échoue sur `main` | `notify.py` | GitHub |
 
 **Règles** :
@@ -235,6 +242,11 @@ Prérequis : le cluster Minikube `orion`
 #    n'est jamais téléchargée : imagePullPolicy Never)
 docker build -t orion/postgres:18.6-hardened infra/postgres
 minikube -p orion image load orion/postgres:18.6-hardened
+
+# Image du test d'intrusion (ZAP corrigé, règles bêta vérifiées par
+# empreinte), utilisée dans staging par scripts/zap-scan.sh
+docker build -t orion/zap:2.17.0-hardened infra/zap
+minikube -p orion image load orion/zap:2.17.0-hardened
 ```
 
 2. Socle du cluster, une seule fois, par Terraform : namespaces `dev`,
@@ -269,17 +281,16 @@ runner local, avec le workflow réutilisable
 [`deploy.yml`](.github/workflows/deploy.yml) :
 
 ```text
-publish ──▶ deploy-dev ──▶ deploy-staging ──▶ deploy-prod
-            image           même image         version vX.Y.Z,
-            sha-xxxxxxx     (promotion)        seulement si release en a
-                                               publié une ; attend
-                                               l'approbation
+publish ──▶ deploy-dev ──▶ deploy-staging ──▶ zap ─────────▶ deploy-prod
+            image          même image         test passif    vX.Y.Z, si release
+            sha-xxxxxxx    (promotion)        (FAIL : arrêt) en a publié une ;
+                                                             approbation
 ```
 
 | Environnement (GitHub / namespace) | Branche | Type de déploiement | Accès | Particularités |
 |---|---|---|---|---|
 | `dev` / `dev` | `main` | automatique, à chaque fusion (image `sha-xxxxxxx`) | `kubectl -n dev port-forward svc/microcrm-front 8080:8080` | 1 réplique par composant ; réglages par défaut du chart |
-| `staging` / `staging` | `main` | automatique, après la réussite de `dev` (même image) | idem, `-n staging` | 1 réplique par composant ; cible du test d'intrusion ZAP (à venir) |
+| `staging` / `staging` | `main` | automatique, après la réussite de `dev` (même image) | idem, `-n staging` | 1 réplique par composant ; cible du test d'intrusion ZAP : seul le pod ZAP peut joindre le front |
 | `production` / `prod` | `main` | à chaque version `vX.Y.Z`, **après approbation** | idem, `-n prod` | 2 répliques du back au minimum, autoscaling (HPA), mise à jour progressive sans coupure |
 
 Chaque environnement GitHub garde le secret `KUBE_TOKEN`, jeton du
@@ -314,6 +325,43 @@ test : le jeton y était fourni à la main ; la première exécution par
 GitHub a échoué (jeton vide, secret non transmis par `ci.yml`, ticket
 #77), corrigée ensuite. Le cluster n'a pas été modifié (`dev` resté à la
 révision 12).
+
+### Test d'intrusion (ZAP)
+
+[ZAP](https://www.zaproxy.org/) (OWASP) teste l'application **en
+fonctionnement**, comme un attaquant sans accès au code. Il tourne dans
+`staging`, en Job Kubernetes, avec l'image du projet
+[`infra/zap`](infra/zap/Dockerfile) et le script
+[`zap-scan.sh`](scripts/README.md#zap-scansh) :
+
+| Mode | Quand | Ce qu'il fait | Durée mesurée |
+|---|---|---|---|
+| `baseline` (passif) | après chaque déploiement de `staging` (job `zap` de `ci.yml`) | visite les pages et inspecte les réponses (en-têtes, cookies, fuites d'information) | ~30 s |
+| `full` (actif) | à la demande : Actions → **ZAP** → Run workflow | en plus, tente des attaques (injections SQL et de commandes, XSS, traversée de dossiers) | ~2 min |
+
+Chaque alerte reçoit une décision dans
+[`infra/zap/rules.tsv`](infra/zap/rules.tsv) : **FAIL** (bloque la prod),
+WARN (signalée), INFO ou IGNORE. Le rapport est dans le **résumé de
+l'exécution** et en **artefact** (`zap-baseline-report`, 30 jours).
+
+Premiers résultats (03/11/2026, `staging`) : aucune alerte bloquante ;
+5 alertes WARN, triées :
+
+| Alerte | Risque | Décision |
+|---|---|---|
+| Angular 17.3.12 vulnérable (bibliothèque JavaScript) | Élevé | Risque accepté jusqu'à la montée de version (audit, R4 ; `.trivyignore`) |
+| En-tête CSP absent | Moyen | À corriger (serveur web du front), puis FAIL |
+| CSS Bulma chargé d'un CDN sans contrôle d'intégrité (SRI) | Moyen | Équipe Dev |
+| En-têtes Permissions-Policy et d'isolation (Spectre) absents | Faible | À corriger avec la CSP, puis FAIL |
+
+Les protections déjà en place (anti-cadre, `nosniff`, aucune version du
+serveur affichée, aucune injection ni XSS trouvée…) sont réglées sur
+FAIL : leur disparition bloquerait la prod.
+
+Sécurité du scan lui-même : pod éphémère, sans root, sans jeton, isolé
+par le pare-feu (il ne joint que le front, pas Internet) ; ZAP ne
+télécharge rien (`-silent`) : ses modules sont figés dans l'image et
+vérifiés par empreinte à la construction.
 
 ## Installer la chaîne sur le poste Ops
 
@@ -391,6 +439,9 @@ Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#
   minimaux par job ; runner local jetable et non privilégié, jamais
   utilisé par un fork ; jetons de déploiement rangés dans les
   environnements GitHub (`main` seulement, approbation pour la prod).
+- **Test d'intrusion** : ZAP passif sur `staging` à chaque déploiement,
+  actif à la demande ; les alertes réglées sur FAIL bloquent la prod
+  ([détails](#test-dintrusion-zap)).
 - **Sauvegardes** : fichiers en 600, dossiers en 700, empreinte SHA-256
   contrôlée avant toute restauration ; disque de la machine chiffré.
 
@@ -402,8 +453,11 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 |---|---|---|
 | Tout tourne sur une seule machine (Minikube) | Cible cloud (schéma AWS, à venir) | — |
 | Sauvegarde quotidienne complète, sur la machine, non chiffrée fichier par fichier | Restauration à un instant donné (WAL, CloudNativePG ou RDS), incrémental, copie hors site chiffrée (règle 3-2-1) | [scripts](scripts/README.md#backupsh) |
+| Déploiement « poussé » par la CI : un jeton du cluster est rangé dans GitHub, une modification faite à la main dans le cluster n'est pas détectée | GitOps avec Argo CD : le cluster lit lui-même Git et corrige tout écart | [CI](#déploiement-continu-ci) |
 | Jetons de déploiement de longue durée, état Terraform local | Fédération OIDC GitHub → cluster (jetons de quelques minutes) ; état distant chiffré et verrouillé | [Terraform](infra/terraform/README.md#limites-connues-et-évolutions) |
-| Versions de `kubectl` et `helm` du job de déploiement mises à jour à la main (Dependabot ne les suit pas) | Image du runner contenant ces outils, mise à jour par Dependabot | [CI](#déploiement-continu-ci) |
+| Versions de `kubectl`, `helm` et de l'image ZAP mises à jour à la main (Dependabot ne les suit pas) | Image du runner contenant ces outils, mise à jour par Dependabot ; ZAP dans un fichier suivi par Dependabot | [CI](#déploiement-continu-ci) |
+| Test d'intrusion limité au front : l'API ne publie pas de description OpenAPI, le scan actif n'atteint donc pas ses routes ; scan actif lancé à la main | OpenAPI (`springdoc`, équipe Dev) puis `zap-api-scan` ; scan actif planifié chaque semaine | [ZAP](#test-dintrusion-zap) |
+| Image ZAP : 421 failles hautes ou critiques sans correctif, dans le système de base de l'image officielle | Suivre les versions de ZAP ; pod éphémère, isolé par le pare-feu, sans root (risque accepté) | [ZAP](#test-dintrusion-zap) |
 | Une seule personne : elle approuve ses propres déploiements en prod | En équipe : une autre personne approuve (« Prevent self-review ») | [CI](#déploiement-continu-ci) |
 | Compte `microcrm` superutilisateur PostgreSQL | Compte applicatif aux droits limités | [chart](infra/helm/microcrm/README.md#limites-connues) |
 | Sondes de santé sur `/`, sans Spring Boot Actuator | Point de santé dédié (`/actuator/health`) | [chart](infra/helm/microcrm/README.md#limites-connues) |
@@ -445,7 +499,8 @@ Vérifiées le 02/11/2026 (dernière version publiée et fin de support sur
 | Angular / Node.js | 17.3 / 24 |
 | PostgreSQL | 18.6 |
 | Kubernetes (Minikube 1.39.0) | 1.37.0 (correctif 1.37.2 disponible) |
-| Helm / kubectl (job de déploiement) | 4.3.1 / 1.37.2 |
+| Helm / kubectl (jobs du runner local) | 4.3.1 / 1.37.2 |
+| ZAP (test d'intrusion) | 2.17.0 |
 | Terraform / fournisseur Kubernetes | 1.17 (1.17.1 dans la CI) / 3.4.0 |
 | ARC (runner local) | 0.15.1, runner 2.338.2 |
 | SonarQube Community Build | 26.10 |

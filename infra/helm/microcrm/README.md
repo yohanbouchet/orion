@@ -48,10 +48,13 @@ Le HPA a besoin de l'addon **metrics-server** de Minikube
   1001, 70), aucune élévation de droits, aucune capacité Linux, disque
   système **en lecture seule** (seuls `/tmp` et les données sont
   inscriptibles), aucun jeton d'accès à l'API Kubernetes.
-- **Pare-feu entre pods** (NetworkPolicy) : tout est refusé, sauf
-  front → back → base et le DNS. Le front accepte en plus le runner de la
-  CI (tests ZAP). La base ne peut joindre personne, le back n'a pas accès
-  à Internet.
+- **Pare-feu entre pods** (NetworkPolicy) : tout est refusé, pour
+  **tous les pods du namespace** (même un pod lancé plus tard, hors du
+  chart), sauf front → back → base et le DNS. En `staging` seulement
+  (`networkPolicy.allowZap`), le pod du test d'intrusion ZAP peut joindre
+  le front, et rien d'autre (ni Internet, ni le back, ni la base en
+  direct). La base ne peut joindre personne, le back n'a pas accès à
+  Internet.
 - **Mises à jour sans coupure** : un nouveau pod doit être prêt avant
   qu'un ancien soit arrêté (`maxUnavailable: 0`) ; sondes de
   disponibilité et de vie sur chaque composant, plus une sonde de

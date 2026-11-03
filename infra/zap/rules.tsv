@@ -1,0 +1,44 @@
+# Fichier  : infra/zap/rules.tsv
+# Rôle     : décision pour chaque alerte de ZAP : FAIL (bloque la prod),
+#            WARN (signalée), INFO ou IGNORE ; 3 colonnes séparées par une
+#            TABULATION : numéro de la règle, décision, (nom) ; une règle
+#            absente vaut WARN
+# Utilise  : numéros des règles de ZAP (https://www.zaproxy.org/docs/alerts/)
+# Utilisé par : scripts/zap-scan.sh (ConfigMap zap-rules) ; ticket #64
+#
+# Tri du 03/11/2026 (premiers scans de staging) ; à revoir à chaque
+# nouvelle alerte. Règles stables et « bêta » de l'image orion/zap
+# (infra/zap/Dockerfile) : ZAP ne télécharge rien au scan (-silent)
+
+# FAIL : protections déjà en place ou failles graves ; leur retour bloque
+# la prod (non-régression)
+10020	FAIL	(Anti-clickjacking Header)
+10021	FAIL	(X-Content-Type-Options Header Missing)
+10010	FAIL	(Cookie No HttpOnly Flag)
+10023	FAIL	(Information Disclosure - Debug Error Messages)
+10036	FAIL	(HTTP Server Response Header)
+10037	FAIL	(Server Leaks Information via X-Powered-By)
+90022	FAIL	(Application Error Disclosure)
+10115	FAIL	(Script Served From Malicious Domain)
+# Règles actives (scan full seulement) : injections et XSS
+40012	FAIL	(Cross Site Scripting (Reflected))
+40014	FAIL	(Cross Site Scripting (Persistent))
+40018	FAIL	(SQL Injection)
+90020	FAIL	(Remote OS Command Injection)
+6	FAIL	(Path Traversal)
+
+# WARN : à corriger (en-têtes de sécurité du serveur web du front), puis
+# à passer en FAIL
+10038	WARN	(Content Security Policy (CSP) Header Not Set)
+10063	WARN	(Permissions Policy Header Not Set)
+90004	WARN	(Insufficient Site Isolation Against Spectre)
+
+# WARN : risque accepté, correction par l'équipe Dev ; Angular 17 hors
+# maintenance (audit, R4 ; voir aussi .trivyignore) ; CSS Bulma chargé
+# depuis un CDN sans contrôle d'intégrité (SRI)
+10003	WARN	(Vulnerable JS Library)
+90003	WARN	(Sub Resource Integrity Attribute Missing)
+
+# INFO : constats sans risque pour cette application
+10049	INFO	(Storable and Cacheable Content)
+10109	INFO	(Modern Web Application)
