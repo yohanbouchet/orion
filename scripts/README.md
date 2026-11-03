@@ -180,7 +180,10 @@ scripts/deploy.sh rollback prod 3         # révision choisie (helm history)
 4. `helm lint` avec les réglages de l'environnement ;
 5. `helm upgrade --install --wait --rollback-on-failure` : si les pods ne
    sont pas prêts en 6 minutes, Helm remet lui-même la version précédente ;
-   les anciens pods servent jusqu'au bout (`maxUnavailable: 0`) ;
+   les anciens pods servent jusqu'au bout (`maxUnavailable: 0`). L'image
+   déployée est notée dans la colonne DESCRIPTION de `helm history`
+   (`--description "image v1.1.1"`) : la colonne APP VERSION vient de
+   `Chart.yaml` et ne suit pas les versions publiées ;
 6. **test de fumée** : depuis le pod du front, appel de `/api/persons`
    (chemin complet front → back → base), 3 essais ; en cas d'échec,
    `helm rollback`, puis arrêt en erreur.
