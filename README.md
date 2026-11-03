@@ -344,15 +344,22 @@ Chaque alerte reçoit une décision dans
 WARN (signalée), INFO ou IGNORE. Le rapport est dans le **résumé de
 l'exécution** et en **artefact** (`zap-baseline-report`, 30 jours).
 
-Premiers résultats (03/11/2026, `staging`) : aucune alerte bloquante ;
-5 alertes WARN, triées :
+Premiers résultats (03/11/2026, `staging`) : aucune alerte bloquante,
+5 alertes WARN ; triées, puis **corrigées avant la prod** quand elles
+dépendaient de l'exploitation :
 
 | Alerte | Risque | Décision |
 |---|---|---|
+| En-tête CSP absent | Moyen | **Corrigé** : `front/nginx.conf` ; règle passée en FAIL |
+| En-têtes Permissions-Policy et d'isolation (Spectre) absents | Faible | **Corrigés** avec la CSP ; règles en FAIL |
 | Angular 17.3.12 vulnérable (bibliothèque JavaScript) | Élevé | Risque accepté jusqu'à la montée de version (audit, R4 ; `.trivyignore`) |
-| En-tête CSP absent | Moyen | À corriger (serveur web du front), puis FAIL |
-| CSS Bulma chargé d'un CDN sans contrôle d'intégrité (SRI) | Moyen | Équipe Dev |
-| En-têtes Permissions-Policy et d'isolation (Spectre) absents | Faible | À corriger avec la CSP, puis FAIL |
+| CSS Bulma chargé d'un CDN sans contrôle d'intégrité (SRI) | Moyen | Équipe Dev (attribut `integrity`, ou Bulma installé avec npm) |
+
+Vérifié avant la fusion : avec les règles en FAIL, le front sans les
+en-têtes fait échouer ZAP (3 alertes FAIL, prod bloquée) ; avec les
+en-têtes, 0 FAIL et 64 règles passées ; l'application fonctionne dans
+Chromium et Firefox, sans aucune violation de la CSP (liste, détail,
+création).
 
 Les protections déjà en place (anti-cadre, `nosniff`, aucune version du
 serveur affichée, aucune injection ni XSS trouvée…) sont réglées sur
@@ -426,6 +433,9 @@ Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#
   critiques ; une faille sans correctif n'est acceptée que justifiée et
   datée dans [`.trivyignore`](.trivyignore) ; Dependabot propose les mises
   à jour après un délai de refroidissement (sécurité : immédiat).
+- **En-têtes de sécurité du front** (nginx) : CSP stricte (scripts du
+  site seulement, aucun style en ligne), anti-cadre, `nosniff`,
+  `Referrer-Policy`, `Permissions-Policy`, isolation (COOP, CORP, COEP).
 - **Images durcies** : sans root, versions figées, seulement le
   nécessaire ; image PostgreSQL sans `gosu`.
 - **Cluster** : namespaces au niveau Pod Security « restricted »,
@@ -462,6 +472,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Compte `microcrm` superutilisateur PostgreSQL | Compte applicatif aux droits limités | [chart](infra/helm/microcrm/README.md#limites-connues) |
 | Sondes de santé sur `/`, sans Spring Boot Actuator | Point de santé dédié (`/actuator/health`) | [chart](infra/helm/microcrm/README.md#limites-connues) |
 | Table de liens sans clé primaire | Migration Flyway (équipe Dev) | [scripts](scripts/README.md#backupsh) |
+| CSP sans style en ligne : un futur style de composant Angular serait bloqué | Jeton par page (« nonce », `ngCspNonce`) servi par nginx | [ZAP](#test-dintrusion-zap) |
 | Angular 17 hors maintenance, pas d'ESLint | Montée de version et ESLint (équipe Dev) | [audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance) |
 
 ## Contribuer

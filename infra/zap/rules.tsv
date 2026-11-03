@@ -27,11 +27,12 @@
 90020	FAIL	(Remote OS Command Injection)
 6	FAIL	(Path Traversal)
 
-# WARN : à corriger (en-têtes de sécurité du serveur web du front), puis
-# à passer en FAIL
-10038	WARN	(Content Security Policy (CSP) Header Not Set)
-10063	WARN	(Permissions Policy Header Not Set)
-90004	WARN	(Insufficient Site Isolation Against Spectre)
+# FAIL : en-têtes ajoutés au serveur web du front (front/nginx.conf,
+# 03/11/2026) ; leur disparition ou une CSP affaiblie bloque la prod
+10038	FAIL	(Content Security Policy (CSP) Header Not Set)
+10055	FAIL	(CSP)
+10063	FAIL	(Permissions Policy Header Not Set)
+90004	FAIL	(Insufficient Site Isolation Against Spectre)
 
 # WARN : risque accepté, correction par l'équipe Dev ; Angular 17 hors
 # maintenance (audit, R4 ; voir aussi .trivyignore) ; CSS Bulma chargé
