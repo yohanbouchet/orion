@@ -1,0 +1,7 @@
+# Fichier  : infra/ansible/.ansible-lint
+# Rôle     : réglages d'ansible-lint : profil le plus strict, sans
+#            analyser les collections téléchargées
+# Utilisé par : ansible-lint (poste Ops et job ansible de la CI)
+profile: production
+exclude_paths:
+  - collections/

@@ -1,0 +1,58 @@
+# Fichier  : infra/ansible/roles/node_exporter/tasks/main.yml
+# Rôle     : node_exporter (Prometheus) : métriques de la machine elle-
+#            même (disque, mémoire, CPU) pour la supervision ; binaire
+#            officiel à l'empreinte vérifiée, compte système dédié sans
+#            shell, écoute seulement sur le réseau du cluster
+# Utilise  : group_vars/all.yml (node_exporter_*) ; minikube_gateway
+#            (site.yml) ; templates/node_exporter.service.j2
+# Utilisé par : site.yml ; supervision (phase 7)
+
+# Compte sans connexion ni dossier personnel : il ne sert qu'à ce service
+- name: Create the node_exporter system user
+  become: true
+  ansible.builtin.user:
+    name: node_exporter
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Download node_exporter
+  become: true
+  ansible.builtin.get_url:
+    url: "{{ node_exporter_url }}"
+    dest: "/opt/node_exporter-{{ node_exporter_version }}.tar.gz"
+    checksum: "sha256:{{ node_exporter_sha256 }}"
+    mode: "0644"
+
+# Binaire seul, appartenant à root : le compte du service ne peut pas le
+# modifier
+- name: Install the node_exporter binary
+  become: true
+  ansible.builtin.unarchive:
+    src: "/opt/node_exporter-{{ node_exporter_version }}.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+    include: ["node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"]
+    extra_opts: [--strip-components=1]
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart node_exporter
+
+- name: Install the node_exporter service
+  become: true
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart node_exporter
+
+- name: Enable and start node_exporter
+  become: true
+  ansible.builtin.systemd_service:
+    name: node_exporter
+    enabled: true
+    state: started
+    daemon_reload: true

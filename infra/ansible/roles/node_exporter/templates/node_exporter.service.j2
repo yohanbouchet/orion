@@ -1,0 +1,32 @@
+# Fichier  : /etc/systemd/system/node_exporter.service (géré par Ansible :
+#            infra/ansible/roles/node_exporter, ne pas modifier ici)
+# Rôle     : métriques de la machine pour la supervision du cluster
+
+[Unit]
+Description=Prometheus node_exporter (host metrics)
+Documentation=https://github.com/prometheus/node_exporter
+# L'adresse d'écoute est celle du réseau Docker du cluster
+After=docker.service
+Wants=docker.service
+
+[Service]
+User=node_exporter
+Group=node_exporter
+# Écoute seulement sur la passerelle du réseau Minikube : joignable par
+# les pods (supervision), pas depuis le réseau local ni Internet
+ExecStart=/usr/local/bin/node_exporter --web.listen-address={{ minikube_gateway }}:9100
+Restart=on-failure
+RestartSec=10
+# Durcissement : aucun privilège, système en lecture seule, pas d'accès
+# aux dossiers personnels
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

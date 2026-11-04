@@ -4,9 +4,9 @@
 #            GitHub, images Docker ; chaque lundi, après un délai de
 #            refroidissement. Les mises à jour de SÉCURITÉ ne dépendent pas
 #            de ce fichier : elles arrivent tout de suite (docs/02, 2.7).
-# Utilise  : front/, .github/release/, scripts/tests/, back/,
-#            .github/workflows/, Dockerfiles du front, du back et de
-#            infra/postgres
+# Utilise  : front/, .github/release/, scripts/tests/, infra/ansible/,
+#            back/, .github/workflows/, Dockerfiles du front, du back, de
+#            infra/postgres et de infra/zap
 # Utilisé par : GitHub Dependabot ; tickets #38 et #56
 
 version: 2
@@ -69,10 +69,13 @@ updates:
       prefix: build
       prefix-development: build
       include: scope
-  # Outils de test des scripts Python : pytest et ses dépendances,
-  # empreintes comprises (scripts/tests/requirements.txt)
+  # Outils Python de la CI, empreintes comprises : pytest
+  # (scripts/tests/requirements.txt), ansible-core et ansible-lint
+  # (infra/ansible/requirements-ci.txt)
   - package-ecosystem: pip
-    directory: /scripts/tests
+    directories:
+      - /scripts/tests
+      - /infra/ansible
     schedule:
       interval: weekly
       day: monday
@@ -150,6 +153,7 @@ updates:
       - /front
       - /back
       - /infra/postgres
+      - /infra/zap
     schedule:
       interval: weekly
       day: monday

@@ -1,0 +1,45 @@
+# Fichier  : infra/ansible/roles/backup/tasks/main.yml
+# Rôle     : sauvegarde automatique de la base de prod : chaque nuit, et
+#            vérification chaque semaine qu'elle se restaure vraiment
+#            (base temporaire) ; journal dans ~/.local/state
+# Utilise  : scripts/backup.sh ; group_vars/all.yml (backup_*)
+# Utilisé par : site.yml
+
+# Dossier lisible par l'Ops seul : une sauvegarde contient des données
+# personnelles
+- name: Create the backup folder
+  ansible.builtin.file:
+    path: "{{ backup_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Create the log folder
+  ansible.builtin.file:
+    path: "{{ backup_log | dirname }}"
+    state: directory
+    mode: "0700"
+
+# cron n'a pas le PATH de la session : on donne celui des outils du poste
+- name: Back up the production database every night
+  ansible.builtin.cron:
+    name: microcrm backup (ansible)
+    hour: "2"
+    minute: "30"
+    job: >-
+      PATH={{ ops_home }}/.local/bin:/usr/bin:/bin
+      BACKUP_DIR={{ backup_dir }}
+      {{ repo_dir }}/scripts/backup.sh {{ backup_env }}
+      >> {{ backup_log }} 2>&1
+
+# Une sauvegarde jamais restaurée n'est pas une sauvegarde
+- name: Check every week that the last backup restores
+  ansible.builtin.cron:
+    name: microcrm backup verify (ansible)
+    weekday: "0"
+    hour: "3"
+    minute: "30"
+    job: >-
+      PATH={{ ops_home }}/.local/bin:/usr/bin:/bin
+      BACKUP_DIR={{ backup_dir }}
+      {{ repo_dir }}/scripts/backup.sh verify {{ backup_env }}
+      >> {{ backup_log }} 2>&1

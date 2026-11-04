@@ -1,0 +1,43 @@
+# Fichier  : infra/ansible/roles/cluster_images/tasks/image.yml
+# Rôle     : UNE image : reconstruite et rechargée seulement si elle manque
+#            dans le cluster ou si son Dockerfile a changé (empreinte notée
+#            dans ~/.local/state/orion-images après chaque chargement)
+# Utilisé par : main.yml (une fois par image)
+
+- name: Read the Dockerfile fingerprint of {{ image.name }}
+  ansible.builtin.stat:
+    path: "{{ repo_dir }}/{{ image.context }}/Dockerfile"
+    checksum_algorithm: sha256
+  register: cluster_images_dockerfile
+
+# Fichier d'empreinte de cette image (vide s'il n'existe pas encore)
+- name: Locate the fingerprint file of {{ image.name }}
+  ansible.builtin.set_fact:
+    cluster_images_stamp: "{{ ops_home }}/.local/state/orion-images/{{ image.name | replace('/', '_') }}"
+
+# À reconstruire si l'image manque dans le cluster ou si l'empreinte
+# notée diffère de celle du Dockerfile actuel
+- name: Check if a rebuild is needed for {{ image.name }}
+  ansible.builtin.set_fact:
+    cluster_images_needed: >-
+      {{ ('docker.io/' ~ image.name) not in cluster_images_loaded.stdout_lines
+         or lookup('ansible.builtin.file', cluster_images_stamp, errors='ignore')
+            != cluster_images_dockerfile.stat.checksum }}
+
+- name: Build and load {{ image.name }}
+  when: cluster_images_needed | bool
+  block:
+    - name: Build {{ image.name }}
+      ansible.builtin.command: >-
+        docker build -t {{ image.name }} {{ repo_dir }}/{{ image.context }}
+      changed_when: true
+    - name: Load into Minikube {{ image.name }}
+      ansible.builtin.command: >-
+        minikube -p {{ minikube_profile }} image load --overwrite=true
+        {{ image.name }}
+      changed_when: true
+    - name: Remember the Dockerfile fingerprint of {{ image.name }}
+      ansible.builtin.copy:
+        dest: "{{ cluster_images_stamp }}"
+        content: "{{ cluster_images_dockerfile.stat.checksum }}"
+        mode: "0600"

@@ -1,0 +1,24 @@
+# Fichier  : infra/ansible/roles/minikube_service/tasks/main.yml
+# Rôle     : démarrage automatique du cluster au démarrage de la machine
+#            (modèle de service infra/systemd/minikube@.service, lancé
+#            sous l'utilisateur Ops, pas root)
+# Utilise  : infra/systemd/minikube@.service
+# Utilisé par : site.yml
+
+- name: Install the Minikube service template
+  become: true
+  ansible.builtin.copy:
+    src: "{{ repo_dir }}/infra/systemd/minikube@.service"
+    dest: /etc/systemd/system/minikube@.service
+    owner: root
+    group: root
+    mode: "0644"
+
+# daemon_reload : systemd relit le modèle s'il vient de changer
+- name: Enable the Minikube service for the Ops user
+  become: true
+  ansible.builtin.systemd_service:
+    name: "minikube@{{ ops_user }}"
+    enabled: true
+    state: started
+    daemon_reload: true

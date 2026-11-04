@@ -5,9 +5,10 @@
 #            SonarQube et son Quality Gate sur le runner local ; en
 #            parallèle, les scans de sécurité (gitleaks, hadolint,
 #            ShellCheck, Trivy), les tests des scripts (bashunit, pytest),
-#            les contrôles du socle Terraform (fmt, validate, test) et
-#            la construction des images Docker analysées ; après une fusion
-#            sur main, si tout est vert, numéro de version (semantic-release :
+#            les contrôles du socle Terraform (fmt, validate, test) et du
+#            code Ansible (syntaxe, ansible-lint), et la construction des
+#            images Docker analysées ; après une fusion sur main,
+#            si tout est vert, numéro de version (semantic-release :
 #            étiquette vX.Y.Z et Release GitHub) puis publication des images
 #            sur GHCR ; déploiement dans dev puis staging (deploy.yml),
 #            test d'intrusion passif de staging (zap.yml), et dans prod
@@ -318,6 +319,40 @@ jobs:
       - name: Unit tests
         run: terraform test
 
+  # Code Ansible du poste Ops (infra/ansible) : syntaxe et bonnes pratiques
+  # (ansible-lint, profil « production ») ; le playbook n'est JAMAIS lancé
+  # par la CI : il agit sur la machine hôte, avec sudo
+  ansible:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/ansible
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Python 3.14 (supporté jusqu'au 31/10/2030), comme en local
+      - name: Set up Python 3.14
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      # ansible-core et ansible-lint : versions et empreintes figées,
+      # paquets déjà construits seulement (aucun code exécuté à
+      # l'installation)
+      - name: Install Ansible tools
+        run: >-
+          python -m pip install --require-hashes --only-binary :all:
+          -r requirements-ci.txt
+      # Collections aux versions figées de requirements.yml
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml -p collections
+      - name: Check the playbook syntax
+        run: ansible-playbook site.yml --syntax-check
+      - name: Lint
+        run: ansible-lint
+
   # Failles connues dans les dépendances (npm, Gradle) : bloque sur les
   # failles hautes et critiques, sauf exceptions justifiées et datées dans
   # .trivyignore (docs/02, section 2.7) ; ticket #20
@@ -429,6 +464,7 @@ jobs:
       - shellcheck
       - script-tests
       - terraform
+      - ansible
       - trivy
       - images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -483,6 +519,7 @@ jobs:
       - shellcheck
       - script-tests
       - terraform
+      - ansible
       - trivy
       - images
       - release
@@ -609,6 +646,7 @@ jobs:
       - shellcheck
       - script-tests
       - terraform
+      - ansible
       - trivy
       - images
       - release

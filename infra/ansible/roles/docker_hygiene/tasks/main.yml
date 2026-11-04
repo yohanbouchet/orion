@@ -1,0 +1,38 @@
+# Fichier  : infra/ansible/roles/docker_hygiene/tasks/main.yml
+# Rôle     : protège le disque de la machine (1re cause de panne d'un
+#            serveur unique) : journaux des conteneurs limités, nettoyage
+#            chaque semaine des images et du cache inutilisés
+# Utilise  : group_vars/all.yml (docker_*) ; handlers/main.yml
+# Utilisé par : site.yml
+
+# Réglages du démon Docker : journaux limités (3 fichiers de 10 Mo par
+# conteneur) ; live-restore : les conteneurs (dont le cluster) continuent
+# de tourner pendant un redémarrage de Docker
+- name: Configure the Docker daemon
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: "{{ docker_daemon | to_nice_json }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    docker_daemon:
+      log-driver: json-file
+      log-opts:
+        max-size: "{{ docker_log_max_size }}"
+        max-file: "{{ docker_log_max_file }}"
+      live-restore: true
+  notify: Restart Docker
+
+# Images et cache de construction non utilisés depuis 7 jours ; JAMAIS les
+# volumes (celui de Minikube contient le cluster et ses bases)
+- name: Prune unused Docker images and build cache every week
+  ansible.builtin.cron:
+    name: docker prune (ansible)
+    weekday: "0"
+    hour: "4"
+    minute: "0"
+    job: >-
+      docker image prune -af --filter until={{ docker_prune_until }} &&
+      docker builder prune -af --filter until={{ docker_prune_until }}

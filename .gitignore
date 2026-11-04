@@ -45,6 +45,10 @@ reports/
 # Rapport du test d'intrusion lancé en local (scripts/zap-scan.sh)
 zap-report/
 
+# Collections Ansible téléchargées (versions figées dans
+# infra/ansible/requirements.yml)
+infra/ansible/collections/
+
 # --- Dépendances installées ---
 # Paquets npm téléchargés par npm ci (ex. outil de version dans
 # .github/release/) : régénérés depuis le package-lock.json.

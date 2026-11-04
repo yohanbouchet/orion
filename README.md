@@ -39,7 +39,7 @@ DevOps » (OpenClassrooms, option B), à partir de
 
 ## État d'avancement
 
-Au 03/11/2026 :
+Au 04/11/2026 :
 
 | Étape | État |
 |---|---|
@@ -51,9 +51,9 @@ Au 03/11/2026 :
 | Script de déploiement avec test de fumée et retour arrière | ✅ [`scripts/deploy.sh`](scripts/README.md#deploysh) |
 | Déploiement continu : `dev` puis `staging` à chaque fusion, `prod` sur une version après approbation | ✅ [`deploy.yml`](.github/workflows/deploy.yml) (1er passage en `prod` : à la prochaine version) |
 | Test d'intrusion automatisé (ZAP) : passif à chaque déploiement de `staging` (bloque la prod), actif à la demande | ✅ [`zap.yml`](.github/workflows/zap.yml), [règles](infra/zap/rules.tsv) |
-| Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) (planification quotidienne : avec Ansible) |
+| Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée chaque nuit, restauration vérifiée chaque semaine, copie hors site chiffrée |
 | Socle du cluster en Terraform (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
-| Ansible (configuration de la machine) | ⏳ à venir |
+| Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) | ✅ [`infra/ansible/`](infra/ansible/README.md) |
 | Supervision (ELK), alertes, indicateurs DORA, tests de charge | ⏳ à venir |
 
 ## Architecture
@@ -112,6 +112,7 @@ front/                    application Angular, Dockerfile, nginx.conf
 back/                     API Spring Boot (Gradle), Dockerfile
 infra/
   terraform/              socle du cluster (namespaces, comptes deployer)
+  ansible/                configuration et durcissement du poste Ops
   zap/                    règles du test d'intrusion (bloquant ou non)
   helm/microcrm/          chart Helm de l'application
   postgres/               image PostgreSQL durcie (sans gosu, sans root)
@@ -140,6 +141,7 @@ main depuis l'onglet **Actions**.
 | `shellcheck` | Erreurs courantes des scripts Bash | ShellCheck | GitHub |
 | `script-tests` | Tests des scripts | bashunit, pytest | GitHub |
 | `terraform` | Mise en forme, validité et tests du socle Terraform | Terraform (`fmt`, `validate`, `test`) | GitHub |
+| `ansible` | Syntaxe et bonnes pratiques du code Ansible (jamais exécuté par la CI) | ansible-playbook `--syntax-check`, ansible-lint (profil production) | GitHub |
 | `trivy` | Failles des dépendances (production et outillage) | Trivy | GitHub |
 | `images` | Construction et scan des images front et back | Docker, Trivy | GitHub |
 | `release` | Numéro de version et Release GitHub (sur `main`) | semantic-release | GitHub |
@@ -236,6 +238,10 @@ front).
 Prérequis : le cluster Minikube `orion`
 ([installation](#installer-la-chaîne-sur-le-poste-ops)), `kubectl`,
 `helm` 4 et Terraform 1.17.
+
+Les images du projet (PostgreSQL durcie, ZAP, runner) sont construites et
+chargées dans Minikube par Ansible ([`infra/ansible`](infra/ansible/README.md),
+rôle `cluster_images`). À la main :
 
 ```shell
 # 1. Image PostgreSQL durcie, construite et chargée dans Minikube (elle
@@ -375,6 +381,13 @@ vérifiés par empreinte à la construction.
 À faire une seule fois, sur la machine qui héberge le runner local et
 SonarQube (Docker, `minikube`, `kubectl` et `helm` installés).
 
+La configuration de la machine elle-même (outils à version figée,
+démarrage automatique du cluster, images, metrics-server, sauvegardes
+planifiées, hygiène du disque, pare-feu, fail2ban, métriques de l'hôte)
+est faite par **Ansible**, après l'étape 1 :
+`cd infra/ansible && ansible-playbook site.yml -K`
+([détails](infra/ansible/README.md)).
+
 ```shell
 # 1. Cluster Minikube (4 cœurs, 7 Go), puis démarrage automatique :
 #    voir infra/systemd/README.md
@@ -419,6 +432,9 @@ scripts/backup.sh restore dev <fichier>        # toute la base
 scripts/backup.sh restore dev <fichier> --table person
 ```
 
+En production, Ansible planifie la sauvegarde chaque nuit (2 h 30) et la
+vérification de sa restauration chaque dimanche ; le dossier est copié
+hors site par la sauvegarde chiffrée de la machine (GPG, Google Drive).
 Chaque restauration est précédée d'une sauvegarde de sécurité de l'état
 actuel. Objectifs : perte de données maximale (RPO) de 24 h avec une
 sauvegarde quotidienne ; temps de restauration (RTO) mesuré à 0,6 s.
@@ -453,7 +469,12 @@ Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#
   actif à la demande ; les alertes réglées sur FAIL bloquent la prod
   ([détails](#test-dintrusion-zap)).
 - **Sauvegardes** : fichiers en 600, dossiers en 700, empreinte SHA-256
-  contrôlée avant toute restauration ; disque de la machine chiffré.
+  contrôlée avant toute restauration, restauration vérifiée chaque
+  semaine ; copie hors site chiffrée ; disque de la machine chiffré.
+- **Machine hôte** (Ansible) : mises à jour de sécurité automatiques,
+  pare-feu (entrée refusée sauf SSH du réseau local), fail2ban, journaux
+  Docker limités, outils à version figée et empreinte vérifiée ; le
+  playbook n'est jamais lancé par la CI.
 
 ## Limites connues et évolutions
 
@@ -462,7 +483,8 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Limite | Évolution | Détails |
 |---|---|---|
 | Tout tourne sur une seule machine (Minikube) | Cible cloud (schéma AWS, à venir) | — |
-| Sauvegarde quotidienne complète, sur la machine, non chiffrée fichier par fichier | Restauration à un instant donné (WAL, CloudNativePG ou RDS), incrémental, copie hors site chiffrée (règle 3-2-1) | [scripts](scripts/README.md#backupsh) |
+| Sauvegarde quotidienne complète, non chiffrée fichier par fichier sur la machine (la copie hors site, elle, est chiffrée) | Restauration à un instant donné (WAL, CloudNativePG ou RDS), sauvegarde incrémentale | [scripts](scripts/README.md#backupsh) |
+| Poste Ops : SSH accepte encore les mots de passe ; un seul poste ; rôles Ansible testés par lint et idempotence, sans machine jetable | Clé SSH seule, inventaire multi-machines, Molecule | [Ansible](infra/ansible/README.md#limites-et-évolutions) |
 | Déploiement « poussé » par la CI : un jeton du cluster est rangé dans GitHub, une modification faite à la main dans le cluster n'est pas détectée | GitOps avec Argo CD : le cluster lit lui-même Git et corrige tout écart | [CI](#déploiement-continu-ci) |
 | Jetons de déploiement de longue durée, état Terraform local | Fédération OIDC GitHub → cluster (jetons de quelques minutes) ; état distant chiffré et verrouillé | [Terraform](infra/terraform/README.md#limites-connues-et-évolutions) |
 | Versions de `kubectl`, `helm` et de l'image ZAP mises à jour à la main (Dependabot ne les suit pas) | Image du runner contenant ces outils, mise à jour par Dependabot ; ZAP dans un fichier suivi par Dependabot | [CI](#déploiement-continu-ci) |
@@ -501,7 +523,7 @@ Règles complètes : [normalisation](docs/02-normalisation-plan-ci.md#2-normes-e
 
 ## Versions des outils
 
-Vérifiées le 02/11/2026 (dernière version publiée et fin de support sur
+Vérifiées le 04/11/2026 (dernière version publiée et fin de support sur
 [endoflife.date](https://endoflife.date)) :
 
 | Outil | Version |
@@ -513,6 +535,8 @@ Vérifiées le 02/11/2026 (dernière version publiée et fin de support sur
 | Helm / kubectl (jobs du runner local) | 4.3.1 / 1.37.2 |
 | ZAP (test d'intrusion) | 2.17.0 |
 | Terraform / fournisseur Kubernetes | 1.17 (1.17.1 dans la CI) / 3.4.0 |
+| Ansible (ansible-core / ansible-lint / community.general) | 2.21 (2.21.6 dans la CI) / 26.10.1 / 14.0.0 |
+| metrics-server / node_exporter | 0.9.1 / 1.12.1 |
 | ARC (runner local) | 0.15.1, runner 2.338.2 |
 | SonarQube Community Build | 26.10 |
 | Trivy / hadolint / gitleaks / ShellCheck | 0.76.1 / 2.15.1 / 8.30.1 / 0.11.0 |

@@ -1,0 +1,76 @@
+# Fichier  : infra/ansible/roles/hardening/tasks/main.yml
+# Rôle     : durcissement de la machine : mises à jour de sécurité
+#            automatiques vérifiées, pare-feu (tout refusé en entrée sauf
+#            SSH du réseau local et métriques vers le cluster), fail2ban
+#            contre les essais de mot de passe SSH
+# Utilise  : group_vars/all.yml (lan_cidr) ; minikube_subnet (site.yml) ;
+#            files/sshd.local ; collection community.general (ufw)
+# Utilisé par : site.yml
+
+# Les correctifs de sécurité d'Ubuntu s'installent seuls chaque jour
+- name: Install the security tools
+  become: true
+  ansible.builtin.apt:
+    name: [unattended-upgrades, ufw, fail2ban]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Keep automatic security updates on
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+
+# ORDRE IMPORTANT : on autorise SSH AVANT d'activer le pare-feu, sinon la
+# connexion en cours (VS Code) serait coupée
+- name: Allow SSH from the local network only
+  become: true
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    from_ip: "{{ lan_cidr }}"
+    comment: SSH from the local network
+
+# Les pods du cluster lisent les métriques de la machine (node_exporter)
+- name: Allow host metrics from the Minikube network
+  become: true
+  community.general.ufw:
+    rule: allow
+    port: "9100"
+    proto: tcp
+    from_ip: "{{ minikube_subnet }}"
+    comment: node_exporter for the cluster
+
+# Tout le reste est refusé en entrée ; la machine peut sortir (mises à
+# jour, GitHub, registres d'images)
+- name: Enable the firewall, deny incoming by default
+  become: true
+  community.general.ufw:
+    state: enabled
+    default: deny
+    direction: incoming
+    logging: low
+
+- name: Configure fail2ban for SSH
+  become: true
+  ansible.builtin.copy:
+    src: sshd.local
+    dest: /etc/fail2ban/jail.d/sshd.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Enable fail2ban
+  become: true
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    enabled: true
+    state: started

@@ -83,4 +83,5 @@ sudo systemctl daemon-reload
   ([documentation Docker](https://docs.docker.com/engine/security/#docker-daemon-attack-surface)) :
   acceptable sur un poste de laboratoire, à éviter sur un serveur partagé.
 - Le chemin `~/.local/bin/minikube` et le profil `orion` sont écrits dans le
-  modèle. L'installation pourra être automatisée par Ansible (phase 6).
+  modèle. L'installation est automatisée par Ansible
+  ([`infra/ansible`](../ansible/README.md), rôle `minikube_service`).

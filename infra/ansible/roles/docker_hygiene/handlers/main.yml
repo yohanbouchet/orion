@@ -1,0 +1,20 @@
+# Fichier  : infra/ansible/roles/docker_hygiene/handlers/main.yml
+# Rôle     : redémarre Docker quand sa configuration change (une seule
+#            fois, à la fin), puis relance le cluster : le service est un
+#            « oneshot » resté actif, « started » ne le relancerait pas
+# Utilisé par : tasks/main.yml (notify)
+
+# Le 1er passage arrête les conteneurs (live-restore n'est pas encore
+# actif) : coupure de quelques minutes, annoncée dans le README
+- name: Restart Docker
+  become: true
+  ansible.builtin.systemd_service:
+    name: docker
+    state: restarted
+  notify: Restart the Minikube service
+
+- name: Restart the Minikube service
+  become: true
+  ansible.builtin.systemd_service:
+    name: "minikube@{{ ops_user }}"
+    state: restarted
