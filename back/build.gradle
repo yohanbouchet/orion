@@ -31,6 +31,11 @@ dependencies {
 	// (src/main/resources/db/migration), appliqués au démarrage (ticket #66)
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	implementation 'ro.polak:spring-boot-data-fixtures:0.2.0'
+	// Supervision (ticket #84) : Actuator publie la santé et les métriques
+	// (port de gestion séparé, voir application.properties) ; Micrometer
+	// les met au format Prometheus, lu par VictoriaMetrics
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	// Base en mémoire HSQLDB quand aucune base n'est configurée (tests,
 	// poste de dev) ; PostgreSQL quand SPRING_DATASOURCE_URL est fournie.
