@@ -1,6 +1,7 @@
 # Fichier  : /etc/systemd/system/node_exporter.service (géré par Ansible :
 #            infra/ansible/roles/node_exporter, ne pas modifier ici)
-# Rôle     : métriques de la machine pour la supervision du cluster
+# Rôle     : métriques de la machine pour la supervision du cluster,
+#            et celles écrites par nos scripts (dossier textfile)
 
 [Unit]
 Description=Prometheus node_exporter (host metrics)
@@ -13,12 +14,15 @@ Wants=docker.service
 User=node_exporter
 Group=node_exporter
 # Écoute seulement sur la passerelle du réseau Minikube : joignable par
-# les pods (supervision), pas depuis le réseau local ni Internet
-ExecStart=/usr/local/bin/node_exporter --web.listen-address={{ minikube_gateway }}:9100
+# les pods (supervision), pas depuis le réseau local ni Internet ; lit
+# aussi les métriques écrites par nos scripts (dossier textfile)
+ExecStart=/usr/local/bin/node_exporter \
+    --web.listen-address={{ minikube_gateway }}:9100 \
+    --collector.textfile.directory={{ node_exporter_textfile_dir }}
 Restart=on-failure
 RestartSec=10
-# Durcissement : aucun privilège, système en lecture seule, pas d'accès
-# aux dossiers personnels
+# Durcissement : aucun privilège, système en lecture seule, dossiers
+# personnels en lecture seule
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only

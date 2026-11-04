@@ -32,9 +32,10 @@ WORKDIR /app
 COPY --from=build /src/app.jar /app/app.jar
 # Compte sans droits (numéro 1001) : l'application ne tourne jamais en root
 USER 1001:1001
-EXPOSE 8080
-# Sonde de santé : l'API répond-elle ? (les sondes de Kubernetes prendront
-# le relais en phase 5)
+# 8080 : API ; 8081 : port de gestion (santé, métriques), jamais publié
+EXPOSE 8080 8081
+# Sonde de santé hors Kubernetes (docker run, Compose) : Actuator répond-il ?
+# Dans Kubernetes, ce sont les sondes du chart qui comptent
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-    CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+    CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/actuator/health/liveness"]
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

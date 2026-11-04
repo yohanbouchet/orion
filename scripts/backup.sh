@@ -14,7 +14,10 @@
 #            scripts/backup.sh restore dev|staging|prod FILE [--table NAME]
 # Paramètres : BACKUP_DIR = dossier des sauvegardes, hors du dépôt et du
 #              cluster (défaut ~/backups/microcrm) ; KEEP = nombre de
-#              sauvegardes gardées par environnement (défaut 7)
+#              sauvegardes gardées par environnement (défaut 7) ;
+#              BACKUP_METRICS_DIR = dossier lu par node_exporter (heure de
+#              la dernière sauvegarde réussie, pour l'alerte BackupTooOld ;
+#              vide par défaut : aucune métrique écrite)
 
 # Arrêt à la première erreur, variable inconnue, erreur dans un tube
 set -Eeuo pipefail
@@ -34,6 +37,7 @@ DB="microcrm"
 DB_USER="microcrm"
 BACKUP_DIR="${BACKUP_DIR:-$HOME/backups/microcrm}"
 KEEP="${KEEP:-7}"
+BACKUP_METRICS_DIR="${BACKUP_METRICS_DIR:-}"
 # Chemin de la dernière sauvegarde faite (cité si une restauration échoue)
 LAST_BACKUP=""
 
@@ -107,6 +111,24 @@ backup() {
     done
   log INFO "backup ready: $dir/$name ($(du -h "$dir/$name" | cut -f1))"
   LAST_BACKUP="$dir/$name"
+}
+
+# Métrique pour la supervision : heure (secondes depuis 1970) de la
+# dernière sauvegarde réussie, au format texte de Prometheus, lue par
+# node_exporter ; écrite puis renommée, pour qu'il ne lise jamais un
+# fichier à moitié écrit ; lisible par son groupe (node_exporter)
+write_metric() {
+  [[ -n "$BACKUP_METRICS_DIR" ]] || return 0
+  local file="$BACKUP_METRICS_DIR/microcrm_backup_$ENV.prom"
+  {
+    echo "# HELP microcrm_backup_last_success_timestamp_seconds" \
+      "Time of the last successful MicroCRM database backup."
+    echo "# TYPE microcrm_backup_last_success_timestamp_seconds gauge"
+    echo "microcrm_backup_last_success_timestamp_seconds{env=\"$ENV\"}" \
+      "$(date +%s)"
+  } >"$file.tmp"
+  chmod 640 "$file.tmp"
+  mv "$file.tmp" "$file"
 }
 
 # Restaure le fichier dans une base annexe vide (la vraie base n'est pas
@@ -217,6 +239,7 @@ main() {
     backup)
       [[ $# -eq 1 ]] || usage
       backup
+      write_metric
       ;;
     verify)
       [[ $# -le 2 ]] || usage

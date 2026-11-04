@@ -31,6 +31,7 @@ DevOps » (OpenClassrooms, option B), à partir de
 - [Déployer sur Kubernetes](#déployer-sur-kubernetes)
 - [Installer la chaîne sur le poste Ops](#installer-la-chaîne-sur-le-poste-ops)
 - [Sauvegarder la base](#sauvegarder-la-base)
+- [Superviser](#superviser)
 - [Sécurité](#sécurité)
 - [Limites connues et évolutions](#limites-connues-et-évolutions)
 - [Contribuer](#contribuer)
@@ -54,7 +55,8 @@ Au 04/11/2026 :
 | Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée chaque nuit, restauration vérifiée chaque semaine, copie hors site chiffrée |
 | Socle du cluster en Terraform (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) | ✅ [`infra/ansible/`](infra/ansible/README.md) |
-| Supervision (ELK), alertes, indicateurs DORA, tests de charge | ⏳ à venir |
+| Supervision : métriques, journaux, alertes par e-mail, 3 tableaux de bord (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) |
+| Indicateurs DORA, rapport de performance | ⏳ à venir |
 
 ## Architecture
 
@@ -111,7 +113,9 @@ orchestre la CI et héberge le registre d'images.
 front/                    application Angular, Dockerfile, nginx.conf
 back/                     API Spring Boot (Gradle), Dockerfile
 infra/
-  terraform/              socle du cluster (namespaces, comptes deployer)
+  terraform/              socle du cluster (namespaces, comptes deployer,
+                          installation de la supervision)
+  monitoring/             supervision : réglages, alertes, tableaux de bord
   ansible/                configuration et durcissement du poste Ops
   zap/                    règles du test d'intrusion (bloquant ou non)
   helm/microcrm/          chart Helm de l'application
@@ -438,7 +442,23 @@ hors site par la sauvegarde chiffrée de la machine (GPG, Google Drive).
 Chaque restauration est précédée d'une sauvegarde de sécurité de l'état
 actuel. Objectifs : perte de données maximale (RPO) de 24 h avec une
 sauvegarde quotidienne ; temps de restauration (RTO) mesuré à 0,6 s.
+Une alerte (`BackupTooOld`) prévient si la dernière sauvegarde réussie de
+la prod date de plus de 26 h.
 Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#backupsh).
+
+## Superviser
+
+Pile **VictoriaMetrics + VictoriaLogs + Grafana** (open source, Apache 2.0
+sauf Grafana en AGPL v3), installée par Terraform dans deux namespaces :
+`monitoring` (« restricted ») et `monitoring-collector` (collecteur de
+journaux seul, verrouillé). Elle lit les métriques de l'API (Spring Boot
+Actuator, port de gestion 8081), de Kubernetes et de la machine
+(node_exporter), et les journaux des conteneurs (gardés 7 jours). Six
+alertes sont envoyées par e-mail (prod arrêtée, erreurs 5xx, lenteur,
+disque, sauvegarde, redémarrages en boucle). Trois tableaux de bord sont
+disponibles : disponibilité, performance, sécurité. Consommation mesurée :
+≈ 0,8 Gio et 0,1 cœur. Détails, premiers gestes face à une alerte,
+sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.md).
 
 ## Sécurité
 
@@ -492,7 +512,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Image ZAP : 421 failles hautes ou critiques sans correctif, dans le système de base de l'image officielle | Suivre les versions de ZAP ; pod éphémère, isolé par le pare-feu, sans root (risque accepté) | [ZAP](#test-dintrusion-zap) |
 | Une seule personne : elle approuve ses propres déploiements en prod | En équipe : une autre personne approuve (« Prevent self-review ») | [CI](#déploiement-continu-ci) |
 | Compte `microcrm` superutilisateur PostgreSQL | Compte applicatif aux droits limités | [chart](infra/helm/microcrm/README.md#limites-connues) |
-| Sondes de santé sur `/`, sans Spring Boot Actuator | Point de santé dédié (`/actuator/health`) | [chart](infra/helm/microcrm/README.md#limites-connues) |
+| Supervision sur un seul nœud ; journaux techniques gardés 7 jours, masqués à la source seulement ; pas de journal d'audit (l'application n'a pas d'authentification) | VictoriaMetrics/VictoriaLogs en cluster ; Vector ou Alloy pour masquer centralement ; authentification puis audit pseudonymisé (6 mois à 1 an) | [supervision](infra/monitoring/README.md#limites-et-évolutions) |
 | Table de liens sans clé primaire | Migration Flyway (équipe Dev) | [scripts](scripts/README.md#backupsh) |
 | CSP sans style en ligne : un futur style de composant Angular serait bloqué | Jeton par page (« nonce », `ngCspNonce`) servi par nginx | [ZAP](#test-dintrusion-zap) |
 | Angular 17 hors maintenance, pas d'ESLint | Montée de version et ESLint (équipe Dev) | [audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance) |

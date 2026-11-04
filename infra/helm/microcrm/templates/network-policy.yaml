@@ -1,8 +1,9 @@
 {{- /*
 Fichier  : infra/helm/microcrm/templates/network-policy.yaml
 Rôle     : pare-feu entre pods : tout est refusé dans le namespace, sauf
-           front → back → base (et la résolution DNS) ; en staging, le
-           pod du test d'intrusion ZAP peut joindre le front, et lui seul
+           front → back → base (et la résolution DNS) ; vmagent (namespace
+           monitoring) lit les métriques du back (port 8081) ; en staging,
+           le pod du test d'intrusion ZAP peut joindre le front, et lui seul
 Utilise  : values.yaml (networkPolicy.*) ; _helpers.tpl
 Utilisé par : Kubernetes (appliqué par kindnet dans Minikube) ; ticket #64
 */}}
@@ -54,7 +55,8 @@ spec:
         - port: 8080
     {{- include "microcrm.dnsEgress" . | nindent 4 }}
 ---
-# 3. Back : reçoit seulement le front ; appelle seulement la base et le DNS
+# 3. Back : reçoit le front (API) et vmagent (métriques, port de gestion) ;
+# appelle seulement la base et le DNS
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -71,6 +73,15 @@ spec:
               {{- include "microcrm.selectorLabels" $front | nindent 14 }}
       ports:
         - port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: 8081
   egress:
     - to:
         - podSelector:

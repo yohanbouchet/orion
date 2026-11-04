@@ -5,7 +5,8 @@ Rôle     : API Spring Boot : adresse fixe (Service), Deployment avec
            automatique (HPA) si back.autoscaling.enabled
 Utilise  : values.yaml (back.*, postgres.*) ; image GHCR orion-back ;
            Secret de la base ; _helpers.tpl
-Utilisé par : le front (relais /api, templates/front.yaml) ; ticket #64
+Utilisé par : le front (relais /api, templates/front.yaml) ; vmagent
+              (métriques, port 8081) ; tickets #64 et #84
 */}}
 {{- $ctx := dict "root" $ "component" "back" }}
 {{- $name := include "microcrm.name" $ctx }}
@@ -63,6 +64,10 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            # Port de gestion (Actuator) : santé et métriques, lu par les
+            # sondes et par vmagent ; absent du Service public
+            - name: management
+              containerPort: 8081
           env:
             # Connexion à la base du même environnement (ticket #66) ; le
             # mot de passe vient du Secret, jamais du chart
@@ -79,25 +84,27 @@ spec:
               value: {{ .javaToolOptions | quote }}
           securityContext:
             {{- include "microcrm.containerSecurityContext" . | nindent 12 }}
+          # Sondes sur Actuator (port de gestion, ticket #84) :
+          # « liveness » = l'appli tourne ; « readiness » = elle peut
+          # servir (la base répond)
           # Démarrage de Spring Boot : jusqu'à 3 min avant les autres sondes
           startupProbe:
             httpGet:
-              path: /
-              port: http
+              path: /actuator/health/liveness
+              port: management
             periodSeconds: 5
             failureThreshold: 36
-          # Reçoit du trafic seulement quand l'API répond (racine de l'API
-          # REST ; actuator absent, voir le plan)
+          # Reçoit du trafic seulement quand l'API est prête
           readinessProbe:
             httpGet:
-              path: /
-              port: http
+              path: /actuator/health/readiness
+              port: management
             periodSeconds: 10
           # Redémarré s'il ne répond plus pendant 1 min
           livenessProbe:
             httpGet:
-              path: /
-              port: http
+              path: /actuator/health/liveness
+              port: management
             periodSeconds: 20
             failureThreshold: 3
           resources:

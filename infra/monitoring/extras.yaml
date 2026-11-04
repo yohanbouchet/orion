@@ -1,0 +1,240 @@
+# Fichier  : infra/monitoring/extras.yaml
+# Rôle     : ce qu'on ajoute à la pile de supervision : cibles lues par
+#            vmagent (API MicroCRM, machine hôte), nos alertes, et les
+#            pare-feu réseau des deux namespaces de la supervision
+# Utilise  : rien (2e fichier de réglages du même chart)
+# Utilisé par : infra/terraform/monitoring.tf (helm_release) ; ticket #83
+# Note     : le chart passe ce contenu dans son moteur de modèles ;
+#            aucune accolade double ici (annotations sans variables)
+
+extraObjects:
+  # --- 1. Cibles lues par vmagent --------------------------------------
+  # API MicroCRM : métriques de Spring Boot sur le port de gestion 8081
+  # (jamais exposé par le Service public), dans les 3 environnements
+  - apiVersion: operator.victoriametrics.com/v1beta1
+    kind: VMPodScrape
+    metadata:
+      name: microcrm-back
+      namespace: monitoring
+    spec:
+      namespaceSelector:
+        matchNames: ["dev", "staging", "prod"]
+      selector:
+        matchLabels:
+          app.kubernetes.io/part-of: microcrm
+          app.kubernetes.io/name: back
+      podMetricsEndpoints:
+        - port: management
+          path: /actuator/prometheus
+
+  # Machine hôte : node_exporter installé par Ansible, joignable
+  # seulement depuis le réseau du cluster (pare-feu ufw)
+  - apiVersion: operator.victoriametrics.com/v1beta1
+    kind: VMStaticScrape
+    metadata:
+      name: host-node-exporter
+      namespace: monitoring
+    spec:
+      jobName: node-exporter
+      targetEndpoints:
+        - targets: ["192.168.58.1:9100"]
+          labels:
+            instance: orion-host
+
+  # --- 2. Nos alertes (évaluées par vmalert toutes les 20 s) -----------
+  - apiVersion: operator.victoriametrics.com/v1beta1
+    kind: VMRule
+    metadata:
+      name: orion-alerts
+      namespace: monitoring
+    spec:
+      groups:
+        - name: orion.availability
+          rules:
+            # Alerte de contrôle : toujours active ; si elle disparaît de
+            # Alertmanager, c'est la chaîne d'alerte qui est cassée
+            - alert: Watchdog
+              expr: vector(1)
+              labels:
+                severity: none
+              annotations:
+                summary: Alerting chain is working (always firing).
+            # La prod ne répond plus : aucun pod prêt pour le back ou le
+            # front pendant 2 min
+            - alert: MicrocrmProdDown
+              expr: >-
+                kube_deployment_status_replicas_available{namespace="prod",
+                deployment=~"microcrm-(back|front)"} == 0
+              for: 2m
+              labels:
+                severity: critical
+              annotations:
+                summary: MicroCRM is down in prod (no ready pod).
+                runbook: infra/monitoring/README.md#microcrmproddown
+            # Un conteneur redémarre en boucle (plus de 3 fois en 30 min) ;
+            # dev exclu (redémarrages normaux pendant le développement) ;
+            # increase_prometheus : ignore la 1re valeur d'une série (sinon,
+            # après une réinstallation, les anciens redémarrages comptent)
+            - alert: PodRestartLoop
+              expr: >-
+                increase_prometheus(kube_pod_container_status_restarts_total{
+                namespace=~"prod|staging|monitoring|monitoring-collector"}[30m])
+                > 3
+              labels:
+                severity: warning
+              annotations:
+                summary: A container keeps restarting.
+                runbook: infra/monitoring/README.md#podrestartloop
+
+        - name: orion.performance
+          rules:
+            # Plus de 5 % de réponses en erreur serveur (5xx) sur 5 min ;
+            # sondes (/actuator) exclues en haut ET en bas : sinon leurs
+            # appels, toutes les 5 à 20 s, diluent le taux
+            - alert: MicrocrmHighErrorRate
+              expr: >-
+                sum(rate(http_server_requests_seconds_count{namespace="prod",
+                status=~"5..", uri!~"/actuator.*"}[5m]))
+                / sum(rate(http_server_requests_seconds_count{
+                namespace="prod", uri!~"/actuator.*"}[5m])) > 0.05
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: More than 5% of API responses are 5xx errors.
+                runbook: infra/monitoring/README.md#microcrmhigherrorrate
+            # 95 % des requêtes en moins de 500 ms (sous charge k6, le
+            # 03/11 : p95 mesuré à 401 ms ; seuil juste au-dessus)
+            - alert: MicrocrmSlowResponses
+              expr: >-
+                histogram_quantile(0.95, sum by (le)(rate(
+                http_server_requests_seconds_bucket{namespace="prod",
+                uri!~"/actuator.*"}[5m]))) > 0.5
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: API p95 response time is above 500 ms.
+                runbook: infra/monitoring/README.md#microcrmslowresponses
+
+        - name: orion.host
+          rules:
+            # Disque de la machine rempli à plus de 85 % (1re cause de
+            # panne d'un serveur unique)
+            - alert: HostDiskAlmostFull
+              expr: >-
+                1 - node_filesystem_avail_bytes{job="node-exporter",
+                mountpoint="/"} / node_filesystem_size_bytes{
+                job="node-exporter", mountpoint="/"} > 0.85
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: Host root disk is more than 85% full.
+                runbook: infra/monitoring/README.md#hostdiskalmostfull
+            # Dernière sauvegarde réussie de la prod il y a plus de 26 h
+            # (une par nuit + 2 h de marge), ou jamais vue ; métrique
+            # écrite par scripts/backup.sh, lue par node_exporter
+            - alert: BackupTooOld
+              expr: >-
+                (time() - microcrm_backup_last_success_timestamp_seconds{
+                env="prod"} > 26 * 3600)
+                or absent(microcrm_backup_last_success_timestamp_seconds{
+                env="prod"})
+              for: 15m
+              labels:
+                severity: critical
+              annotations:
+                summary: No successful prod backup for more than 26 hours.
+                runbook: infra/monitoring/README.md#backuptooold
+
+  # --- 3. Pare-feu réseau ------------------------------------------------
+  # monitoring : n'entre que ce qui vient du même namespace, et le
+  # collecteur vers VictoriaLogs ; la sortie reste ouverte (vmagent lit
+  # tous les namespaces et l'hôte, Alertmanager envoie vers Gmail,
+  # Grafana télécharge son module) : limite écrite dans le README
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: monitoring-ingress
+      namespace: monitoring
+    spec:
+      podSelector: {}
+      policyTypes: ["Ingress"]
+      ingress:
+        - from:
+            - podSelector: {}
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: vlsingle-from-collector
+      namespace: monitoring
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: vlsingle
+      policyTypes: ["Ingress"]
+      ingress:
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: monitoring-collector
+          ports:
+            - port: 9428
+
+  # monitoring-collector : le collecteur ne reçoit que vmagent (lecture
+  # de ses métriques) ; il n'envoie qu'à VictoriaLogs, au DNS et à l'API
+  # de Kubernetes (noms des pods)
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: collector
+      namespace: monitoring-collector
+    spec:
+      podSelector: {}
+      policyTypes: ["Ingress", "Egress"]
+      ingress:
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: monitoring
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: vmagent
+          ports:
+            - port: 9429
+      egress:
+        - to:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: monitoring
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: vlsingle
+          ports:
+            - port: 9428
+        - to:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: kube-system
+              podSelector:
+                matchLabels:
+                  k8s-app: kube-dns
+          ports:
+            - port: 53
+              protocol: UDP
+            - port: 53
+              protocol: TCP
+        # API de Kubernetes : adresse du Service (10.96.0.1:443) et du
+        # nœud derrière lui (192.168.58.2:8443), selon l'étape où kindnet
+        # applique la règle
+        - to:
+            - ipBlock:
+                cidr: 10.96.0.1/32
+          ports:
+            - port: 443
+        - to:
+            - ipBlock:
+                cidr: 192.168.58.2/32
+          ports:
+            - port: 8443

@@ -1,12 +1,12 @@
 # Veille, audit et recommandations — MicroCRM
 
-| Élément   | Valeur                                           |
-| --------- | ------------------------------------------------ |
-| Projet    | Démarche DevOps pour l'application MicroCRM      |
-| Client    | Orion (destinataire : Maria, CTO)                |
-| Auteur    | Yohan Bouchet                                    |
-| Version   | 1.0 (à valider)           |
-| Date      | 29/10/2026                                       |
+| Élément | Valeur                                      |
+| ------- | ------------------------------------------- |
+| Projet  | Démarche DevOps pour l'application MicroCRM |
+| Client  | Orion (destinataire : Maria, CTO)           |
+| Auteur  | Yohan Bouchet                               |
+| Version | 1.1 (04/11/2026 : supervision, voir 2.3.7)  |
+| Date    | 29/10/2026                                  |
 
 ## 1. Introduction
 
@@ -174,6 +174,23 @@ main. Docker Compose reste réservé aux outils placés hors du cluster
 
 **Choix : ELK**, attendu par le projet. Il répond au besoin le plus urgent
 de l'audit : des journaux aujourd'hui en texte libre et non centralisés.
+
+> **Mise à jour du 04/11/2026 : choix révisé.** Le 03/11, le mentor a
+> précisé que la fiche d'autoévaluation demande « ELK ou un outil
+> équivalent », et que le marché utilise plutôt la pile Grafana. Choix
+> retenu : **VictoriaMetrics** (métriques, compatible avec le langage de
+> requête de Prometheus) et **VictoriaLogs** (journaux), tous deux sous
+> licence Apache 2.0, avec **Grafana** (AGPL v3) pour les tableaux de bord
+> et **Alertmanager** pour les alertes par e-mail. Raisons : open source,
+> très utilisés, conseillés par le mentor pour leur faible consommation
+> (mesurée : environ 0,8 Gio de mémoire pour toute la pile) ; les alertes
+> sont gratuites, sans limite de l'offre gratuite. La pile est installée
+> **dans le cluster** (namespaces dédiés), par Terraform, et non plus hors
+> du cluster avec Docker Compose (2.3.6 et R6) : un seul outil
+> d'installation, une seule machine. Limite acceptée : un incident du
+> cluster touche aussi sa supervision. Les mentions d'ELK ci-dessous (R6,
+> 5.1, 5.2) gardent la trace du choix initial. Détails :
+> `infra/monitoring/README.md`.
 
 #### 2.3.8 Base de données : PostgreSQL contre HSQLDB
 

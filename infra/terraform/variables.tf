@@ -1,7 +1,7 @@
 # Fichier  : infra/terraform/variables.tf
 # Rôle     : réglages du socle du cluster, avec leurs valeurs par défaut
 # Utilise  : rien
-# Utilisé par : providers.tf, main.tf, rbac.tf ; tests/
+# Utilisé par : providers.tf, main.tf, rbac.tf, monitoring.tf ; tests/
 
 variable "kubeconfig_path" {
   description = "Path of the kubeconfig file used to reach the cluster"
@@ -26,5 +26,19 @@ variable "environments" {
       for env in var.environments : contains(["dev", "staging", "prod"], env)
     ])
     error_message = "Environments must be dev, staging or prod."
+  }
+}
+
+# Donnée personnelle : jamais dans le dépôt ; fournie par un fichier
+# rangé hors du dépôt (voir README) ; masquée dans le plan, mais écrite
+# en clair dans l'état (lui aussi hors du dépôt)
+variable "ops_email" {
+  description = "Mailbox that receives the alerts (Gmail account)"
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[^@ ]+@gmail\\.com$", var.ops_email))
+    error_message = "The alert mailbox must be a Gmail address."
   }
 }
