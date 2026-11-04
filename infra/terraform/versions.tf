@@ -1,6 +1,6 @@
 # Fichier  : infra/terraform/versions.tf
-# Rôle     : versions exigées de Terraform et du fournisseur Kubernetes ;
-#            dossier d'état choisi au lancement (hors du dépôt)
+# Rôle     : versions exigées de Terraform et des fournisseurs Kubernetes
+#            et Helm ; dossier d'état choisi au lancement (hors du dépôt)
 # Utilise  : rien
 # Utilisé par : terraform init (ce dossier) ; job terraform de la CI
 
@@ -15,9 +15,16 @@ terraform {
       # migré kubernetes_role_v1) ; montée de version par une PR
       version = "~> 3.4.0"
     }
+    # Installe la pile de supervision (chart Helm) ; 3.3 = dernière
+    # version, vérifiée le 04/11/2026 ; montée de version par une PR
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 3.3.0"
+    }
   }
 
-  # État local, rangé HORS du dépôt : il contient les jetons des comptes
-  # deployer ; chemin donné à terraform init (-backend-config)
+  # État local, rangé HORS du dépôt : il contient en clair les jetons des
+  # comptes deployer et l'adresse des alertes ; chemin donné à
+  # terraform init (-backend-config)
   backend "local" {}
 }

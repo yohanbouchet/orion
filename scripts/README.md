@@ -318,7 +318,11 @@ scripts/backup.sh restore dev <fichier> --table person
 **Paramètres** : `BACKUP_DIR`, dossier des sauvegardes, hors du dépôt et
 du cluster (défaut `~/backups/microcrm`, un sous-dossier par
 environnement) ; `KEEP`, nombre de sauvegardes gardées par environnement
-(défaut 7).
+(défaut 7) ; `BACKUP_METRICS_DIR`, dossier lu par node_exporter : après
+une sauvegarde réussie, le script y écrit l'heure de cette sauvegarde
+(`microcrm_backup_last_success_timestamp_seconds`, fichier en 640, écrit
+puis renommé), qui alimente l'alerte `BackupTooOld` (vide par défaut :
+rien n'est écrit ; réglé par Ansible pour la sauvegarde de nuit).
 
 **Conditions d'exécution** : `kubectl` et `sha256sum` ; accès au cluster
 avec le droit `pods/exec` dans le namespace (il donne accès à la base :
@@ -370,7 +374,6 @@ cron (environnement vide) : sauvegarde et vérification réussies.
 | Sauvegarde complète à chaque fois | Complète hebdomadaire et incrémentale quotidienne (pgBackRest, ou `pg_basebackup --incremental` de PostgreSQL 17+), utile quand la base grossit ; la base fait 7 Ko |
 | Deux copies : sur la machine, et hors site (Google Drive, dans l'archive chiffrée GPG AES-256 de la machine, chaque jour) | Règle 3-2-1 complète : 3e copie sur un autre support ; stockage S3 versionné dans la cible cloud |
 | Sur la machine, fichiers non chiffrés un par un (protégés par le chiffrement du disque et les droits) ; la copie hors site est chiffrée | Chiffrement de chaque fichier (age) dès sa création, clé gardée hors de la machine |
-| Aucune alerte si la sauvegarde ne se fait plus | Alerte « dernière sauvegarde de plus de 26 h » dans la supervision (phase 7, à venir) |
 | Le compte `microcrm` de l'application est superutilisateur PostgreSQL (réglage par défaut de l'image officielle) | Compte applicatif aux droits limités, propriétaire du seul schéma de l'application |
 | La table de liens `organization_persons` n'a pas de clé primaire : restauration par table impossible, liens en double possibles | Clé primaire `(organizations_id, persons_id)` par une migration Flyway (demande à l'équipe Dev) |
 
@@ -441,7 +444,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/common_test.sh` | bashunit | journal, codes de `die` / `die_with`, outils requis, garde contre l'exécution directe |
 | `tests/install_deps_test.sh` | bashunit | usage, `package-lock.json` absent, commandes npm et Gradle, « FAILED » détecté |
 | `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Karma lancé une fois, `KARMA_BROWSER`, tests rouges, rapport absent |
-| `tests/backup_test.sh` | bashunit | usage, fichier privé (600/700) et empreinte, rotation, `pg_dump` en échec sans fichier partiel, `verify` (base temporaire), fichier abîmé refusé, sauvegarde de sécurité avant restauration, table : lignes absentes seulement, table sans clé refusée, nom de table piégé |
+| `tests/backup_test.sh` | bashunit | usage, fichier privé (600/700) et empreinte, rotation, `pg_dump` en échec sans fichier partiel, `verify` (base temporaire), fichier abîmé refusé, sauvegarde de sécurité avant restauration, table : lignes absentes seulement, table sans clé refusée, nom de table piégé ; métrique de supervision écrite après une sauvegarde réussie (fichier en 640), aucune après un échec |
 | `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, échec de Helm, test de fumée raté → retour arrière, `rollback` |
 | `tests/zap_scan_test.sh` | bashunit | usage, mode inconnu, règles absentes, commandes passive et active (durée limitée), pod sans privilège ni jeton, rapport extrait du journal, échec (règle FAIL) avec rapport conservé |
 | `tests/test_notify.py` | pytest | jobs en échec, exercice, ouverture / commentaire / fermeture, résumé, paramètres |

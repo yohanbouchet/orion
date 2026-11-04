@@ -1,0 +1,204 @@
+# Fichier  : infra/monitoring/values.yaml.tftpl
+# Rôle     : réglages de la pile de supervision (chart
+#            victoria-metrics-k8s-stack 0.97.1) : métriques
+#            (VictoriaMetrics), journaux (VictoriaLogs + collecteur
+#            vlagent), alertes (vmalert + Alertmanager), Grafana
+# Utilise  : Secret créé par l'Ops (mot de passe SMTP) ;
+#            ${ops_email} : adresse donnée par Terraform (variable
+#            ops_email, hors du dépôt : donnée personnelle)
+# Utilisé par : infra/terraform/monitoring.tf (helm_release) ; ticket #83
+
+# Noms courts (vm-…) plutôt que « victoria-metrics-k8s-stack-… »
+fullnameOverride: vm
+
+# --- Opérateur : crée les pods à partir des objets VM* ci-dessous -------
+victoria-metrics-operator:
+  # Pas de webhook d'admission (moins de composants exposés)
+  admissionWebhooks:
+    enabled: false
+  operator:
+    # Pas de conversion des objets de prometheus-operator (absent ici)
+    disable_prometheus_converter: true
+  # Profil seccomp (filtre des appels système) : exigé par « restricted »,
+  # absent des réglages par défaut du chart
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  # Réglages de chaque conteneur de l'opérateur, repris par son Job de
+  # nettoyage à la désinstallation (image kubectl, root par défaut)
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  # Pods créés par l'opérateur : mode « strict » (système de fichiers en
+  # lecture seule, compte non root) ; requis par « restricted »
+  env:
+    - name: VM_ENABLESTRICTSECURITY
+      value: "true"
+
+# Pas de téléchargement des tableaux de bord et des règles de la
+# communauté à chaque installation (branches GitHub non figées) : nos
+# règles (extras.yaml) et nos tableaux de bord (dashboards/) sont relus
+syncJob:
+  enabled: false
+
+# --- Métriques : base VictoriaMetrics, 30 jours --------------------------
+vmsingle:
+  spec:
+    retentionPeriod: 30d
+    storage:
+      resources:
+        requests:
+          storage: 10Gi
+
+# --- Lecture des métriques : toutes les 30 s -----------------------------
+vmagent:
+  spec:
+    scrapeInterval: 30s
+
+# --- Journaux : base VictoriaLogs, 7 jours (minimisation, RGPD) ----------
+vlsingle:
+  enabled: true
+  spec:
+    retentionPeriod: 7d
+    storage:
+      resources:
+        requests:
+          storage: 5Gi
+
+# --- Collecteur de journaux : un pod par nœud, dans son namespace -------
+# Seul composant qui lit les fichiers de l'hôte (/var/log/pods) ; voir
+# « Sécurité » dans le README
+vlagent:
+  enabled: true
+  namespaceOverride: monitoring-collector
+  spec:
+    k8sCollector:
+      enabled: true
+      # Journaux jamais lus : système du cluster et jobs de la CI (un
+      # secret mal masqué pourrait y apparaître)
+      excludeFilter: >-
+        kubernetes.pod_namespace:in(kube-system,kube-node-lease,arc-runners,arc-systems)
+      # Champs retirés avant l'envoi, s'ils apparaissent
+      ignoreFields:
+        - password
+        - token
+        - authorization
+      # Chemin NON standard exprès : avec le chemin par défaut,
+      # l'opérateur monte tout /var/lib de l'hôte, où kubelet range les
+      # Secrets des autres pods (23 vus le 04/11) ; ici on ne monte que
+      # les 2 dossiers de journaux, en lecture seule (volumes plus bas)
+      logsPath: /host/log/containers
+    volumes:
+      # Liens vers les fichiers de journaux, un par conteneur
+      - name: log-links
+        hostPath:
+          path: /var/log/containers
+          type: Directory
+      # Fichiers de journaux (cibles des liens, même chemin que sur l'hôte)
+      - name: log-files
+        hostPath:
+          path: /var/log/pods
+          type: Directory
+    volumeMounts:
+      - name: log-links
+        mountPath: /host/log/containers
+        readOnly: true
+      - name: log-files
+        mountPath: /var/log/pods
+        readOnly: true
+    # Lecture seule, une seule capacité : DAC_READ_SEARCH (lire tout
+    # fichier) ; utilité à vérifier : le pod tourne en root (uid 0),
+    # déjà propriétaire des journaux (root:root, 640)
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+        add: ["DAC_READ_SEARCH"]
+      seccompProfile:
+        type: RuntimeDefault
+
+# --- Alertes : règles évaluées par vmalert, envoyées par Alertmanager ---
+alertmanager:
+  spec:
+    # Mot de passe SMTP : Secret créé par l'Ops (voir README),
+    # monté dans /etc/vm/secrets/alertmanager-smtp/
+    secrets:
+      - alertmanager-smtp
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: ops-email
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        # Alerte de contrôle permanente (règle « Watchdog ») : jamais
+        # envoyée, elle prouve seulement que la chaîne fonctionne
+        - matchers: ['alertname="Watchdog"']
+          receiver: blackhole
+        - matchers: ['severity="none"']
+          receiver: blackhole
+    receivers:
+      - name: blackhole
+      - name: ops-email
+        email_configs:
+          - to: "${ops_email}"
+            from: "${ops_email}"
+            smarthost: smtp.gmail.com:587
+            auth_username: "${ops_email}"
+            auth_password_file: /etc/vm/secrets/alertmanager-smtp/password
+            require_tls: true
+            send_resolved: true
+
+# --- Grafana : tableaux de bord ------------------------------------------
+grafana:
+  image:
+    # 13.2.5 : corrige les failles de la 13.2.3 livrée par le chart ; la
+    # 13.3.0 (27/10) a plus de failles hautes (Trivy : 39 contre 35)
+    tag: 13.2.5-distroless
+  # Conteneur qui charge les tableaux de bord (ConfigMaps du namespace
+  # étiquetés grafana_dashboard=1, créés par Terraform) : 2.14.3 (Trivy,
+  # 04/11 : 0 critique / 5 hautes, contre 1 / 14 pour la 2.11.2 du chart)
+  sidecar:
+    image:
+      tag: 2.14.3
+  # Module officiel VictoriaLogs pour Grafana (Apache 2.0), version
+  # figée ; signé, signature vérifiée par Grafana au chargement
+  plugins:
+    - victoriametrics-logs-datasource@0.33.1
+  # Mot de passe admin : généré par le chart, lu dans le Secret vm-grafana
+  # (voir README) ; pas de compte anonyme
+  grafana.ini:
+    auth.anonymous:
+      enabled: false
+    analytics:
+      reporting_enabled: false
+      check_for_updates: false
+      check_for_plugin_updates: false
+    users:
+      allow_sign_up: false
+  # Pas de pod de test du chart (inutile ici, une image de plus)
+  testFramework:
+    enabled: false
+
+# Métriques de la machine : node_exporter installé sur l'hôte par Ansible
+# (celui du chart exige un pod privilégié) ; lu par extras.yaml
+# (VMStaticScrape host-node-exporter)
+prometheus-node-exporter:
+  enabled: false
+
+# Composants internes de Kubernetes non lisibles dans Minikube (ils
+# n'écoutent que sur 127.0.0.1 du nœud)
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false

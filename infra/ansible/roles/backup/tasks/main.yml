@@ -2,7 +2,8 @@
 # Rôle     : sauvegarde automatique de la base de prod : chaque nuit, et
 #            vérification chaque semaine qu'elle se restaure vraiment
 #            (base temporaire) ; journal dans ~/.local/state
-# Utilise  : scripts/backup.sh ; group_vars/all.yml (backup_*)
+# Utilise  : scripts/backup.sh ; group_vars/all.yml (backup_*,
+#            node_exporter_textfile_dir : métrique de la sauvegarde)
 # Utilisé par : site.yml
 
 # Dossier lisible par l'Ops seul : une sauvegarde contient des données
@@ -28,6 +29,7 @@
     job: >-
       PATH={{ ops_home }}/.local/bin:/usr/bin:/bin
       BACKUP_DIR={{ backup_dir }}
+      BACKUP_METRICS_DIR={{ node_exporter_textfile_dir }}
       {{ repo_dir }}/scripts/backup.sh {{ backup_env }}
       >> {{ backup_log }} 2>&1
 

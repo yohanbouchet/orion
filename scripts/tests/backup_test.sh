@@ -89,6 +89,29 @@ function test_backup_writes_a_private_dump_with_its_checksum() {
   assert_contains "pg_restore --list" "$(calls)"
 }
 
+function test_backup_writes_the_metric_for_the_alert() {
+  export BACKUP_METRICS_DIR="$FAKE_REPO/metrics"
+  mkdir -p "$BACKUP_METRICS_DIR"
+  run_backup dev >/dev/null
+  assert_successful_code
+  local file="$BACKUP_METRICS_DIR/microcrm_backup_dev.prom"
+  assert_file_exists "$file"
+  assert_contains 'microcrm_backup_last_success_timestamp_seconds{env="dev"}' \
+    "$(cat "$file")"
+  # Lisible par le groupe node_exporter, pas par les autres
+  assert_equals "640" "$(stat -c %a "$file")"
+  unset BACKUP_METRICS_DIR
+}
+
+function test_failed_backup_writes_no_metric() {
+  export BACKUP_METRICS_DIR="$FAKE_REPO/metrics" PG_DUMP_EXIT=1
+  mkdir -p "$BACKUP_METRICS_DIR"
+  run_backup dev >/dev/null
+  assert_general_error
+  assert_file_not_exists "$BACKUP_METRICS_DIR/microcrm_backup_dev.prom"
+  unset BACKUP_METRICS_DIR
+}
+
 function test_backup_keeps_only_the_most_recent_ones() {
   make_backup_file microcrm-dev-20260101T000000Z.dump
   make_backup_file microcrm-dev-20260102T000000Z.dump
