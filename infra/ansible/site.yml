@@ -1,0 +1,107 @@
+# Fichier  : infra/ansible/site.yml
+# Rôle     : configure et durcit le poste Ops qui héberge le cluster :
+#            outils, démarrage automatique du cluster, images, metrics-
+#            server, sauvegarde de la prod, hygiène de Docker, pare-feu,
+#            métriques de la machine ; relançable sans effet (idempotent)
+# Utilise  : inventory.ini, group_vars/all.yml, roles/
+# Utilisé par : l'opérateur (README de ce dossier) ; job ansible de la CI
+#               (vérification seulement, jamais exécuté par la CI)
+# Usage    : ansible-playbook site.yml -K   (-K : mot de passe sudo,
+#            demandé une fois, pour les seules tâches marquées become)
+
+- name: Configure the Ops host
+  hosts: ops
+  # Pas de root par défaut : chaque tâche qui en a besoin le demande
+  become: false
+  pre_tasks:
+    - name: Refuse to run as root
+      ansible.builtin.assert:
+        that: ansible_facts['user_id'] != 'root'
+        fail_msg: run as the Ops user, sudo is asked only where needed
+      tags: always
+    # Réseau Docker du cluster : sa passerelle est l'adresse de la machine
+    # vue depuis les pods (pare-feu, node_exporter)
+    - name: Read the Minikube network
+      ansible.builtin.command: docker network inspect {{ minikube_profile }}
+      register: minikube_network
+      changed_when: false
+      # Simple lecture : aussi en mode simulation (--check)
+      check_mode: false
+      tags: always
+    - name: Keep the Minikube gateway and subnet
+      ansible.builtin.set_fact:
+        minikube_gateway: "{{ (minikube_network.stdout | from_json)[0].IPAM.Config[0].Gateway }}"
+        minikube_subnet: "{{ (minikube_network.stdout | from_json)[0].IPAM.Config[0].Subnet }}"
+      tags: always
+  # Étiquettes : un rôle seul avec --tags (ex. --tags backup)
+  roles:
+    - { role: ops_tools, tags: ops_tools }
+    - { role: docker_hygiene, tags: docker_hygiene }
+    - { role: minikube_service, tags: minikube_service }
+    - { role: cluster_images, tags: cluster_images }
+    - { role: metrics_server, tags: metrics_server }
+    - { role: backup, tags: backup }
+    - { role: node_exporter, tags: node_exporter }
+    - { role: hardening, tags: hardening }
+
+# Vérifications finales : l'état attendu est bien là (relancé à chaque
+# passage ; seul « --tags verify » les lance aussi)
+- name: Verify the Ops host
+  hosts: ops
+  become: false
+  tags: verify
+  tasks:
+    - name: Read the services
+      ansible.builtin.service_facts:
+
+    # service_facts lit mal les instances d'un modèle de service
+    # (minikube@…) : on lit l'état donné par systemd lui-même
+    - name: Read the Minikube service
+      ansible.builtin.systemd_service:
+        name: "minikube@{{ ops_user }}"
+      register: verify_minikube
+
+    - name: Check that the cluster starts with the machine
+      ansible.builtin.assert:
+        that: verify_minikube.status.UnitFileState == 'enabled'
+        quiet: true
+
+    - name: Check that node_exporter and fail2ban are running
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['node_exporter.service'].state == 'running'
+          - ansible_facts.services['fail2ban.service'].state == 'running'
+        quiet: true
+
+    - name: Read the host metrics as a pod would
+      ansible.builtin.uri:
+        url: "http://{{ minikube_gateway }}:9100/metrics"
+        return_content: false
+
+    - name: Read the scheduled tasks
+      ansible.builtin.command: crontab -l
+      register: crontab
+      changed_when: false
+      # Simple lecture : aussi en mode simulation (--check)
+      check_mode: false
+
+    - name: Check the scheduled backup, verification and cleanup
+      ansible.builtin.assert:
+        that:
+          - "'scripts/backup.sh prod' in crontab.stdout"
+          - "'scripts/backup.sh verify prod' in crontab.stdout"
+          - "'docker builder prune' in crontab.stdout"
+        quiet: true
+
+    - name: Read the firewall status
+      become: true
+      ansible.builtin.command: ufw status
+      register: ufw_status
+      changed_when: false
+      # Simple lecture : aussi en mode simulation (--check)
+      check_mode: false
+
+    - name: Check that the firewall is active
+      ansible.builtin.assert:
+        that: "'Status: active' in ufw_status.stdout"
+        quiet: true

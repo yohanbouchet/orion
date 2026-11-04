@@ -1,0 +1,31 @@
+# Fichier  : infra/ansible/roles/metrics_server/tasks/main.yml
+# Rôle     : addon metrics-server de Minikube (mesures CPU et mémoire pour
+#            l'autoscaling HPA de la prod), à la version figée par
+#            empreinte plutôt qu'à celle choisie par Minikube
+# Utilise  : group_vars/all.yml (metrics_server_image)
+# Utilisé par : site.yml
+
+- name: Read the running metrics-server image
+  ansible.builtin.command: >-
+    kubectl -n kube-system get deployment metrics-server
+    -o jsonpath={.spec.template.spec.containers[0].image}
+  register: metrics_server_running
+  changed_when: false
+  # Simple lecture : aussi en mode simulation (--check)
+  check_mode: false
+  failed_when: false
+
+# Seulement si l'image en place n'est pas celle attendue
+- name: Enable metrics-server with the pinned image
+  ansible.builtin.command: >-
+    minikube -p {{ minikube_profile }} addons enable metrics-server
+    --images=MetricsServer={{ metrics_server_image }}
+    --registries=MetricsServer=registry.k8s.io
+  when: metrics_server_running.stdout != 'registry.k8s.io/' ~ metrics_server_image
+  changed_when: true
+
+- name: Wait for metrics-server to be ready
+  ansible.builtin.command: >-
+    kubectl -n kube-system rollout status deployment/metrics-server
+    --timeout=180s
+  changed_when: false

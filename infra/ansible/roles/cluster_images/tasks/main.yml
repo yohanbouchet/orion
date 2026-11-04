@@ -1,0 +1,28 @@
+# Fichier  : infra/ansible/roles/cluster_images/tasks/main.yml
+# Rôle     : images du projet construites sur le poste et chargées dans
+#            Minikube (jamais téléchargées par le cluster) : PostgreSQL
+#            durcie, ZAP, runner de la CI
+# Utilise  : group_vars/all.yml (cluster_images) ; image.yml
+# Utilisé par : site.yml
+
+# Empreintes des Dockerfiles déjà chargés (lisibles par l'Ops seul)
+- name: Create the image fingerprint folder
+  ansible.builtin.file:
+    path: "{{ ops_home }}/.local/state/orion-images"
+    state: directory
+    mode: "0700"
+
+# Liste des images déjà présentes dans le cluster
+- name: List the images loaded in Minikube
+  ansible.builtin.command: minikube -p {{ minikube_profile }} image ls
+  register: cluster_images_loaded
+  changed_when: false
+  # Simple lecture : aussi en mode simulation (--check)
+  check_mode: false
+
+- name: Build and load each image when needed
+  ansible.builtin.include_tasks: image.yml
+  loop: "{{ cluster_images }}"
+  loop_control:
+    loop_var: image
+    label: "{{ image.name }}"

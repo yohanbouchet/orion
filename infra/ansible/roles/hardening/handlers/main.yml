@@ -1,0 +1,9 @@
+# Fichier  : infra/ansible/roles/hardening/handlers/main.yml
+# Rôle     : relance fail2ban quand sa configuration change
+# Utilisé par : tasks/main.yml (notify)
+
+- name: Restart fail2ban
+  become: true
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    state: restarted

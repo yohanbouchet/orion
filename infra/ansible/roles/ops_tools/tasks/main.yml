@@ -1,0 +1,69 @@
+# Fichier  : infra/ansible/roles/ops_tools/tasks/main.yml
+# Rôle     : outils du poste Ops (kubectl, minikube, helm) dans
+#            ~/.local/bin, sans sudo, à la version figée et à l'empreinte
+#            vérifiée ; contrôle de la version de Terraform
+# Utilise  : group_vars/all.yml (ops_tools, helm_*, terraform_min_version)
+# Utilisé par : site.yml
+
+- name: Create the user binary folder
+  ansible.builtin.file:
+    path: "{{ ops_home }}/.local/bin"
+    state: directory
+    mode: "0755"
+
+# Téléchargé seulement si le fichier manque ou si son empreinte diffère ;
+# refusé si l'empreinte du téléchargement ne correspond pas
+- name: Install kubectl and minikube
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "{{ ops_home }}/.local/bin/{{ item.name }}"
+    checksum: "sha256:{{ item.sha256 }}"
+    mode: "0755"
+  loop: "{{ ops_tools }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# helm est livré dans une archive : on ne la traite que si la version
+# installée n'est pas la bonne
+- name: Read the installed helm version
+  ansible.builtin.command: "{{ ops_home }}/.local/bin/helm version --short"
+  register: ops_tools_helm
+  changed_when: false
+  # Simple lecture : aussi en mode simulation (--check)
+  check_mode: false
+  failed_when: false
+
+- name: Install helm
+  when: helm_version not in ops_tools_helm.stdout | default('')
+  block:
+    - name: Download the helm archive
+      ansible.builtin.get_url:
+        url: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+        dest: "/tmp/helm-{{ helm_version }}.tar.gz"
+        checksum: "sha256:{{ helm_sha256 }}"
+        mode: "0600"
+    - name: Extract helm
+      ansible.builtin.unarchive:
+        src: "/tmp/helm-{{ helm_version }}.tar.gz"
+        dest: "{{ ops_home }}/.local/bin"
+        remote_src: true
+        include: [linux-amd64/helm]
+        extra_opts: [--strip-components=1]
+        mode: "0755"
+
+# Terraform est installé par le dépôt apt de HashiCorp (signé) : on vérifie
+# seulement qu'il est assez récent pour infra/terraform
+- name: Read the Terraform version
+  ansible.builtin.command: terraform version -json
+  register: ops_tools_terraform
+  changed_when: false
+  # Simple lecture : aussi en mode simulation (--check)
+  check_mode: false
+
+- name: Check the Terraform version
+  ansible.builtin.assert:
+    that: >-
+      (ops_tools_terraform.stdout | from_json).terraform_version
+      is version(terraform_min_version, '>=')
+    fail_msg: "Terraform >= {{ terraform_min_version }} is required"
+    quiet: true

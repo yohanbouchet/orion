@@ -7,8 +7,8 @@
 #            précède toujours une restauration
 # Utilise  : scripts/lib/common.sh ; kubectl, sha256sum ; outils
 #            PostgreSQL du pod de la base (pg_dump, pg_restore, psql)
-# Utilisé par : l'opérateur ; tâche planifiée quotidienne (Ansible, à
-#               venir) ; ticket #56
+# Utilisé par : l'opérateur ; tâches planifiées installées par Ansible
+#               (infra/ansible, rôle backup) ; ticket #56
 # Usage    : scripts/backup.sh dev|staging|prod
 #            scripts/backup.sh verify dev|staging|prod [FILE]
 #            scripts/backup.sh restore dev|staging|prod FILE [--table NAME]

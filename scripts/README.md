@@ -14,7 +14,7 @@ marche dans la CI, et inversement.
 | [`lib/common.sh`](#libcommonsh) | Fonctions partagées : journal, arrêt, outils requis | les scripts Bash |
 | [`deploy.sh`](#deploysh) | Déployer MicroCRM, le vérifier, revenir en arrière | l'opérateur ; job de déploiement de la CI (`deploy.yml`) |
 | [`zap-scan.sh`](#zap-scansh) | Test d'intrusion de `staging` avec ZAP (passif ou actif) | job `zap` de la CI (`zap.yml`) ; l'opérateur |
-| [`backup.sh`](#backupsh) | Sauvegarder, vérifier et restaurer la base | l'opérateur ; tâche planifiée quotidienne (à venir) |
+| [`backup.sh`](#backupsh) | Sauvegarder, vérifier et restaurer la base | l'opérateur ; tâches planifiées installées par Ansible (sauvegarde chaque nuit, vérification chaque semaine) |
 | [`deploy-sonarqube.sh`](#deploy-sonarqubesh) | Déployer SonarQube dans le cluster Minikube | l'opérateur, à la main |
 
 ## Règles communes
@@ -354,9 +354,13 @@ restaurée, application fonctionnelle ; fichier modifié refusé ; rotation.
 **Temps de restauration (RTO) mesuré : 0,6 s**, sauvegarde de sécurité
 comprise (base de 7 Ko).
 
-**Objectifs actuels** : sauvegarde **quotidienne** (tâche planifiée
-installée par Ansible, à venir), soit une perte de données maximale
-(**RPO**) de 24 h ; 7 sauvegardes gardées, soit une semaine d'historique.
+**Objectifs actuels** : sauvegarde **quotidienne** de la prod (2 h 30) et
+vérification de sa restauration **chaque dimanche** (3 h 30), tâches
+planifiées installées par Ansible ([`infra/ansible`](../infra/ansible/README.md),
+rôle `backup`, journal `~/.local/state/microcrm-backup.log`), soit une
+perte de données maximale (**RPO**) de 24 h ; 7 sauvegardes gardées, soit
+une semaine d'historique. Testées le 04/11/2026 dans les conditions de
+cron (environnement vide) : sauvegarde et vérification réussies.
 
 **Limites connues et évolutions** :
 
@@ -364,9 +368,9 @@ installée par Ansible, à venir), soit une perte de données maximale
 |---|---|
 | RPO de 24 h, pas de retour à une minute précise | Archivage continu des journaux de transactions (WAL) et restauration à un instant donné (PITR) : opérateur CloudNativePG ou service managé (AWS RDS) |
 | Sauvegarde complète à chaque fois | Complète hebdomadaire et incrémentale quotidienne (pgBackRest, ou `pg_basebackup --incremental` de PostgreSQL 17+), utile quand la base grossit ; la base fait 7 Ko |
-| Une seule copie, sur la machine du cluster | Règle 3-2-1 : 3 copies, 2 supports, 1 hors site (stockage S3 dans la cible cloud) |
-| Fichiers non chiffrés un par un (protégés par le chiffrement du disque et les droits) | Chiffrement de chaque fichier (gpg ou age) dès que la sauvegarde quitte la machine, clé gardée hors de la machine |
-| Aucune alerte si la sauvegarde ne se fait plus | Alerte « dernière sauvegarde de plus de 26 h » dans la supervision (ELK, à venir) |
+| Deux copies : sur la machine, et hors site (Google Drive, dans l'archive chiffrée GPG AES-256 de la machine, chaque jour) | Règle 3-2-1 complète : 3e copie sur un autre support ; stockage S3 versionné dans la cible cloud |
+| Sur la machine, fichiers non chiffrés un par un (protégés par le chiffrement du disque et les droits) ; la copie hors site est chiffrée | Chiffrement de chaque fichier (age) dès sa création, clé gardée hors de la machine |
+| Aucune alerte si la sauvegarde ne se fait plus | Alerte « dernière sauvegarde de plus de 26 h » dans la supervision (phase 7, à venir) |
 | Le compte `microcrm` de l'application est superutilisateur PostgreSQL (réglage par défaut de l'image officielle) | Compte applicatif aux droits limités, propriétaire du seul schéma de l'application |
 | La table de liens `organization_persons` n'a pas de clé primaire : restauration par table impossible, liens en double possibles | Clé primaire `(organizations_id, persons_id)` par une migration Flyway (demande à l'équipe Dev) |
 

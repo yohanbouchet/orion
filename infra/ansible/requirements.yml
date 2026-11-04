@@ -1,0 +1,9 @@
+# Fichier  : infra/ansible/requirements.yml
+# Rôle     : collections Ansible utilisées, versions figées
+# Utilisé par : ansible-galaxy collection install -r requirements.yml
+#               -p collections (poste Ops et job ansible de la CI)
+
+collections:
+  # Pare-feu ufw (rôle hardening) ; dernière version, vérifiée le 04/11/2026
+  - name: community.general
+    version: 14.0.0
