@@ -1,9 +1,12 @@
 # Fichier  : infra/helm/microcrm/values-staging.yaml
-# Rôle     : différences de l'environnement staging (recette, tests ZAP)
-#            par rapport à values.yaml : proche de la prod, une réplique
-# Utilisé par : scripts/deploy.sh staging ; ticket #64
+# Rôle     : différences de l'environnement staging (recette, tests ZAP
+#            et k6) par rapport à values.yaml : proche de la prod, une
+#            réplique
+# Utilisé par : scripts/deploy.sh staging ; tickets #64 et #92
 postgres:
   storage: 2Gi
 networkPolicy:
   # Cible du test d'intrusion : le pod ZAP peut joindre le front
   allowZap: true
+  # Cible du test de charge : le pod k6 peut joindre le front
+  allowK6: true

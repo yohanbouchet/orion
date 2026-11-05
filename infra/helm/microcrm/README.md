@@ -53,7 +53,9 @@ Le HPA a besoin de l'addon **metrics-server** de Minikube
   chart), sauf front → back → base et le DNS. En `staging` seulement
   (`networkPolicy.allowZap`), le pod du test d'intrusion ZAP peut joindre
   le front, et rien d'autre (ni Internet, ni le back, ni la base en
-  direct). La base ne peut joindre personne, le back n'a pas accès à
+  direct) ; de même pour le pod du test de charge k6
+  (`networkPolicy.allowK6`), qui peut en plus envoyer ses mesures à
+  VictoriaMetrics (namespace `monitoring`, port 8428). La base ne peut joindre personne, le back n'a pas accès à
   Internet.
 - **Mises à jour sans coupure** : un nouveau pod doit être prêt avant
   qu'un ancien soit arrêté (`maxUnavailable: 0`) ; sondes de

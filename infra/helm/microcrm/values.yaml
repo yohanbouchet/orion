@@ -70,3 +70,6 @@ networkPolicy:
   enabled: true
   # Pod du test d'intrusion ZAP autorisé à joindre le front (staging)
   allowZap: false
+  # Pod du test de charge k6 autorisé à joindre le front et à envoyer ses
+  # mesures à VictoriaMetrics (staging ; scripts/load-test.sh)
+  allowK6: false

@@ -1,0 +1,95 @@
+# Fichier  : .github/workflows/load-test.yml
+# Rôle     : test de charge de staging avec k6 : « smoke » (fumée) après
+#            chaque déploiement de staging, appelé par ci.yml, qui bloque la
+#            prod ; les 5 autres profils lancés à la main (Actions → Load
+#            test → Run workflow) ; résumé de k6 dans le résumé de
+#            l'exécution et en artefact ; mesures dans Grafana
+# Utilise  : scripts/load-test.sh, infra/k6/microcrm.js ; action
+#            .github/actions/kube-access ; environnement GitHub staging
+#            (secret KUBE_TOKEN, main seulement) ; variable KUBE_CA
+# Utilisé par : job load-test de ci.yml ; lancement manuel ; ticket #92
+
+name: Load test
+
+on:
+  # Appelé par ci.yml (fumée) ; le jeton doit être transmis
+  workflow_call:
+    inputs:
+      profile:
+        type: string
+        default: smoke
+    secrets:
+      KUBE_TOKEN:
+        required: true
+  # Lancement manuel : profil au choix
+  workflow_dispatch:
+    inputs:
+      profile:
+        type: choice
+        options: [smoke, average, stress, spike, breakpoint, soak]
+        default: average
+
+# Moindre privilège : lire le code, rien d'autre
+permissions:
+  contents: read
+
+jobs:
+  load-test:
+    # Runner local : le seul qui atteint le cluster Minikube
+    runs-on: orion-local
+    # Endurance : 30 min de test + marge
+    timeout-minutes: 45
+    # Jeton du deployer de staging (droit de lancer le Job k6) ; branche
+    # main seulement
+    environment: staging
+    # Jamais pendant un déploiement de staging ni pendant ZAP (même groupe)
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      # Code du dépôt (script et scénario k6) ; identifiant GitHub non gardé
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # kubectl à l'empreinte vérifiée, kubeconfig du deployer de staging
+      - name: Kubernetes access
+        uses: ./.github/actions/kube-access
+        with:
+          namespace: staging
+          ca: ${{ vars.KUBE_CA }}
+          token: ${{ secrets.KUBE_TOKEN }}
+      # Échoue si un seuil de k6 est dépassé (sauf point de rupture)
+      - name: Run k6
+        env:
+          PROFILE: ${{ inputs.profile }}
+          REPORT_DIR: ${{ runner.temp }}/load-report
+        run: scripts/load-test.sh "$PROFILE"
+      # Résumé lisible sur la page de l'exécution, même en cas d'échec
+      - name: Write summary
+        if: always()
+        env:
+          PROFILE: ${{ inputs.profile }}
+          SUMMARY: ${{ runner.temp }}/load-report/summary.txt
+        run: |
+          if [ -s "$SUMMARY" ]; then
+            {
+              echo "## k6 load test: $PROFILE (staging)"
+              echo '```'
+              cat "$SUMMARY"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      # Résumé complet, téléchargeable 30 jours
+      - name: Upload summary
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: k6-${{ inputs.profile }}-summary
+          path: ${{ runner.temp }}/load-report/
+          if-no-files-found: ignore
+          retention-days: 30
+      # Le jeton ne reste pas sur le disque, même si une étape a échoué
+      - name: Remove kubeconfig
+        if: always()
+        run: rm -f "$RUNNER_TEMP/kubeconfig"
