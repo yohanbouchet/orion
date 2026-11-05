@@ -108,15 +108,14 @@ vlagent:
       - name: log-files
         mountPath: /var/log/pods
         readOnly: true
-    # Lecture seule, une seule capacité : DAC_READ_SEARCH (lire tout
-    # fichier) ; utilité à vérifier : le pod tourne en root (uid 0),
-    # déjà propriétaire des journaux (root:root, 640)
+    # Lecture seule, AUCUNE capacité : le pod tourne en root (uid 0),
+    # propriétaire des journaux (root:root, 640) ; DAC_READ_SEARCH retirée
+    # le 05/11 après test (journaux toujours reçus, CapEff = 0)
     securityContext:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
       capabilities:
         drop: ["ALL"]
-        add: ["DAC_READ_SEARCH"]
       seccompProfile:
         type: RuntimeDefault
 

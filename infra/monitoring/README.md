@@ -124,8 +124,8 @@ désinstallation attend sans fin (vu le 04/11) :
 kubectl delete vlagent vm -n monitoring-collector
 ```
 
-Tester l'envoi d'un e-mail (alerte de test, résolue après 5 min ; nom
-du service à confirmer lors de l'installation réelle) :
+Tester l'envoi d'un e-mail (alerte de test, résolue après 5 min ;
+testé le 05/11 : e-mails « FIRING » puis « RESOLVED » reçus) :
 
 ```shell
 kubectl -n monitoring port-forward svc/vmalertmanager-vm 9093:9093 &
@@ -140,12 +140,18 @@ curl -s -X POST localhost:9093/api/v2/alerts -H 'Content-Type: application/json'
   (`monitoring-collector`, « privileged », qui avertit de tout écart à
   « restricted »). Ce niveau l'autorise sans rien lui donner : le pod
   lui-même est verrouillé.
-- **Collecteur verrouillé** (vérifié sur le nœud) : toutes les capacités
-  de root retirées sauf une, `DAC_READ_SEARCH` (lire tout fichier) ;
-  son utilité reste à vérifier, car le pod tourne en root, déjà
-  propriétaire des journaux (`root:root`, 640) ; aucune montée de
-  privilèges (`NoNewPrivs=1`) ; système de fichiers en lecture seule ;
-  il ne peut envoyer qu'à VictoriaLogs, au DNS et à l'API de Kubernetes.
+- **Collecteur verrouillé** (vérifié sur le nœud) : root, mais **aucune
+  capacité** (`CapEff = 0`) : propriétaire des journaux (`root:root`,
+  640), il n'en a pas besoin ; `DAC_READ_SEARCH`, d'abord prévue, a été
+  retirée le 05/11 après test (journaux toujours reçus, aucune erreur) ;
+  aucune montée de privilèges (`NoNewPrivs=1`) ; système de fichiers en
+  lecture seule ; il ne peut envoyer qu'à VictoriaLogs, au DNS et à
+  l'API de Kubernetes. L'avertissement Pod Security du namespace liste
+  ses écarts à « restricted » : montages de l'hôte (`hostPath`) et root.
+- **Piège de l'opérateur** : il met à jour le DaemonSet du collecteur par
+  fusion ; un champ **retiré** des réglages (ici la capacité) reste sur
+  le DaemonSet. Il faut alors le retirer aussi du DaemonSet
+  (`kubectl patch ds vlagent-vm --type=json`, opération `remove`).
 - **Montages réduits** : par défaut, l'opérateur VictoriaMetrics monte
   tout `/var/lib` de la machine, où kubelet range les **Secrets des
   autres pods** (23 comptés) ; on ne monte que `/var/log/containers` et
