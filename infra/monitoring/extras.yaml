@@ -3,7 +3,8 @@
 #            vmagent (API MicroCRM, machine hôte), nos alertes, et les
 #            pare-feu réseau des deux namespaces de la supervision
 # Utilise  : rien (2e fichier de réglages du même chart)
-# Utilisé par : infra/terraform/monitoring.tf (helm_release) ; ticket #83
+# Utilisé par : infra/terraform/monitoring.tf (helm_release) ; tickets #83
+#            et #92 (mesures des tests de charge k6)
 # Note     : le chart passe ce contenu dans son moteur de modèles ;
 #            aucune accolade double ici (annotations sans variables)
 
@@ -152,10 +153,11 @@ extraObjects:
                 runbook: infra/monitoring/README.md#backuptooold
 
   # --- 3. Pare-feu réseau ------------------------------------------------
-  # monitoring : n'entre que ce qui vient du même namespace, et le
-  # collecteur vers VictoriaLogs ; la sortie reste ouverte (vmagent lit
-  # tous les namespaces et l'hôte, Alertmanager envoie vers Gmail,
-  # Grafana télécharge son module) : limite écrite dans le README
+  # monitoring : n'entre que ce qui vient du même namespace, le
+  # collecteur vers VictoriaLogs et k6 (staging) vers VictoriaMetrics ;
+  # la sortie reste ouverte (vmagent lit tous les namespaces et l'hôte,
+  # Alertmanager envoie vers Gmail, Grafana télécharge son module) :
+  # limite écrite dans le README
   - apiVersion: networking.k8s.io/v1
     kind: NetworkPolicy
     metadata:
@@ -184,6 +186,28 @@ extraObjects:
                   kubernetes.io/metadata.name: monitoring-collector
           ports:
             - port: 9428
+  # Mesures des tests de charge : seul le pod k6 de staging
+  # (scripts/load-test.sh) écrit dans VictoriaMetrics (remote write)
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: vmsingle-from-k6
+      namespace: monitoring
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: vmsingle
+      policyTypes: ["Ingress"]
+      ingress:
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: staging
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: k6
+          ports:
+            - port: 8428
 
   # monitoring-collector : le collecteur ne reçoit que vmagent (lecture
   # de ses métriques) ; il n'envoie qu'à VictoriaLogs, au DNS et à l'API

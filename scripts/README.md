@@ -15,6 +15,7 @@ marche dans la CI, et inversement.
 | [`lib/common.sh`](#libcommonsh) | Fonctions partagées : journal, arrêt, outils requis | les scripts Bash |
 | [`deploy.sh`](#deploysh) | Déployer MicroCRM, le vérifier, revenir en arrière | l'opérateur ; job de déploiement de la CI (`deploy.yml`) |
 | [`zap-scan.sh`](#zap-scansh) | Test d'intrusion de `staging` avec ZAP (passif ou actif) | job `zap` de la CI (`zap.yml`) ; l'opérateur |
+| [`load-test.sh`](#load-testsh) | Test de charge de `staging` avec k6 (6 profils) | job `load-test` de la CI (`load-test.yml`) ; l'opérateur |
 | [`backup.sh`](#backupsh) | Sauvegarder, vérifier et restaurer la base | l'opérateur ; tâches planifiées installées par Ansible (sauvegarde au démarrage du poste et chaque jour, vérification chaque semaine) |
 | [`deploy-sonarqube.sh`](#deploy-sonarqubesh) | Déployer SonarQube dans le cluster Minikube | l'opérateur, à la main |
 
@@ -328,6 +329,84 @@ sur le poste) ; application déployée dans `staging` ; image
 | Alerte réglée sur FAIL trouvée | 1 | lire le rapport, corriger, ou justifier et dater un changement de règle |
 | Job pas fini à temps | 1 | `kubectl -n staging describe job zap` |
 
+## load-test.sh
+
+**But** : mesurer comment MicroCRM tient la charge, avant chaque mise en
+production et à la demande, sans jamais charger la prod.
+
+**Fonctionnement** : le scénario
+[`infra/k6/microcrm.js`](../infra/k6/microcrm.js) est mis dans la
+ConfigMap `k6-script`, puis un Job Kubernetes `k6` (image officielle
+`grafana/k6` 2.3.0, figée par empreinte) le joue dans `staging`, contre
+le front. Chaque utilisateur simulé (VU) suit le même parcours :
+accueil → liste des personnes et des organisations → fiche d'une
+personne → 1 fois sur 10, création puis suppression d'une personne
+(aucune donnée de test ne reste), avec 1 à 3 s de pause entre deux
+écrans, comme un humain.
+
+| Profil ([types de tests de k6](https://grafana.com/docs/k6/latest/testing-guides/test-types/)) | Charge | Durée | Question | Lancement |
+|---|---|---|---|---|
+| `smoke` (fumée) | 1 VU | 30 s | le script et l'appli fonctionnent ? | **CI, après ZAP ; bloque la prod** |
+| `average` (charge moyenne) | 20 VUs | 5 min | comportement normal ? | à la main |
+| `stress` | 60 VUs (3 × la moyenne) | 5 min | au-delà du normal ? | à la main |
+| `spike` (pic) | 0 → 100 VUs en 10 s | 1 min | arrivée brutale ? | à la main |
+| `breakpoint` (point de rupture) | 10 → 200 parcours/s | 10 min au plus | capacité maximale ? | à la main |
+| `soak` (endurance) | 20 VUs | 30 min | fuite de mémoire ? | à la main |
+
+**Seuils** (un seuil dépassé fait échouer le test) : moins de 1 %
+d'erreurs, p95 < 500 ms, p99 < 1,5 s, plus de 99 % de vérifications
+réussies. Le point de rupture s'arrête de lui-même quand les erreurs
+passent 5 % : c'est la capacité cherchée, le script le compte comme un
+succès.
+
+```shell
+scripts/load-test.sh smoke             # 1 utilisateur, 30 s
+scripts/load-test.sh stress            # 60 utilisateurs, 5 min
+PUSH_METRICS=0 scripts/load-test.sh average   # sans envoi à Grafana
+```
+
+Dans GitHub : **Actions** → **Load test** → **Run workflow**, choisir le
+profil. Le résumé de k6 s'affiche sur la page de l'exécution (et en
+artefact 30 jours). Les mesures arrivent dans VictoriaMetrics (sortie
+`experimental-prometheus-rw` de k6, étiquette `testid` propre à chaque
+test) : charge, temps de réponse et nombre de répliques se lisent sur la
+même période dans Grafana.
+
+**Paramètres** : `REPORT_DIR`, dossier du résumé (`./load-report` par
+défaut, ignoré par Git) ; `NAMESPACE` (`staging` par défaut ; **`prod`
+refusé** : elle sert de vrais utilisateurs) ; `PUSH_METRICS` (`1` par
+défaut, `0` pour ne pas envoyer les mesures).
+
+**Conditions d'exécution** : `kubectl` ; accès au namespace avec le droit
+de gérer des `jobs` et des `configmaps` (deployer de `staging` dans la
+CI, contexte `orion` sur le poste) ; application déployée dans `staging`
+avec `networkPolicy.allowK6` (pare-feu : le pod k6 ne joint que le front,
+le DNS et VictoriaMetrics) ; pile de supervision installée pour les
+mesures.
+
+**Sécurité** : pod sans privilège (non-root, aucune capacité, disque en
+lecture seule, aucun jeton Kubernetes) ; image figée par empreinte ;
+aucun secret ; données de test reconnaissables (`Load Test…`,
+`@example.com`, domaine réservé aux exemples) et supprimées aussitôt.
+
+**Limites** : k6 tourne sur la même machine que l'application et lui
+prend du processeur : les chiffres servent à **comparer** (avant/après),
+pas à annoncer une capacité absolue ; la charge « normale » de 20
+utilisateurs et la part d'écritures (1 parcours sur 10) sont des
+hypothèses, l'énoncé ne donnant aucun chiffre de fréquentation.
+
+**Arrêts expliqués** :
+
+| Cas | Code | Correction proposée |
+|---|---|---|
+| Profil inconnu | 2 | syntaxe rappelée |
+| `NAMESPACE=prod` | 1 | tester `staging` |
+| `PUSH_METRICS` autre que 0 ou 1 | 1 | `0` ou `1` |
+| `kubectl` absent | 127 | installer l'outil |
+| Scénario absent | 1 | `infra/k6/microcrm.js` |
+| Seuil dépassé | 1 | lire le résumé ; corriger l'appli ou ses ressources |
+| Job pas fini à temps | 1 | `kubectl -n staging describe job k6` |
+
 ## backup.sh
 
 **But** : sauvegarder la base PostgreSQL de MicroCRM d'un environnement,
@@ -501,6 +580,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Karma lancé une fois, `KARMA_BROWSER`, tests rouges, rapport absent |
 | `tests/backup_test.sh` | bashunit | usage, fichier privé (600/700) et empreinte, rotation, `pg_dump` en échec sans fichier partiel, `verify` (base temporaire), fichier abîmé refusé, sauvegarde de sécurité avant restauration, table : lignes absentes seulement, table sans clé refusée, nom de table piégé ; métrique de supervision écrite après une sauvegarde réussie (fichier en 640), aucune après un échec |
 | `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, échec de Helm, test de fumée raté → retour arrière, `rollback` |
+| `tests/load_test_test.sh` | bashunit | usage, profil inconnu, prod refusée, `PUSH_METRICS` invalide, scénario absent, fumée dans `staging` contre le front (durée limitée), envoi des mesures activable, pod sans privilège sur image figée, résumé gardé, seuil dépassé (code 1), point de rupture atteint (succès) |
 | `tests/zap_scan_test.sh` | bashunit | usage, mode inconnu, règles absentes, commandes passive et active (durée limitée), pod sans privilège ni jeton, rapport extrait du journal, échec (règle FAIL) avec rapport conservé |
 | `tests/test_notify.py` | pytest | jobs en échec, exercice, ouverture / commentaire / fermeture, résumé, paramètres |
 | `tests/test_dora.py` | pytest | dates de l'API, période, délai médian, échec par état ou par incident, rétablissement, reprise (`fix` seuls), aucune donnée, déploiements en attente ignorés, commits de fusion exclus, paramètre invalide (code 2), API injoignable (code 1) |

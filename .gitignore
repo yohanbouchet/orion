@@ -45,6 +45,9 @@ reports/
 # Rapport du test d'intrusion lancé en local (scripts/zap-scan.sh)
 zap-report/
 
+# Résumé du test de charge lancé en local (scripts/load-test.sh)
+load-report/
+
 # Collections Ansible téléchargées (versions figées dans
 # infra/ansible/requirements.yml)
 infra/ansible/collections/

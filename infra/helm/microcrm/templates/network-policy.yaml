@@ -3,15 +3,19 @@ Fichier  : infra/helm/microcrm/templates/network-policy.yaml
 Rôle     : pare-feu entre pods : tout est refusé dans le namespace, sauf
            front → back → base (et la résolution DNS) ; vmagent (namespace
            monitoring) lit les métriques du back (port 8081) ; en staging,
-           le pod du test d'intrusion ZAP peut joindre le front, et lui seul
+           les pods des tests ZAP (intrusion) et k6 (charge) peuvent
+           joindre le front, et eux seuls ; k6 envoie aussi ses mesures à
+           VictoriaMetrics
 Utilise  : values.yaml (networkPolicy.*) ; _helpers.tpl
-Utilisé par : Kubernetes (appliqué par kindnet dans Minikube) ; ticket #64
+Utilisé par : Kubernetes (appliqué par kindnet dans Minikube) ; tickets #64
+           et #92
 */}}
 {{- if .Values.networkPolicy.enabled }}
 {{- $front := dict "root" $ "component" "front" }}
 {{- $back := dict "root" $ "component" "back" }}
 {{- $db := dict "root" $ "component" "postgres" }}
 {{- $zap := .Values.networkPolicy.allowZap }}
+{{- $k6 := .Values.networkPolicy.allowK6 }}
 # 1. Refus par défaut : aucun pod du namespace (ceux du chart, ZAP, ou
 # tout autre pod lancé plus tard) ne reçoit ni n'envoie rien ; les règles
 # suivantes ouvrent seulement le nécessaire
@@ -33,16 +37,26 @@ spec:
     matchLabels:
       {{- include "microcrm.selectorLabels" $front | nindent 6 }}
   policyTypes: ["Ingress", "Egress"]
-  # Aucun autre pod, sauf ZAP si allowZap ; kubectl port-forward entre
-  # par l'intérieur du pod et n'est pas concerné
-  {{- if $zap }}
+  # Aucun autre pod, sauf ZAP (allowZap) et k6 (allowK6) ; kubectl
+  # port-forward entre par l'intérieur du pod et n'est pas concerné
+  {{- if or $zap $k6 }}
   ingress:
+    {{- if $zap }}
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: zap
       ports:
         - port: 8080
+    {{- end }}
+    {{- if $k6 }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: k6
+      ports:
+        - port: 8080
+    {{- end }}
   {{- else }}
   ingress: []
   {{- end }}
@@ -128,6 +142,37 @@ spec:
               {{- include "microcrm.selectorLabels" $front | nindent 14 }}
       ports:
         - port: 8080
+    {{- include "microcrm.dnsEgress" . | nindent 4 }}
+{{- end }}
+{{- if $k6 }}
+---
+# 6. k6 (scripts/load-test.sh) : ne reçoit rien ; ne joint que le front,
+# le DNS et VictoriaMetrics (ses mesures), pas Internet ni la base
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $.Release.Name }}-k6
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: k6
+  policyTypes: ["Ingress", "Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "microcrm.selectorLabels" $front | nindent 14 }}
+      ports:
+        - port: 8080
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmsingle
+      ports:
+        - port: 8428
     {{- include "microcrm.dnsEgress" . | nindent 4 }}
 {{- end }}
 {{- end }}

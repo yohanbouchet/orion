@@ -178,7 +178,9 @@ curl -s -X POST localhost:9093/api/v2/alerts -H 'Content-Type: application/json'
   1 an) : voir les évolutions.
 - **Rien d'exposé** : pas d'Ingress ; Grafana seulement par
   `port-forward`, sans compte anonyme ni inscription ; pare-feu réseau
-  (seuls les pods de la supervision et le collecteur entrent).
+  (seuls les pods de la supervision et le collecteur entrent, plus le
+  pod du test de charge k6 de `staging`, qui écrit ses mesures dans
+  VictoriaMetrics : [`load-test.sh`](../../scripts/README.md#load-testsh)).
 - **Contenu relu** : le téléchargement automatique des tableaux de bord
   et règles de la communauté (« sync-job », branches GitHub non figées)
   est coupé ; toutes les règles d'alerte et tous les tableaux de bord
