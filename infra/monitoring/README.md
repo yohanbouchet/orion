@@ -76,6 +76,18 @@ les 4 h tant qu'elles durent.
 | <a id="podrestartloop"></a>`PodRestartLoop` | un conteneur redémarre plus de 3 fois en 30 min | avertissement |
 | `Watchdog` | toujours active : prouve que la chaîne d'alerte fonctionne ; jamais envoyée | — |
 
+**Compter des événements : deux fonctions, selon la source** (testé le
+05/11 avec 5 réponses 404 en prod) :
+
+- compteurs de **Spring Boot** (erreurs de l'API) : `increase`. Le
+  compteur d'un code (404, 500…) n'existe qu'à partir de sa 1re
+  réponse, déjà à 1 ou plus ; `rate` et `increase_prometheus` ne
+  mesurent qu'une variation entre deux relevés et affichaient 0 ;
+  `increase` (VictoriaMetrics) compte aussi cette 1re valeur : 5 ;
+- compteurs de **kube-state-metrics** (redémarrages) :
+  `increase_prometheus`. Ils sont publiés avec tout leur passé ; après
+  une réinstallation, `increase` compterait d'anciens redémarrages.
+
 **Premiers gestes** (lien `runbook` de chaque alerte) :
 
 - `MicrocrmProdDown` : `kubectl -n prod get pods`, puis

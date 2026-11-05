@@ -90,12 +90,14 @@ extraObjects:
           rules:
             # Plus de 5 % de réponses en erreur serveur (5xx) sur 5 min ;
             # sondes (/actuator) exclues en haut ET en bas : sinon leurs
-            # appels, toutes les 5 à 20 s, diluent le taux
+            # appels, toutes les 5 à 20 s, diluent le taux ;
+            # increase (et non rate) : Spring Boot crée le compteur d'un
+            # code à sa 1re erreur, rate ne verrait pas ces 1res erreurs
             - alert: MicrocrmHighErrorRate
               expr: >-
-                sum(rate(http_server_requests_seconds_count{namespace="prod",
-                status=~"5..", uri!~"/actuator.*"}[5m]))
-                / sum(rate(http_server_requests_seconds_count{
+                sum(increase(http_server_requests_seconds_count{
+                namespace="prod", status=~"5..", uri!~"/actuator.*"}[5m]))
+                / sum(increase(http_server_requests_seconds_count{
                 namespace="prod", uri!~"/actuator.*"}[5m])) > 0.05
               for: 5m
               labels:
