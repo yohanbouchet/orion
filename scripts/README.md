@@ -11,6 +11,7 @@ marche dans la CI, et inversement.
 | [`install-deps.sh`](#install-depssh) | Installer (front) ou vérifier (back) les dépendances | jobs `test-front`, `test-back` |
 | [`run-tests.sh`](#run-testssh) | Lancer les tests et vérifier le rapport de couverture | jobs `test-front`, `test-back` |
 | [`notify.py`](#notifypy) | Signaler par ticket et e-mail une CI en échec sur `main` | job `notify` |
+| [`dora.py`](#dorapy) | Mesurer les 5 indicateurs DORA de la prod (livraison et stabilité) | workflow `dora.yml` (chaque lundi) ; l'opérateur |
 | [`lib/common.sh`](#libcommonsh) | Fonctions partagées : journal, arrêt, outils requis | les scripts Bash |
 | [`deploy.sh`](#deploysh) | Déployer MicroCRM, le vérifier, revenir en arrière | l'opérateur ; job de déploiement de la CI (`deploy.yml`) |
 | [`zap-scan.sh`](#zap-scansh) | Test d'intrusion de `staging` avec ZAP (passif ou actif) | job `zap` de la CI (`zap.yml`) ; l'opérateur |
@@ -148,6 +149,58 @@ Pour vérifier que l'alerte arrive vraiment, sans rien casser :
 
 Ces lancements manuels ne publient aucune version. Exercice réussi le
 01/11/2026 (ticket #61 : deux e-mails reçus, mention et assignation).
+
+## dora.py
+
+**But** : mesurer la performance de livraison de l'équipe avec les
+indicateurs **DORA** (DevOps Research and Assessment), sur les 30 derniers
+jours, à partir de ce que GitHub enregistre déjà : aucune base, aucun
+outil à installer (modèle du projet Four Keys de Google).
+
+| Indicateur ([définitions DORA](https://dora.dev/guides/dora-metrics/)) | Calcul chez Orion |
+|---|---|
+| Fréquence de déploiement | déploiements **réussis** de l'environnement GitHub `production`, par semaine |
+| Délai des changements | médiane, pour chaque commit livré, entre le commit et la fin de son déploiement en prod |
+| Taux d'échec des changements | déploiements en échec, ou pendant lesquels un ticket `incident` a été ouvert, sur le total |
+| Temps de rétablissement | médiane ouverture → fermeture des tickets `incident` |
+| Taux de reprise des déploiements (5e indicateur, ajouté par DORA après les 4 historiques) | déploiements qui ne livrent que des correctifs (`fix`), sur les déploiements réussis |
+
+**Lancement** : workflow **DORA metrics** chaque lundi à 8 h UTC, ou à la
+main (**Actions** → **DORA metrics** → **Run workflow**) ; le tableau
+s'affiche sur la page du run. Le lancement planifié ne part que de `main`,
+peut avoir quelques minutes de retard, et GitHub le désactive après 60
+jours sans activité sur un dépôt public (le réactiver dans **Actions**).
+En local, sans jeton (dépôt public) :
+
+```shell
+python3 scripts/dora.py                 # 30 derniers jours
+DORA_DAYS=7 python3 scripts/dora.py     # 7 derniers jours
+```
+
+**Incidents** : un incident de prod s'ouvre avec le formulaire
+**Incident de production** (étiquette `incident` posée d'office), dès la
+détection, et se ferme au rétablissement.
+
+**Paramètres** (variables d'environnement) : `DORA_DAYS` (30 par défaut),
+`GITHUB_TOKEN` (facultatif), et les variables standard `GITHUB_*` de
+GitHub Actions. **Conditions d'exécution** : Python 3.14, bibliothèque
+standard seule. **Sécurité** : lecture seule (`contents`, `deployments`,
+`issues: read`), jeton temporaire du job.
+
+**Codes** : 0 réussi ; 1 appel à l'API GitHub en échec ; 2 `DORA_DAYS`
+invalide.
+
+**Limites** (approximations assumées, à dire à l'oral) :
+
+- historique court : déploiements en prod depuis le 03/11/2026 ; la
+  fréquence est rapportée à toute la période (la 1re date est affichée) ;
+- un incident est attribué au déploiement actif à son ouverture, même si
+  sa cause est ailleurs (ex. la machine) ;
+- « reprise » = commits `fix` seulement : un correctif planifié compte
+  comme une reprise ;
+- le 1er déploiement n'a pas de délai (aucun déploiement précédent pour
+  savoir quels commits il livre) ; 100 déploiements et 100 tickets au
+  plus par appel (pas de pagination).
 
 ## deploy.sh
 
@@ -450,6 +503,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, échec de Helm, test de fumée raté → retour arrière, `rollback` |
 | `tests/zap_scan_test.sh` | bashunit | usage, mode inconnu, règles absentes, commandes passive et active (durée limitée), pod sans privilège ni jeton, rapport extrait du journal, échec (règle FAIL) avec rapport conservé |
 | `tests/test_notify.py` | pytest | jobs en échec, exercice, ouverture / commentaire / fermeture, résumé, paramètres |
+| `tests/test_dora.py` | pytest | dates de l'API, période, délai médian, échec par état ou par incident, rétablissement, reprise (`fix` seuls), aucune donnée, déploiements en attente ignorés, commits de fusion exclus, paramètre invalide (code 2), API injoignable (code 1) |
 
 Les tests Bash remplacent `npm`, `java`, `gradlew`, `helm` ou `kubectl`
 par des **doublures** (faux programmes placés en tête du `PATH`) : ils

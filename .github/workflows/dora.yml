@@ -1,0 +1,43 @@
+# Fichier  : .github/workflows/dora.yml
+# Rôle     : calcule chaque lundi (et à la demande) les 5 indicateurs DORA
+#            de la prod sur 30 jours ; tableau affiché sur la page du run
+# Utilise  : scripts/dora.py (API de GitHub, lecture seule)
+# Utilisé par : l'équipe et le mentor (Actions → DORA metrics) ; ticket #83
+
+name: DORA metrics
+
+on:
+  # Chaque lundi à 8 h UTC (9 h à Paris l'hiver) : bilan de la semaine
+  schedule:
+    - cron: "0 8 * * 1"
+  # Lancement à la main : Actions → DORA metrics → Run workflow
+  workflow_dispatch:
+
+# Aucun droit par défaut ; le job ne reçoit que des droits de lecture
+permissions: {}
+
+jobs:
+  dora:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      deployments: read
+      issues: read
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Python 3.14, comme en local ; bibliothèque standard seule
+      - name: Set up Python 3.14
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      # Jeton temporaire du job (lecture seule) : plus d'appels permis
+      # par heure que sans jeton
+      - name: Compute DORA metrics
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DORA_DAYS: "30"
+        run: python scripts/dora.py

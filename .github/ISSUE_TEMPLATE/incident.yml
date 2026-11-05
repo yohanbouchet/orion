@@ -1,0 +1,69 @@
+# Fichier  : .github/ISSUE_TEMPLATE/incident.yml
+# Rôle     : formulaire d'issue pour un incident de production (service
+#            dégradé ou arrêté, intervention immédiate) ; l'étiquette
+#            « incident » est posée d'office
+# Utilise  : étiquette incident (créée dans GitHub)
+# Utilisé par : GitHub (Issues → New issue) ; scripts/dora.py (taux
+#            d'échec et temps de rétablissement : ouverture → fermeture)
+
+name: Incident de production
+description: La prod est arrêtée ou dégradée et demande une intervention immédiate
+title: "[Incident] "
+labels: ["incident"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Ouvrir ce ticket **dès** la détection et le fermer **au
+        rétablissement** : ces deux heures servent à mesurer le temps de
+        rétablissement (DORA). Aucune donnée personnelle ni aucun secret
+        ici (dépôt public).
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: >-
+        Ce que voient les utilisateurs (erreur, lenteur, données
+        absentes) et depuis quand.
+    validations:
+      required: true
+  - type: textarea
+    id: detection
+    attributes:
+      label: Détection
+      description: >-
+        Comment l'incident a été vu : alerte (nom), tableau de bord,
+        signalement d'un utilisateur.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version en prod
+      description: Version déployée au moment de l'incident (ex. v1.3.3).
+    validations:
+      required: true
+  - type: textarea
+    id: actions
+    attributes:
+      label: Actions et rétablissement
+      description: >-
+        Ce qui a été fait, dans l'ordre (retour arrière, correctif,
+        redémarrage), et ce qui a rétabli le service.
+  - type: textarea
+    id: followup
+    attributes:
+      label: Suite (post-mortem)
+      description: >-
+        Cause, et ce qui évitera que ça recommence (ticket [Dev] ou
+        [Ops] lié).
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Gravité
+      options:
+        - Critique (prod arrêtée ou données en danger)
+        - Majeure (prod dégradée)
+        - Mineure (gêne limitée)
+    validations:
+      required: true
