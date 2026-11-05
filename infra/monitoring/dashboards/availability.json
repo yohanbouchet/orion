@@ -164,7 +164,7 @@
     {
       "id": 4,
       "title": "Last prod backup",
-      "description": "Hours since the last successful nightly backup of the prod database (alert above 26 h).",
+      "description": "Hours since the last successful scheduled backup of the prod database (alert above 26 h).",
       "type": "stat",
       "gridPos": {
         "x": 18,

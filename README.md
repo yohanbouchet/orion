@@ -52,7 +52,7 @@ Au 04/11/2026 :
 | Script de déploiement avec test de fumée et retour arrière | ✅ [`scripts/deploy.sh`](scripts/README.md#deploysh) |
 | Déploiement continu : `dev` puis `staging` à chaque fusion, `prod` sur une version après approbation | ✅ [`deploy.yml`](.github/workflows/deploy.yml) (1er passage en `prod` : à la prochaine version) |
 | Test d'intrusion automatisé (ZAP) : passif à chaque déploiement de `staging` (bloque la prod), actif à la demande | ✅ [`zap.yml`](.github/workflows/zap.yml), [règles](infra/zap/rules.tsv) |
-| Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée chaque nuit, restauration vérifiée chaque semaine, copie hors site chiffrée |
+| Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée au démarrage du poste et chaque jour, restauration vérifiée chaque semaine, copie hors site chiffrée |
 | Socle du cluster en Terraform (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) | ✅ [`infra/ansible/`](infra/ansible/README.md) |
 | Supervision : métriques, journaux, alertes par e-mail, 3 tableaux de bord (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) |
@@ -436,8 +436,10 @@ scripts/backup.sh restore dev <fichier>        # toute la base
 scripts/backup.sh restore dev <fichier> --table person
 ```
 
-En production, Ansible planifie la sauvegarde chaque nuit (2 h 30) et la
-vérification de sa restauration chaque dimanche ; le dossier est copié
+En production, Ansible planifie la sauvegarde au démarrage du poste et
+chaque jour à 12 h 30, et la vérification de sa restauration chaque
+vendredi (le poste est éteint le soir : rien n'est planifié la nuit) ;
+le dossier est copié
 hors site par la sauvegarde chiffrée de la machine (GPG, Google Drive).
 Chaque restauration est précédée d'une sauvegarde de sécurité de l'état
 actuel. Objectifs : perte de données maximale (RPO) de 24 h avec une

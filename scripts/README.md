@@ -14,7 +14,7 @@ marche dans la CI, et inversement.
 | [`lib/common.sh`](#libcommonsh) | Fonctions partagées : journal, arrêt, outils requis | les scripts Bash |
 | [`deploy.sh`](#deploysh) | Déployer MicroCRM, le vérifier, revenir en arrière | l'opérateur ; job de déploiement de la CI (`deploy.yml`) |
 | [`zap-scan.sh`](#zap-scansh) | Test d'intrusion de `staging` avec ZAP (passif ou actif) | job `zap` de la CI (`zap.yml`) ; l'opérateur |
-| [`backup.sh`](#backupsh) | Sauvegarder, vérifier et restaurer la base | l'opérateur ; tâches planifiées installées par Ansible (sauvegarde chaque nuit, vérification chaque semaine) |
+| [`backup.sh`](#backupsh) | Sauvegarder, vérifier et restaurer la base | l'opérateur ; tâches planifiées installées par Ansible (sauvegarde au démarrage du poste et chaque jour, vérification chaque semaine) |
 | [`deploy-sonarqube.sh`](#deploy-sonarqubesh) | Déployer SonarQube dans le cluster Minikube | l'opérateur, à la main |
 
 ## Règles communes
@@ -322,7 +322,7 @@ environnement) ; `KEEP`, nombre de sauvegardes gardées par environnement
 une sauvegarde réussie, le script y écrit l'heure de cette sauvegarde
 (`microcrm_backup_last_success_timestamp_seconds`, fichier en 640, écrit
 puis renommé), qui alimente l'alerte `BackupTooOld` (vide par défaut :
-rien n'est écrit ; réglé par Ansible pour la sauvegarde de nuit).
+rien n'est écrit ; réglé par Ansible pour les sauvegardes planifiées).
 
 **Conditions d'exécution** : `kubectl` et `sha256sum` ; accès au cluster
 avec le droit `pods/exec` dans le namespace (il donne accès à la base :
@@ -358,8 +358,10 @@ restaurée, application fonctionnelle ; fichier modifié refusé ; rotation.
 **Temps de restauration (RTO) mesuré : 0,6 s**, sauvegarde de sécurité
 comprise (base de 7 Ko).
 
-**Objectifs actuels** : sauvegarde **quotidienne** de la prod (2 h 30) et
-vérification de sa restauration **chaque dimanche** (3 h 30), tâches
+**Objectifs actuels** : sauvegarde de la prod **au démarrage du poste**
+(5 min après) et **chaque jour** (12 h 30), vérification de sa
+restauration **chaque vendredi** (13 h) ; le poste est éteint le soir et
+cron ne rattrape pas une tâche manquée, d'où ces horaires ; tâches
 planifiées installées par Ansible ([`infra/ansible`](../infra/ansible/README.md),
 rôle `backup`, journal `~/.local/state/microcrm-backup.log`), soit une
 perte de données maximale (**RPO**) de 24 h ; 7 sauvegardes gardées, soit

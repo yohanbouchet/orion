@@ -36,9 +36,9 @@ cluster_images:
 # par empreinte ; l'addon de Minikube installe sinon la 0.9.0
 metrics_server_image: "metrics-server/metrics-server:v0.9.1@sha256:9b0ba1926e1d3089673f45461c3c1416109dea33b3ba3434048defd380df329b"
 
-# Sauvegarde de la prod : chaque nuit, vérification de la restauration
-# chaque dimanche ; dossier copié hors site par la sauvegarde chiffrée
-# de la machine
+# Sauvegarde de la prod : au démarrage et chaque jour, vérification de la
+# restauration chaque vendredi ; dossier copié hors site par la
+# sauvegarde chiffrée de la machine
 backup_env: prod
 backup_dir: "{{ ops_home }}/backups/microcrm"
 backup_log: "{{ ops_home }}/.local/state/microcrm-backup.log"

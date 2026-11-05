@@ -8,11 +8,11 @@ une seule commande, relançable sans effet si tout est déjà en place
 | Rôle | Ce qu'il fait | Pourquoi |
 |---|---|---|
 | `ops_tools` | kubectl 1.37.2, minikube 1.39.0, helm 4.3.1 dans `~/.local/bin`, **empreinte SHA-256 vérifiée** ; contrôle de Terraform ≥ 1.17 | mêmes versions sur chaque poste Ops, sans sudo |
-| `docker_hygiene` | journaux des conteneurs limités (3 × 10 Mo), `live-restore` ; **nettoyage chaque dimanche** des images et du cache de plus de 7 jours (jamais les volumes) | le disque plein est la 1re cause de panne d'un serveur unique (mesuré le 04/11 : 39 Go d'images et 16 Go de cache récupérables) |
+| `docker_hygiene` | journaux des conteneurs limités (3 × 10 Mo), `live-restore` ; **nettoyage chaque vendredi** (13 h 30) des images et du cache de plus de 7 jours (jamais les volumes) | le disque plein est la 1re cause de panne d'un serveur unique (mesuré le 04/11 : 39 Go d'images et 16 Go de cache récupérables) |
 | `minikube_service` | service `minikube@<utilisateur>` ([`infra/systemd`](../systemd/README.md)) activé | le cluster redémarre avec la machine |
 | `cluster_images` | images `orion/postgres`, `orion/zap`, `orion/actions-runner` construites et chargées dans Minikube **seulement si elles manquent ou si leur Dockerfile a changé** | le cluster ne télécharge jamais ces images |
 | `metrics_server` | addon metrics-server **0.9.1**, figé par empreinte (Minikube installe sinon la 0.9.0) | autoscaling (HPA) de la prod ; correctif de sécurité de la 0.9.1 |
-| `backup` | sauvegarde de la base de prod **chaque nuit** (2 h 30) et **vérification de la restauration chaque dimanche** (3 h 30), journal dans `~/.local/state/microcrm-backup.log` | RPO de 24 h ; une sauvegarde jamais restaurée n'est pas une sauvegarde |
+| `backup` | sauvegarde de la base de prod **au démarrage du poste** (5 min après) **et chaque jour** (12 h 30), **vérification de la restauration chaque vendredi** (13 h) ; poste éteint le soir, donc rien la nuit (cron ne rattrape pas une tâche manquée), journal dans `~/.local/state/microcrm-backup.log` | RPO de 24 h ; une sauvegarde jamais restaurée n'est pas une sauvegarde |
 | `node_exporter` | node_exporter 1.12.1 (métriques de la machine : disque, mémoire), compte système sans shell, service durci, écoute **seulement** sur le réseau du cluster ; lit aussi le dossier `/var/lib/node_exporter/textfile`, où `backup.sh` écrit l'heure de la dernière sauvegarde | supervision de l'hôte (alertes « disque presque plein » et « sauvegarde trop ancienne ») |
 | `hardening` | mises à jour de sécurité automatiques ; pare-feu **ufw** (entrée refusée, sauf SSH depuis le réseau local et métriques depuis le cluster) ; **fail2ban** sur SSH | surface d'attaque réduite |
 
