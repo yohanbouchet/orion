@@ -39,9 +39,11 @@ chart officiel `victoria-metrics-k8s-stack` **0.97.1** à version figée
 Pourquoi VictoriaMetrics plutôt que Prometheus, et VictoriaLogs plutôt
 qu'ELK ou Loki : outils open source, très utilisés, compatibles avec le
 langage de requête de Prometheus, et conseillés par le mentor pour leur
-**faible consommation**. Mesure réelle (04/11/2026, pile stabilisée) :
-**≈ 0,8 Gio de mémoire et 0,1 cœur** pour toute la pile, dont la moitié
-pour Grafana.
+**faible consommation**. Mesure réelle sur la pile installée
+(05/11/2026, `kubectl top pods` des 2 namespaces) : **≈ 1 Gio de
+mémoire et 0,1 cœur** (103m) pour toute la pile, dont la moitié pour
+Grafana (509 Mi) ; disques : 10 Gi (métriques) + 5 Gi (journaux). Le
+nœud entier utilise alors 5,7 Gio sur 15 et 0,8 cœur sur 8.
 
 ## Fichiers
 
