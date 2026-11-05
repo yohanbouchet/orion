@@ -123,7 +123,7 @@ printf '%s' "$P" | kubectl -n monitoring create secret generic \
 
 # 4. Première sauvegarde à la main, avec sa métrique : sans elle,
 #    l'alerte BackupTooOld (« jamais sauvegardée ») part 15 min après
-#    l'installation, avant la sauvegarde de la nuit
+#    l'installation, avant la prochaine sauvegarde planifiée
 BACKUP_METRICS_DIR=/var/lib/node_exporter/textfile scripts/backup.sh prod
 ```
 

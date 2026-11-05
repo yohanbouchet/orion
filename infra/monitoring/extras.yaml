@@ -133,7 +133,8 @@ extraObjects:
                 summary: Host root disk is more than 85% full.
                 runbook: infra/monitoring/README.md#hostdiskalmostfull
             # Dernière sauvegarde réussie de la prod il y a plus de 26 h
-            # (une par nuit + 2 h de marge), ou jamais vue ; métrique
+            # (une par jour + 2 h de marge ; une aussi au démarrage du
+            # poste, éteint le soir), ou jamais vue ; métrique
             # écrite par scripts/backup.sh, lue par node_exporter
             - alert: BackupTooOld
               expr: >-

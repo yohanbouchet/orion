@@ -26,13 +26,14 @@
   notify: Restart Docker
 
 # Images et cache de construction non utilisés depuis 7 jours ; JAMAIS les
-# volumes (celui de Minikube contient le cluster et ses bases)
+# volumes (celui de Minikube contient le cluster et ses bases) ; le
+# vendredi à 13 h 30, poste allumé (il est éteint le soir)
 - name: Prune unused Docker images and build cache every week
   ansible.builtin.cron:
     name: docker prune (ansible)
-    weekday: "0"
-    hour: "4"
-    minute: "0"
+    weekday: "5"
+    hour: "13"
+    minute: "30"
     job: >-
       docker image prune -af --filter until={{ docker_prune_until }} &&
       docker builder prune -af --filter until={{ docker_prune_until }}
