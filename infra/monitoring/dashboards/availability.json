@@ -130,7 +130,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(up{namespace=\"$env\", job=~\"podScrape/monitoring/microcrm-back.*\"}) or vector(0)",
+          "expr": "sum(up{namespace=\"$env\", job=\"monitoring/microcrm-back\"}) or vector(0)",
           "legendFormat": ""
         }
       ],
