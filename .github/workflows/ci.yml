@@ -11,8 +11,9 @@
 #            si tout est vert, numéro de version (semantic-release :
 #            étiquette vX.Y.Z et Release GitHub) puis publication des images
 #            sur GHCR ; déploiement dans dev puis staging (deploy.yml),
-#            test d'intrusion passif de staging (zap.yml), et dans prod
-#            après approbation si une version vient d'être publiée ;
+#            test d'intrusion passif (zap.yml) puis test de charge de
+#            fumée (load-test.yml) de staging, et dans prod après
+#            approbation si une version vient d'être publiée ;
 #            enfin, sur main, notification du résultat (notify).
 # Utilise  : actions officielles de GitHub et de SonarSource, figées par SHA
 #            de commit ; images officielles des outils de sécurité, figées
@@ -21,8 +22,8 @@
 #            back/Dockerfile ; .github/release/ (semantic-release) ;
 #            scripts/ (install-deps.sh, run-tests.sh, notify.py, tests) ;
 #            workflows réutilisables deploy.yml (environnements dev,
-#            staging, production) et zap.yml ; jeton automatique
-#            GITHUB_TOKEN (version, publication, notification)
+#            staging, production), zap.yml et load-test.yml ; jeton
+#            automatique GITHUB_TOKEN (version, publication, notification)
 # Utilisé par : GitHub Actions (PR, fusions sur main, lancement manuel)
 
 name: CI
@@ -618,11 +619,24 @@ jobs:
     secrets:
       KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
 
-  # Prod seulement si une version vX.Y.Z vient d'être publiée, si ZAP n'a
-  # rien trouvé de bloquant, et après l'approbation demandée par
-  # l'environnement production
+  # Test de charge de fumée (k6, 1 utilisateur, 30 s) de staging, après
+  # ZAP (jamais en même temps : les mesures seraient faussées) ; un seuil
+  # dépassé (erreurs, temps de réponse) bloque la prod ; ticket #92
+  load-test:
+    needs: zap
+    uses: ./.github/workflows/load-test.yml
+    with:
+      profile: smoke
+    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
+    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
+    secrets:
+      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+
+  # Prod seulement si une version vX.Y.Z vient d'être publiée, si ZAP et le
+  # test de charge n'ont rien trouvé de bloquant, et après l'approbation
+  # demandée par l'environnement production
   deploy-prod:
-    needs: [release, zap]
+    needs: [release, zap, load-test]
     if: needs.release.outputs.version != ''
     uses: ./.github/workflows/deploy.yml
     with:
@@ -656,6 +670,7 @@ jobs:
       - deploy-dev
       - deploy-staging
       - zap
+      - load-test
     if: >-
       always() && github.ref == 'refs/heads/main' &&
       github.event_name != 'pull_request'
