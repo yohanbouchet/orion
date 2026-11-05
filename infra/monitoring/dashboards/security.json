@@ -16,8 +16,8 @@
   "panels": [
     {
       "id": 1,
-      "title": "Client and server errors by status",
-      "description": "4xx (client side: not found, refused) and 5xx responses of the API.",
+      "title": "Client and server errors by status (per 5 min)",
+      "description": "4xx (client side: not found, refused) and 5xx responses of the API, counted over 5 min; increase also counts the first errors of a new series.",
       "type": "timeseries",
       "gridPos": {
         "x": 0,
@@ -32,13 +32,13 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (status) (rate(http_server_requests_seconds_count{namespace=\"$env\", status=~\"4..|5..\"}[5m]))",
+          "expr": "sum by (status) (increase(http_server_requests_seconds_count{namespace=\"$env\", status=~\"4..|5..\"}[5m]))",
           "legendFormat": "{{status}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -47,7 +47,7 @@
     {
       "id": 2,
       "title": "Refused requests (401/403, 1 h)",
-      "description": "Unauthorized or forbidden responses over the last hour.",
+      "description": "Unauthorized or forbidden responses over the last hour, first ones included.",
       "type": "stat",
       "gridPos": {
         "x": 12,
@@ -62,7 +62,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(increase_prometheus(http_server_requests_seconds_count{namespace=\"$env\", status=~\"401|403\"}[1h])) or vector(0)",
+          "expr": "sum(increase(http_server_requests_seconds_count{namespace=\"$env\", status=~\"401|403\"}[1h])) or vector(0)",
           "legendFormat": ""
         }
       ],
