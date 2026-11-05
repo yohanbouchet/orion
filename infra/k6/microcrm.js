@@ -95,7 +95,10 @@ export default function () {
   group('lists', () => {
     const res = http.get(`${BASE_URL}/api/persons`);
     check(res, { 'persons 200': (r) => r.status === 200 });
-    persons = res.json('_embedded.persons') || [];
+    // Personnes de test exclues : un autre VU peut les supprimer entre la
+    // liste et la fiche (404 du scénario, pas une erreur de l'appli)
+    persons = (res.json('_embedded.persons') || [])
+      .filter((p) => !String(p.email).startsWith('load.test.'));
     const orgs = http.get(`${BASE_URL}/api/organizations`);
     check(orgs, { 'organizations 200': (r) => r.status === 200 });
   });
