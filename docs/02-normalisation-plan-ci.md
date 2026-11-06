@@ -431,7 +431,7 @@ attendus, comparés aux mesures de départ du document 1 :
 | Ressource | Détail |
 | --- | --- |
 | Personnes | Équipe Dev (4), équipe Ops (2), ingénieur DevOps ; Maria (CTO) pour les arbitrages |
-| Serveur | Machine Ubuntu de l'équipe (8 cœurs, 14 Gio de RAM) : Minikube (4 cœurs et 7 Go alloués) avec le runner local et SonarQube (environ 2 Gio mesurés) ; runners hébergés par GitHub, gratuits pour un dépôt public |
+| Serveur | Machine Ubuntu de l'équipe (8 cœurs, 14 Gio de RAM) : Minikube (4 cœurs et 7 Go alloués, 10 Gio depuis le 06/11 après les tests de charge) avec le runner local et SonarQube (environ 2 Gio mesurés) ; runners hébergés par GitHub, gratuits pour un dépôt public |
 | Services | Dépôt GitHub public : GitHub Actions, Dependabot et registre d'images gratuits pour un dépôt public |
 | Logiciels | SonarQube Community Build, Trivy, hadolint, gitleaks, ShellCheck, semantic-release : gratuits et open source |
 | Budget | 0 € de licence ; le coût est le temps des équipes et la machine existante |

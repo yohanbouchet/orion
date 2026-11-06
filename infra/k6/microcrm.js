@@ -1,7 +1,8 @@
 // Fichier  : infra/k6/microcrm.js
 // Rôle     : tests de charge de MicroCRM avec k6 : parcours d'un
 //            utilisateur (accueil, listes, fiche, création + suppression)
-//            sous 6 profils de charge (types de tests de la doc k6)
+//            sous 6 profils de charge (types de tests de la doc k6) ;
+//            ménage final des personnes de test (teardown)
 // Utilise  : k6 2.3.0 ; variables BASE_URL (adresse du front) et
 //            TEST_TYPE (smoke, average, stress, spike, breakpoint, soak)
 // Utilisé par : scripts/load-test.sh (Job k6 dans staging) ; workflow
@@ -38,8 +39,10 @@ const PROFILES = {
   breakpoint: {
     executor: 'ramping-arrival-rate',
     startRate: 10, timeUnit: '1s',
-    preAllocatedVUs: 50, maxVUs: 300,
-    stages: [{ duration: '10m', target: 200 }],
+    // Plafond adapté au poste : à 200 parcours/s, c'est le PC qui a
+    // cédé le 05/11 (cluster, CI et k6 sur la même machine), pas l'appli
+    preAllocatedVUs: 50, maxVUs: 150,
+    stages: [{ duration: '10m', target: 100 }],
   },
   // Endurance : charge moyenne pendant 30 min (fuite de mémoire ?)
   soak: { executor: 'ramping-vus', stages: [
@@ -60,10 +63,14 @@ export const options = {
     http_req_failed: ['rate<0.01'],
     http_req_duration: ['p(95)<500', 'p(99)<1500'],
     checks: ['rate>0.99'],
-    // Point de rupture : on arrête dès que les erreurs passent 5 %
+    // Point de rupture : on arrête dès que les erreurs passent 5 % ou que
+    // le p95 dépasse 2 s (le poste sature avant que les erreurs montent)
     ...(TEST_TYPE === 'breakpoint' && {
       'http_req_failed{scenario:breakpoint}': [
         { threshold: 'rate<0.05', abortOnFail: true, delayAbortEval: '30s' },
+      ],
+      'http_req_duration{scenario:breakpoint}': [
+        { threshold: 'p(95)<2000', abortOnFail: true, delayAbortEval: '30s' },
       ],
     }),
   },
@@ -133,4 +140,21 @@ export default function () {
     });
     think();
   }
+}
+
+// Ménage final : lancé une seule fois, après tous les VUs, même si un
+// seuil a arrêté le test ; supprime les personnes de test restées
+// (suppression jamais aboutie quand l'appli ou le poste sature)
+export function teardown() {
+  const res = http.get(`${BASE_URL}/api/persons?size=1000`);
+  if (res.status !== 200) {
+    return;
+  }
+  const left = (res.json('_embedded.persons') || [])
+    .filter((p) => String(p.email).startsWith('load.test.'));
+  for (const p of left) {
+    http.del(`${BASE_URL}/api/persons/${p.id}`, null,
+      { tags: { name: 'cleanup' } });
+  }
+  console.log(`cleanup: ${left.length} test person(s) deleted`);
 }

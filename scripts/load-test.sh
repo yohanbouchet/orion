@@ -124,13 +124,15 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-          # 300 VUs au plus (point de rupture) : quelques centaines de Mio
+          # Limites : le générateur de charge ne doit pas prendre au poste
+          # (cluster, runner de la CI) les ressources de ce qu'il mesure
           resources:
             requests:
               cpu: 250m
               memory: 128Mi
             limits:
-              memory: 1Gi
+              cpu: "1"
+              memory: 512Mi
           volumeMounts:
             - name: script
               mountPath: /scripts
@@ -186,8 +188,21 @@ main() {
   [[ "$NAMESPACE" != "prod" ]] || die "load tests are not allowed in prod"
   require_cmd kubectl
   [[ -f "$K6_SCRIPT" ]] || die "k6 script not found: $K6_SCRIPT"
+  # Lancé depuis le poste : jamais pendant un job de CI (runners dans le
+  # même cluster : le 05/11, CI + point de rupture ont saturé le nœud) ;
+  # dans Actions, le groupe deploy-staging fait déjà attendre le test
+  if [[ -z "${GITHUB_ACTIONS:-}" ]]; then
+    [[ -z "$(kubectl -n arc-runners get pods --no-headers \
+      --ignore-not-found 2>/dev/null)" ]] ||
+      die "a CI job is running; fix: wait for it, or use Actions > Load test"
+  fi
+  # Un seul test à la fois : deux tests se fausseraient, et le second
+  # effacerait le Job du premier (même nom)
+  [[ -z "$(kubectl -n "$NAMESPACE" get job k6 --ignore-not-found \
+    -o jsonpath='{.status.active}')" ]] ||
+    die "a k6 test is already running; fix: kubectl -n $NAMESPACE get job k6"
   log INFO "k6 $TEST_TYPE test of $TARGET in $NAMESPACE"
-  # Le Job précédent (même nom) est remplacé
+  # Le Job précédent, terminé (même nom), est remplacé
   kubectl -n "$NAMESPACE" delete job k6 --ignore-not-found >/dev/null
   apply_script
   apply_job

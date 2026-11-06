@@ -25,8 +25,10 @@ function tear_down() {
 }
 
 # Faux kubectl : note ses paramètres (et le manifeste reçu par le tube)
-# dans CALLS_LOG ; « get job » répond JOB_STATE (réussi/échoué) ; « logs »
-# renvoie un résumé de k6
+# dans CALLS_LOG ; « arc-runners » répond RUNNER_PODS (job de CI en
+# cours) ; « status.active » répond JOB_ACTIVE (Job en cours) ;
+# « get job » répond JOB_STATE (réussi/échoué) ; « logs » renvoie un
+# résumé de k6
 make_kubectl() {
   cat >"$FAKE_REPO/bin/kubectl" <<'STUB'
 #!/usr/bin/env bash
@@ -34,6 +36,8 @@ echo "kubectl $*" >>"$CALLS_LOG"
 case "$*" in
   *"create configmap"*) echo "kind: ConfigMap" ;;
   *apply*) cat >>"$CALLS_LOG" ;;
+  *arc-runners*) echo "${RUNNER_PODS:-}" ;;
+  *"status.active"*) echo "${JOB_ACTIVE:-}" ;;
   *"get job"*) echo "$JOB_STATE" ;;
   *logs*) printf 'http_req_failed: 0.00%%\n' ;;
 esac
@@ -42,10 +46,11 @@ STUB
 }
 
 # Lance le script copié, faux kubectl en tête du PATH ; stderr joint à
-# stdout ; résumé dans le faux dépôt
+# stdout ; résumé dans le faux dépôt ; lancé « depuis le poste » sauf si
+# FAKE_GHA est donné (la CI définit GITHUB_ACTIONS)
 run_load() {
-  CALLS_LOG="$FAKE_REPO/calls.log" PATH="$FAKE_REPO/bin:$PATH" \
-    REPORT_DIR="$FAKE_REPO/report" "$FAKE_REPO/scripts/load-test.sh" "$@" 2>&1
+  GITHUB_ACTIONS="${FAKE_GHA:-}" CALLS_LOG="$FAKE_REPO/calls.log" \
+    PATH="$FAKE_REPO/bin:$PATH" REPORT_DIR="$FAKE_REPO/report" "$FAKE_REPO/scripts/load-test.sh" "$@" 2>&1
 }
 
 # Journal des appels reçus par le faux kubectl, pour les vérifier
@@ -71,6 +76,35 @@ function test_prod_is_refused() {
   assert_exit_code "1"
   assert_contains "not allowed in prod" "$output"
   assert_file_not_exists "$FAKE_REPO/calls.log"
+}
+
+function test_running_k6_job_is_not_replaced() {
+  local output
+  output="$(JOB_ACTIVE=1 run_load stress)"
+  assert_exit_code "1"
+  assert_contains "already running" "$output"
+  assert_not_contains "delete job" "$(calls)"
+}
+
+function test_k6_pod_has_cpu_and_memory_limits() {
+  run_load smoke >/dev/null
+  assert_contains 'cpu: "1"' "$(calls)"
+  assert_contains "memory: 512Mi" "$(calls)"
+}
+
+function test_running_ci_job_blocks_a_run_from_the_workstation() {
+  local output
+  output="$(RUNNER_PODS="orion-local-runner-1 1/1 Running" run_load stress)"
+  assert_exit_code "1"
+  assert_contains "a CI job is running" "$output"
+  assert_not_contains "delete job" "$(calls)"
+}
+
+function test_run_from_actions_does_not_check_ci_jobs() {
+  RUNNER_PODS="orion-local-runner-1 1/1 Running" FAKE_GHA=true \
+    run_load smoke >/dev/null
+  assert_successful_code
+  assert_not_contains "arc-runners" "$(calls)"
 }
 
 function test_invalid_push_metrics_is_refused() {
