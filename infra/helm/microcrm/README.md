@@ -33,7 +33,7 @@ navigateur ──► microcrm-front (nginx, :8080)
 
 | | dev | staging | prod |
 |---|---|---|---|
-| Répliques du back | 1 | 1 | 2 à 4 (HPA, processeur > 70 %) |
+| Répliques du back | 1 | 1 à 4 (HPA, processeur > 70 %) | 2 à 4 (HPA, processeur > 70 %) |
 | Disque de la base | 1 Gio | 2 Gio | 5 Gio |
 
 Le HPA a besoin de l'addon **metrics-server** de Minikube
