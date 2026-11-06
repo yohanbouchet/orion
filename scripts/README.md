@@ -341,8 +341,9 @@ ConfigMap `k6-script`, puis un Job Kubernetes `k6` (image officielle
 le front. Chaque utilisateur simulé (VU) suit le même parcours :
 accueil → liste des personnes et des organisations → fiche d'une
 personne → 1 fois sur 10, création puis suppression d'une personne
-(aucune donnée de test ne reste), avec 1 à 3 s de pause entre deux
-écrans, comme un humain.
+avec 1 à 3 s de pause entre deux écrans, comme un humain. À la fin
+(`teardown`, une seule fois après tous les VUs), k6 supprime les
+personnes de test restées après un test interrompu ou saturé.
 
 | Profil ([types de tests de k6](https://grafana.com/docs/k6/latest/testing-guides/test-types/)) | Charge | Durée | Question | Lancement |
 |---|---|---|---|---|
@@ -350,7 +351,7 @@ personne → 1 fois sur 10, création puis suppression d'une personne
 | `average` (charge moyenne) | 20 VUs | 5 min | comportement normal ? | à la main |
 | `stress` | 60 VUs (3 × la moyenne) | 5 min | au-delà du normal ? | à la main |
 | `spike` (pic) | 0 → 100 VUs en 10 s | 1 min | arrivée brutale ? | à la main |
-| `breakpoint` (point de rupture) | 10 → 200 parcours/s | 10 min au plus | capacité maximale ? | à la main |
+| `breakpoint` (point de rupture) | 10 → 100 parcours/s, 150 VUs au plus | 10 min au plus | capacité maximale ? | à la main |
 | `soak` (endurance) | 20 VUs | 30 min | fuite de mémoire ? | à la main |
 
 **Seuils** (un seuil dépassé fait échouer le test) : moins de 1 %
@@ -365,8 +366,14 @@ scripts/load-test.sh stress            # 60 utilisateurs, 5 min
 PUSH_METRICS=0 scripts/load-test.sh average   # sans envoi à Grafana
 ```
 
-Dans GitHub : **Actions** → **Load test** → **Run workflow**, choisir le
-profil. Le résumé de k6 s'affiche sur la page de l'exécution (et en
+**Règle** : les profils lourds (`stress`, `spike`, `breakpoint`, `soak`)
+se lancent par GitHub : **Actions** → **Load test** → **Run workflow**,
+choisir le profil. Le test attend alors son tour derrière les
+déploiements de staging (groupe `deploy-staging`) ; lancé à la main
+pendant un pipeline, il se ferait fausser par la CI qui tourne sur le
+même poste (vu le 05/11 : poste saturé, mesure perdue). Le script refuse
+aussi de partir si un Job `k6` tourne déjà et, lancé depuis le poste,
+si un job de CI tourne (pod dans `arc-runners`). Le résumé de k6 s'affiche sur la page de l'exécution (et en
 artefact 30 jours). Les mesures arrivent dans VictoriaMetrics (sortie
 `experimental-prometheus-rw` de k6, étiquette `testid` propre à chaque
 test) : charge, temps de réponse et nombre de répliques se lisent sur la
@@ -387,11 +394,16 @@ mesures.
 **Sécurité** : pod sans privilège (non-root, aucune capacité, disque en
 lecture seule, aucun jeton Kubernetes) ; image figée par empreinte ;
 aucun secret ; données de test reconnaissables (`Load Test…`,
-`@example.com`, domaine réservé aux exemples) et supprimées aussitôt.
+`@example.com`, domaine réservé aux exemples) et supprimées aussitôt,
+puis par le ménage final. **Limites de ressources** du pod k6 (1 cœur,
+512 Mio) : le générateur de charge ne prend pas au poste (cluster, runner
+de la CI) les ressources de ce qu'il mesure.
 
 **Limites** : k6 tourne sur la même machine que l'application et lui
 prend du processeur : les chiffres servent à **comparer** (avant/après),
-pas à annoncer une capacité absolue ; la charge « normale » de 20
+pas à annoncer une capacité absolue ; le point de rupture est plafonné
+à ce que le poste supporte (à 200 parcours/s, c'est le poste qui a
+cédé, pas l'appli) ; la charge « normale » de 20
 utilisateurs et la part d'écritures (1 parcours sur 10) sont des
 hypothèses, l'énoncé ne donnant aucun chiffre de fréquentation.
 
@@ -404,6 +416,8 @@ hypothèses, l'énoncé ne donnant aucun chiffre de fréquentation.
 | `PUSH_METRICS` autre que 0 ou 1 | 1 | `0` ou `1` |
 | `kubectl` absent | 127 | installer l'outil |
 | Scénario absent | 1 | `infra/k6/microcrm.js` |
+| Un Job `k6` tourne déjà | 1 | attendre sa fin (`kubectl -n staging get job k6`) |
+| Job de CI en cours (lancement depuis le poste) | 1 | attendre la fin du pipeline, ou passer par Actions → Load test |
 | Seuil dépassé | 1 | lire le résumé ; corriger l'appli ou ses ressources |
 | Job pas fini à temps | 1 | `kubectl -n staging describe job k6` |
 

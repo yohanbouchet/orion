@@ -393,9 +393,13 @@ est faite par **Ansible**, après l'étape 1 :
 ([détails](infra/ansible/README.md)).
 
 ```shell
-# 1. Cluster Minikube (4 cœurs, 7 Go), puis démarrage automatique :
-#    voir infra/systemd/README.md
-minikube start -p orion --driver=docker --cpus=4 --memory=7g \
+# 1. Cluster Minikube (4 cœurs, 10 Gio), puis démarrage automatique :
+#    voir infra/systemd/README.md. 10 Gio depuis le 06/11 : à 7, le nœud
+#    saturait quand la CI et un test de charge coïncidaient (rapport de
+#    performance) ; Minikube ne redimensionne pas un cluster existant :
+#    agrandi à chaud avec « docker update --memory 10g --memory-swap 12g
+#    orion » + "Memory": 10240 dans ~/.minikube/profiles/orion/config.json
+minikube start -p orion --driver=docker --cpus=4 --memory=10g \
   --kubernetes-version=v1.37.0
 
 # 2. Contrôleur des runners (ARC), version figée
