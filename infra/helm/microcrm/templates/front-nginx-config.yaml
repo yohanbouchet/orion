@@ -2,9 +2,11 @@
 Fichier  : infra/helm/microcrm/templates/front-nginx-config.yaml
 Rôle     : relais /api du front vers le back, ajouté à la configuration
            nginx de l'image (include /etc/nginx/extra/*.conf de
-           front/nginx.conf) : c'est le chart qui connaît le nom du back
+           front/nginx.conf) : c'est le chart qui connaît le nom du back ;
+           réserve de connexions réutilisées vers le back (upstream.conf)
 Utilise  : _helpers.tpl
-Utilisé par : templates/front.yaml (volume en lecture seule) ; ticket #64
+Utilisé par : templates/front.yaml (volumes en lecture seule) ; tickets
+              #64 et #97
 */}}
 {{- $ctx := dict "root" $ "component" "front" }}
 {{- $name := include "microcrm.name" $ctx }}
@@ -16,11 +18,29 @@ metadata:
   labels:
     {{- include "microcrm.labels" $ctx | nindent 4 }}
 data:
+  # Monté dans /etc/nginx/conf.d/ (niveau http) : un bloc upstream est
+  # refusé dans api.conf, qui est inclus dans le bloc server.
+  # Connexions vers le back gardées ouvertes et réutilisées (#97) : sans
+  # elles, une connexion TCP par requête, et 8,6 % de SYN renvoyés (1 s
+  # d'attente chacun) au test de point de rupture du 06/11
+  upstream.conf: |
+    upstream back {
+        server {{ $back }}:8080;
+        # Connexions inactives gardées en réserve, par processus nginx
+        keepalive 16;
+        # Fermées par nginx avant que le back ne les ferme (Tomcat : 20 s
+        # ou plus) : jamais de requête envoyée sur une connexion fermée
+        keepalive_timeout 15s;
+    }
   # Inclus par front/nginx.conf (include /etc/nginx/extra/*.conf) :
   # /api/persons → back /persons (la barre finale retire le préfixe /api)
   api.conf: |
     location /api/ {
-        proxy_pass http://{{ $back }}:8080/;
+        proxy_pass http://back/;
+        # HTTP/1.1 et en-tête Connection vide : sinon nginx demande au
+        # back de fermer la connexion après chaque réponse (doc nginx)
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

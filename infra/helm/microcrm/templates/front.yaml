@@ -1,7 +1,8 @@
 {{- /*
 Fichier  : infra/helm/microcrm/templates/front.yaml
 Rôle     : front Angular servi par nginx : adresse fixe (Service) et
-           Deployment, qui monte le relais /api (front-nginx-config.yaml)
+           Deployment, qui monte le relais /api et la réserve de
+           connexions vers le back (front-nginx-config.yaml)
 Utilise  : values.yaml (front.*) ; image GHCR orion-front ;
            front-nginx-config.yaml ; _helpers.tpl
 Utilisé par : les utilisateurs (kubectl port-forward), ZAP ; ticket #64
@@ -81,6 +82,12 @@ spec:
             - name: nginx-extra
               mountPath: /etc/nginx/extra
               readOnly: true
+            # Réserve de connexions vers le back (bloc upstream), au niveau
+            # http : un seul fichier ajouté à conf.d/, default.conf reste
+            - name: nginx-upstream
+              mountPath: /etc/nginx/conf.d/upstream.conf
+              subPath: upstream.conf
+              readOnly: true
             # Seul dossier inscriptible : pid et fichiers temporaires de nginx
             - name: tmp
               mountPath: /tmp
@@ -88,6 +95,17 @@ spec:
         - name: nginx-extra
           configMap:
             name: {{ $name }}-nginx
+            # Seulement le relais : upstream.conf, inclus dans le bloc
+            # server, ferait échouer le démarrage de nginx
+            items:
+              - key: api.conf
+                path: api.conf
+        - name: nginx-upstream
+          configMap:
+            name: {{ $name }}-nginx
+            items:
+              - key: upstream.conf
+                path: upstream.conf
         - name: tmp
           emptyDir: {}
 {{- end }}
