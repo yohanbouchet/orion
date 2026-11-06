@@ -1,8 +1,15 @@
 # Fichier  : infra/helm/microcrm/values-staging.yaml
 # Rôle     : différences de l'environnement staging (recette, tests ZAP
-#            et k6) par rapport à values.yaml : proche de la prod, une
-#            réplique
+#            et k6) par rapport à values.yaml : proche de la prod, back
+#            de 1 à 4 répliques (HPA)
 # Utilisé par : scripts/deploy.sh staging ; tickets #64 et #92
+back:
+  # Mise à l'échelle automatique comme en prod (#92), mais à partir d'une
+  # seule réplique : mesure « après » comparable à la mesure « avant »
+  # (1 réplique), et le poste garde sa mémoire au repos
+  autoscaling:
+    enabled: true
+    minReplicas: 1
 postgres:
   storage: 2Gi
 networkPolicy:

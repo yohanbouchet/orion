@@ -300,7 +300,7 @@ publish ──▶ deploy-dev ──▶ deploy-staging ──▶ zap ────
 | Environnement (GitHub / namespace) | Branche | Type de déploiement | Accès | Particularités |
 |---|---|---|---|---|
 | `dev` / `dev` | `main` | automatique, à chaque fusion (image `sha-xxxxxxx`) | `kubectl -n dev port-forward svc/microcrm-front 8080:8080` | 1 réplique par composant ; réglages par défaut du chart |
-| `staging` / `staging` | `main` | automatique, après la réussite de `dev` (même image) | idem, `-n staging` | 1 réplique par composant ; cible du test d'intrusion ZAP : seul le pod ZAP peut joindre le front |
+| `staging` / `staging` | `main` | automatique, après la réussite de `dev` (même image) | idem, `-n staging` | back de 1 à 4 répliques (autoscaling HPA, comme la prod mais à partir d'une), autres composants à 1 ; cible des tests ZAP et k6 : seuls ces pods peuvent joindre le front |
 | `production` / `prod` | `main` | à chaque version `vX.Y.Z`, **après approbation** | idem, `-n prod` | 2 répliques du back au minimum, autoscaling (HPA), mise à jour progressive sans coupure |
 
 Chaque environnement GitHub garde le secret `KUBE_TOKEN`, jeton du
