@@ -154,11 +154,12 @@ désinstallation attend sans fin (vu le 04/11) :
 kubectl delete vlagent vm -n monitoring-collector
 ```
 
-Tester l'envoi d'un e-mail (alerte de test, résolue après 5 min ;
-testé le 05/11 : e-mails « FIRING » puis « RESOLVED » reçus ; le
-07/11 : « FIRING » reçu). Le tunnel met quelques secondes à s'ouvrir : sans l'attente,
-le `curl` part trop tôt et l'alerte est perdue sans message (vu le
-07/11) ; `-sS` affiche les erreurs, `HTTP 200` confirme la réception :
+Tester l'envoi d'un e-mail (alerte de test, résolue après 5 min ; testé
+le 05/11 et le 07/11 : e-mails « FIRING » puis « RESOLVED » reçus, 6 min
+d'écart le 07/11). Le tunnel met quelques secondes à s'ouvrir : sans
+l'attente, le `curl` part trop tôt et l'alerte est perdue sans message
+(vu le 07/11) ; `-sS` affiche les erreurs, `HTTP 200` confirme la
+réception :
 
 ```shell
 kubectl -n monitoring port-forward svc/vmalertmanager-vm 9093:9093 &
