@@ -125,8 +125,11 @@ Un sélecteur d'environnement (`prod`, `staging`, `dev`) en haut de
 chaque tableau.
 
 Un panneau sans donnée affiche ce que cela veut dire (`no traffic`,
-`no firing alert`, `no error logged`) : « No data » reste réservé aux
-cas anormaux (collecte en panne, requête fausse).
+`no firing alert`) : « No data » reste réservé aux cas anormaux
+(collecte en panne, requête fausse). Seule exception, **Error logs** :
+un panneau de journaux ne sait pas afficher de message personnalisé,
+donc « No data » y signifie « aucune erreur sur la période » (vérifié
+en prod le 07/11/2026 : 0 ligne, même sans tenir compte de la casse).
 
 ## Utilisation
 
