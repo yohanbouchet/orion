@@ -86,7 +86,8 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "s",
+          "noValue": "no traffic"
         },
         "overrides": []
       },
@@ -176,7 +177,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"$env\"}",
+          "expr": "max by (horizontalpodautoscaler) (kube_horizontalpodautoscaler_status_current_replicas{namespace=\"$env\"})",
           "legendFormat": "current"
         },
         {
@@ -185,7 +186,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"$env\"}",
+          "expr": "max by (horizontalpodautoscaler) (kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"$env\"})",
           "legendFormat": "desired"
         }
       ],
