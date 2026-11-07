@@ -177,7 +177,7 @@
     {
       "id": 5,
       "title": "Error logs",
-      "description": "Log lines mentioning an error, exception or refusal in the selected environment (any case, also inside words such as ConversionFailedException).",
+      "description": "Log lines mentioning an error, exception or refusal in the selected environment (any case, also inside words such as ConversionFailedException). No data here means no error in the period: logs panels cannot show a custom empty message.",
       "type": "logs",
       "gridPos": {
         "x": 0,
@@ -197,9 +197,7 @@
         }
       ],
       "fieldConfig": {
-        "defaults": {
-          "noValue": "no error logged"
-        },
+        "defaults": {},
         "overrides": []
       },
       "options": {
