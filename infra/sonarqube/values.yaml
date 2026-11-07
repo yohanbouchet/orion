@@ -39,6 +39,25 @@ jdbcOverwrite:
 monitoringPasscodeSecretName: "sonarqube-monitoring"
 monitoringPasscodeSecretKey: "passcode"
 
+# Mémoire maximale (-Xmx) des 3 programmes Java de SonarQube, figée ici :
+# par défaut (1 Gio, 1,5 Gio, 0,5 Gio + 0,25 Gio de mémoire directe),
+# leur total dépasse la limite de 3 Gio ; ils grossissent à chaque
+# analyse jusqu'à l'arrêt du conteneur (OOMKilled le 07/11, ticket #109).
+# Total estimé : 2,7 Gio au plus. Variables prévues par le chart.
+env:
+  # Interface web et API
+  - name: SONAR_WEB_JAVAOPTS
+    value: "-Xmx512m -Xms128m -XX:+HeapDumpOnOutOfMemoryError"
+  # Traitement des analyses (Compute Engine)
+  - name: SONAR_CE_JAVAOPTS
+    value: "-Xmx512m -Xms128m -XX:+HeapDumpOnOutOfMemoryError"
+  # Moteur de recherche (Elasticsearch) : défaut de SonarQube, écrit pour
+  # qu'une nouvelle version ne puisse pas l'augmenter sans qu'on le voie
+  - name: SONAR_SEARCH_JAVAOPTS
+    value: >-
+      -Xmx512m -Xms512m -XX:MaxDirectMemorySize=256m
+      -XX:+HeapDumpOnOutOfMemoryError
+
 # Mesuré : environ 2 Gio en fonctionnement (29/10/2026) ; le défaut du
 # chart (4 Go réservés, 10 Go maximum) dépasse les 7 Go de Minikube
 resources:

@@ -735,7 +735,7 @@ sont calculés chaque semaine.
 
 | Incident | Détection | Réponse |
 | --- | --- | --- |
-| CI en échec sur `main` | ticket automatique + e-mail (`notify.py`) | correction sur une branche ; le ticket se ferme au retour au vert |
+| CI en échec sur `main` | ticket automatique + e-mail (`notify.py`) | correction sur une branche ; le ticket se ferme au retour au vert (cas réel : [rapport de performance, section 7.4](04-rapport-performance.md#74-0711--sonarqube-arrêté-par-manque-de-mémoire-incident-de-la-ci)) |
 | Production en panne ou dégradée | alertes (section 7.7) | premiers gestes du [README de la supervision](../infra/monitoring/README.md#alertes) ; retour arrière (section 7.4) ; ticket « Incident » |
 | Attaque probable (rafale de requêtes refusées) | alerte `MicrocrmClientErrorSpike` | analyser les journaux, garder les preuves, bloquer la source |
 | Secret exposé | gitleaks, protection de GitHub, relecture | révoquer et remplacer immédiatement, vérifier son usage |

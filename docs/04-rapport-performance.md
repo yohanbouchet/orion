@@ -466,6 +466,34 @@ dans les indicateurs DORA.
 
 ![Orion - Availability, prod, 07/11 14:00-14:08 : les pods prêts restent affichés à 2, le creux de 11 s n'est pas visible ; aucune alerte en cours](rapport-performance/grafana-exercice-panne-disponibilite.png)
 
+### 7.4 07/11 : SonarQube arrêté par manque de mémoire (incident de la CI)
+
+Incident de l'outillage, **pas de la production** : il n'entre pas dans
+les indicateurs DORA.
+
+- **Symptôme** : à 21:19, la CI de `main` a échoué sur le contrôle
+  SonarQube (connexion refusée pendant l'attente du Quality Gate). Le
+  ticket #109 a été ouvert automatiquement et l'équipe prévenue par
+  e-mail, comme prévu.
+- **Cause** (événements Kubernetes, mémoire du conteneur dans
+  VictoriaMetrics) : Kubernetes a arrêté SonarQube, qui dépassait sa
+  limite de 3 Gio (*OOMKilled*, pic à 3 071 Mio). Sa mémoire montait à
+  chaque analyse sans redescendre : 1 646 Mio le 06/11 à 11 h, puis
+  2 709 Mio le 07/11 à 20 h, après 37 h sans redémarrage. Par défaut, les
+  3 programmes Java de SonarQube 26.10 peuvent occuper ensemble 3,25 Gio
+  (1 Gio, 1,5 Gio, 0,75 Gio), soit plus que la limite.
+- **Rétablissement** : Kubernetes a redémarré SonarQube seul ; la CI de
+  `main` est repassée au vert à la fusion suivante, qui a fermé #109
+  automatiquement : **18 min** d'interruption.
+- **Correction** : mémoire maximale de chaque programme Java fixée à
+  512 Mio, soit 2,7 Gio au plus pour l'ensemble. Vérifiée après le
+  redéploiement : 1 278 Mio au démarrage. Le comportement sur plusieurs
+  jours d'analyses reste à confirmer.
+- **Enseignement** : pour une application Java, la limite mémoire de
+  Kubernetes ne suffit pas. Il faut aussi plafonner la mémoire de chaque
+  programme, sinon elle grossit jusqu'à la limite et le conteneur est
+  arrêté. Aucune alerte n'a signalé cette hausse pendant 37 h.
+
 ## 8. Gains obtenus et recommandations d'amélioration continue
 
 ### 8.1 Gains obtenus
@@ -576,3 +604,4 @@ passage dans le cloud, la séparation de la CI et de l'application.
 | Chaîne d'alerte | alerte de test envoyée à Alertmanager, e-mails reçus | 07/11/2026 |
 | Alertes de sécurité | `vmalert -dryRun` et `vmalert-tool unittest` 1.155.0 ; conditions rejouées sur VictoriaMetrics depuis le 05/11 ; test annoncé en prod | 07/11/2026 |
 | Exercice de panne | sonde (1 requête par seconde, codes HTTP horodatés), `kubectl get pods -w`, journaux du pod dans VictoriaLogs | 07/11/2026 |
+| Incident SonarQube | état et événements du pod (`kubectl`), journaux du conteneur arrêté, mémoire du conteneur dans VictoriaMetrics, réglages Java par défaut lus dans l'image 26.10 | 07/11/2026 |
