@@ -5,7 +5,7 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataire : Maria, CTO)           |
 | Auteur  | Yohan Bouchet                               |
-| Version | 1.1 (04/11/2026 : supervision, voir 2.3.7)  |
+| Version | 1.2 (07/11/2026 : renvois vers le choix révisé de la supervision, 2.3.7) |
 | Date    | 29/10/2026                                  |
 
 ## 1. Introduction
@@ -71,7 +71,7 @@ outils de travail sont ceux décrits dans la méthodologie de l'audit (3.2).
 | Scan des images | Trivy | Scanner de failles | Images, dépendances, configuration (IaC), secrets, SBOM | Bloquer une image vulnérable avant sa publication | v0.76.1 (21/10/2026), Apache-2.0 |
 | Registre d'images | GitHub Container Registry (GHCR) ou Harbor | Registre d'images OCI | Stockage versionné des images, droits d'accès | Livrer des images traçables aux Ops | GHCR retenu (29/10/2026) ; Harbor en évolution |
 | Orchestration | Kubernetes (Minikube) | Orchestrateur de conteneurs | Redémarrage automatique, sondes de santé, mise à jour progressive et retour arrière | Déployer MicroCRM sans intervention manuelle | 1.37, supporté jusqu'au 28/10/2027 |
-| Supervision | ELK (Elasticsearch, Logstash, Kibana) | Centralisation des journaux et tableaux de bord | Recherche dans les journaux, tableaux de bord, alertes | Suivre la disponibilité, les erreurs et les indicateurs DORA | Elastic 8.19 supporté jusqu'au 15/07/2027 ; 9.5 actuelle |
+| Supervision | ELK (Elasticsearch, Logstash, Kibana) | Centralisation des journaux et tableaux de bord | Recherche dans les journaux, tableaux de bord, alertes | Suivre la disponibilité, les erreurs et les indicateurs DORA | Elastic 8.19 supporté jusqu'au 15/07/2027 ; 9.5 actuelle ; **remplacé le 03/11 par VictoriaMetrics, VictoriaLogs et Grafana (2.3.7)** |
 | Base de données | PostgreSQL | Base relationnelle | Persistance, transactions, sauvegardes | Conserver les données de MicroCRM | 18, supportée jusqu'au 14/11/2030 |
 
 ### 2.3 Matrices comparatives
@@ -508,13 +508,15 @@ support publiées sur **endoflife.date** (maintenance).
 
 #### R6. Rendre l'exploitation observable
 
-- **Description** : journaux structurés, centralisés dans ELK ; tableaux de
-  bord et alertes sur la disponibilité, les performances et la sécurité ;
-  indicateurs DORA (fréquence de déploiement, délai de mise en production,
-  taux d'échec, temps de rétablissement).
+- **Description** : journaux structurés, centralisés dans ELK (remplacé le
+  03/11 par VictoriaLogs, avec VictoriaMetrics et Grafana : 2.3.7) ;
+  tableaux de bord et alertes sur la disponibilité, les performances et la
+  sécurité ; indicateurs DORA (fréquence de déploiement, délai de mise en
+  production, taux d'échec, temps de rétablissement).
 - **Raisonnement** : aucune supervision ni alerte aujourd'hui (3.3.6).
 - **Implémentation** : phase 6 ; ELK placé hors du cluster supervisé, pour
   rester disponible en cas d'incident sur celui-ci (répartition à confirmer).
+  Réalisé autrement : pile installée dans le cluster par Terraform (2.3.7).
 - **Impacts** : incidents détectés avant les utilisateurs ; progrès de la
   démarche DevOps mesurés.
 
@@ -543,11 +545,12 @@ demandent elles-mêmes l'automatisation.
 
 Les technologies retenues sont gratuites, maintenues et adaptées à ces
 compétences : GitHub Actions (runners hébergés et runner local non
-privilégié), SonarQube, Trivy,
-Kubernetes, PostgreSQL et ELK. Les 7 recommandations installent d'abord des
-**contrôles automatiques** (R1 à R3), puis le **déploiement automatisé**
-(R5) et la **supervision** (R6), en s'appuyant sur des référentiels reconnus
-(OWASP, Pod Security Standards, endoflife.date).
+privilégié), SonarQube, Trivy, Kubernetes, PostgreSQL et ELK (remplacé le
+03/11 par VictoriaMetrics, VictoriaLogs et Grafana, voir 2.3.7). Les 7
+recommandations installent d'abord des **contrôles automatiques** (R1 à R3),
+puis le **déploiement automatisé** (R5) et la **supervision** (R6), en
+s'appuyant sur des référentiels reconnus (OWASP, Pod Security Standards,
+endoflife.date).
 
 ### 5.2 Prochaines étapes
 
@@ -556,7 +559,7 @@ Kubernetes, PostgreSQL et ELK. Les 7 recommandations installent d'abord des
 | 1. Normalisation | Règles communes (code, branches, revue, tests, sécurité) et plan de mise en œuvre de la CI | R7 |
 | 2. Intégration continue | Pipeline GitHub Actions avec contrôles bloquants et images publiées | R1, R2, R3 |
 | 3. Déploiement continu | Infrastructure en code, déploiement Kubernetes, base persistante, sauvegardes | R5 |
-| 4. Supervision | ELK, alertes, indicateurs DORA | R6 |
+| 4. Supervision | ELK (remplacé le 03/11 par VictoriaMetrics, VictoriaLogs et Grafana), alertes, indicateurs DORA | R6 |
 | 5. Bilan | Rapport de performance : comparaison avec les mesures de départ | — |
 
 La montée de version du socle (R4) est à planifier avec l'équipe Dev, en
