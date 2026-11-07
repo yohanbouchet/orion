@@ -272,7 +272,7 @@ Règles :
   analyse de la CI (PR #19, 30/10/2026) : **37,4 %** de couverture (lignes
   41,1 %, branches 13,8 %), contre 0 % affiché avant (non mesurée) ;
 - le détail (cas testés, tests de charge et de sécurité) figure dans le plan
-  de tests.
+  de tests ([documentation CI/CD, section 4](03-documentation-ci-cd.md#4-stratégie-de-tests-automatisés)).
 
 ### 2.7 Sécurité
 
@@ -333,7 +333,8 @@ Règles :
   `main` protégée.
 - **Référentiels** : OWASP Top 10:2025 (application) et OWASP Top 10 CI/CD
   Security Risks (pipeline). Le traitement des failles (délais selon la
-  gravité) est détaillé dans le plan de sécurité.
+  gravité) est détaillé dans le plan de sécurité
+  ([documentation CI/CD, section 6.4](03-documentation-ci-cd.md#64-processus-de-traitement-des-vulnérabilités)).
 
 ### 2.8 Documentation
 
