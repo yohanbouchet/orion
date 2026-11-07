@@ -3,8 +3,8 @@
 #            vmagent (API MicroCRM, machine hôte), nos alertes, et les
 #            pare-feu réseau des deux namespaces de la supervision
 # Utilise  : rien (2e fichier de réglages du même chart)
-# Utilisé par : infra/terraform/monitoring.tf (helm_release) ; tickets #83
-#            et #92 (mesures des tests de charge k6)
+# Utilisé par : infra/terraform/monitoring.tf (helm_release) ; tickets #83,
+#            #92 (mesures des tests de charge k6) et #106 (alertes de sécurité)
 # Note     : le chart passe ce contenu dans son moteur de modèles ;
 #            aucune accolade double ici (annotations sans variables)
 
@@ -93,7 +93,8 @@ extraObjects:
             # sondes (/actuator) exclues en haut ET en bas : sinon leurs
             # appels, toutes les 5 à 20 s, diluent le taux ;
             # increase (et non rate) : Spring Boot crée le compteur d'un
-            # code à sa 1re erreur, rate ne verrait pas ces 1res erreurs
+            # code à sa 1re erreur, que rate ne verrait pas ; increase la
+            # compte si elle est petite (rafale : increase_pure, plus bas)
             - alert: MicrocrmHighErrorRate
               expr: >-
                 sum(increase(http_server_requests_seconds_count{
@@ -151,6 +152,38 @@ extraObjects:
               annotations:
                 summary: No successful prod backup for more than 26 hours.
                 runbook: infra/monitoring/README.md#backuptooold
+
+        - name: orion.security
+          rules:
+            # Plus de 50 réponses 4xx de l'API de la prod en 5 min (5 au
+            # plus depuis le 05/11) : balayage ou tentative d'intrusion
+            # probable ; sondes exclues ; pas de délai : une attaque est brève
+            # increase_pure : un compteur créé pendant la rafale compte depuis
+            # 0 (increase ignore une 1re valeur trop grande : test du 07/11)
+            - alert: MicrocrmClientErrorSpike
+              expr: >-
+                sum(increase_pure(http_server_requests_seconds_count{
+                namespace="prod", status=~"4..", uri!~"/actuator.*"}[5m]))
+                > 50
+              labels:
+                severity: warning
+              annotations:
+                summary: Over 50 rejected API requests (4xx) in 5 min in prod.
+                runbook: infra/monitoring/README.md#microcrmclienterrorspike
+            # Aucune ligne de journal reçue depuis 15 min (10 min sans
+            # ligne, constaté 5 min) : collecteur ou VictoriaLogs en panne,
+            # une intrusion ne laisserait plus de trace ; « or vector(0) » :
+            # alerte aussi si la mesure disparaît (VictoriaLogs arrêté)
+            - alert: LogIngestionStopped
+              expr: >-
+                (sum(increase(vl_rows_ingested_total{job="vlsingle-vm"}[10m]))
+                or vector(0)) == 0
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: VictoriaLogs has received no log line for 15 minutes.
+                runbook: infra/monitoring/README.md#logingestionstopped
 
   # --- 3. Pare-feu réseau ------------------------------------------------
   # monitoring : n'entre que ce qui vient du même namespace, le

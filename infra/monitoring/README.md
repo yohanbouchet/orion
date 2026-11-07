@@ -68,24 +68,42 @@ nœud entier utilise alors 5,7 Gio sur 15 et 0,8 cœur sur 8.
 Alertmanager, regroupées par alerte et par namespace, rappelées toutes
 les 4 h tant qu'elles durent.
 
-| Alerte | Condition | Gravité |
-|---|---|---|
-| <a id="microcrmproddown"></a>`MicrocrmProdDown` | aucun pod prêt pour le back ou le front de la prod pendant 2 min | critique |
-| <a id="microcrmhigherrorrate"></a>`MicrocrmHighErrorRate` | plus de 5 % de réponses 5xx en prod pendant 5 min | critique |
-| <a id="microcrmslowresponses"></a>`MicrocrmSlowResponses` | p95 au-dessus de 500 ms pendant 10 min (sous charge k6, le 03/11 : p95 = 401 ms) | avertissement |
-| <a id="hostdiskalmostfull"></a>`HostDiskAlmostFull` | disque de la machine rempli à plus de 85 % | avertissement |
-| <a id="backuptooold"></a>`BackupTooOld` | dernière sauvegarde réussie de la prod il y a plus de 26 h, ou jamais | critique |
-| <a id="podrestartloop"></a>`PodRestartLoop` | un conteneur redémarre plus de 3 fois en 30 min | avertissement |
-| `Watchdog` | toujours active : prouve que la chaîne d'alerte fonctionne ; jamais envoyée | — |
+Rangées par groupe dans [`extras.yaml`](extras.yaml) (disponibilité,
+performance, machine, sécurité). Les deux alertes de sécurité (ticket
+#106) répondent à la catégorie A09 de l'OWASP Top 10 2025, « Security
+Logging and Alerting Failures » : détecter une attaque, et savoir quand
+on ne peut plus la détecter.
 
-**Compter des événements : deux fonctions, selon la source** (testé le
-05/11 avec 5 réponses 404 en prod) :
+| Alerte | Domaine | Condition | Gravité |
+|---|---|---|---|
+| <a id="microcrmproddown"></a>`MicrocrmProdDown` | disponibilité | aucun pod prêt pour le back ou le front de la prod pendant 2 min | critique |
+| <a id="podrestartloop"></a>`PodRestartLoop` | disponibilité | un conteneur redémarre plus de 3 fois en 30 min | avertissement |
+| <a id="microcrmhigherrorrate"></a>`MicrocrmHighErrorRate` | performance | plus de 5 % de réponses 5xx en prod pendant 5 min | critique |
+| <a id="microcrmslowresponses"></a>`MicrocrmSlowResponses` | performance | p95 au-dessus de 500 ms pendant 10 min (sous charge k6, le 03/11 : p95 = 401 ms) | avertissement |
+| <a id="hostdiskalmostfull"></a>`HostDiskAlmostFull` | machine | disque de la machine rempli à plus de 85 % | avertissement |
+| <a id="backuptooold"></a>`BackupTooOld` | machine | dernière sauvegarde réussie de la prod il y a plus de 26 h, ou jamais | critique |
+| <a id="microcrmclienterrorspike"></a>`MicrocrmClientErrorSpike` | sécurité | plus de 50 réponses 4xx de l'API de la prod en 5 min (5 au plus vues depuis le 05/11) : balayage ou tentative d'intrusion probable | avertissement |
+| <a id="logingestionstopped"></a>`LogIngestionStopped` | sécurité | aucune ligne de journal reçue par VictoriaLogs depuis 15 min (10 min sans ligne, constaté pendant 5 min), ou mesure disparue : une intrusion ne laisserait plus de trace | critique |
+| `Watchdog` | contrôle | toujours active : prouve que la chaîne d'alerte fonctionne ; jamais envoyée | — |
 
-- compteurs de **Spring Boot** (erreurs de l'API) : `increase`. Le
-  compteur d'un code (404, 500…) n'existe qu'à partir de sa 1re
-  réponse, déjà à 1 ou plus ; `rate` et `increase_prometheus` ne
-  mesurent qu'une variation entre deux relevés et affichaient 0 ;
-  `increase` (VictoriaMetrics) compte aussi cette 1re valeur : 5 ;
+**Compter des événements : trois fonctions, selon le besoin** (testé le
+05/11 avec 5 réponses 404 en prod, puis le 07/11 avec 60) :
+
+- erreurs de l'API **qui durent** (`MicrocrmHighErrorRate`) :
+  `increase`. Spring Boot ne crée le compteur d'un code (404, 500…)
+  qu'à sa 1re réponse ; `rate` et `increase_prometheus` ne mesurent
+  qu'une variation entre deux relevés et affichaient 0 ; `increase`
+  compte aussi la 1re valeur relevée, **si elle est petite** (5 le
+  05/11). Une grande valeur est ignorée, mais des erreurs qui durent
+  font monter le compteur à chaque relevé ;
+- **rafale** d'erreurs (`MicrocrmClientErrorSpike`) : `increase_pure`,
+  qui part toujours de 0. Le 07/11, les 60 requêtes de test sont
+  tombées entre deux relevés : compteurs nés à 44 et 16, comptés 0 par
+  `increase` (alerte manquée), 60 par `increase_pure`. Revers : après
+  une coupure des relevés de plus de 5 min, un ancien compteur est
+  recompté en entier ; fausse alerte possible si l'API a déjà renvoyé
+  plus de 50 réponses 4xx depuis son démarrage (aucune sur l'historique
+  depuis le 05/11 ; compteurs remis à 0 à chaque déploiement) ;
 - compteurs de **kube-state-metrics** (redémarrages) :
   `increase_prometheus`. Ils sont publiés avec tout leur passé ; après
   une réinstallation, `increase` compterait d'anciens redémarrages.
@@ -112,6 +130,18 @@ erreur 500 du 05/11, jusque-là invisibles).
 - `BackupTooOld` : `tail ~/.local/state/microcrm-backup.log`, puis
   `scripts/backup.sh prod` à la main.
 - `PodRestartLoop` : `kubectl -n <ns> logs <pod> --previous`.
+- `MicrocrmClientErrorSpike` : tableau de bord *Security* (codes 4xx,
+  accès refusés, 4xx du front lues dans les journaux) ; dans les
+  journaux du front, repérer l'origine et les chemins essayés ; vérifier
+  qu'aucune requête inhabituelle n'a réussi (2xx) ; garder les journaux
+  (preuves, 7 jours) ; si l'attaque continue, bloquer la source (voir
+  les évolutions).
+- `LogIngestionStopped` : `kubectl -n monitoring-collector get pods` et
+  `kubectl -n monitoring get pods -l app.kubernetes.io/name=vlsingle` ;
+  journaux du collecteur
+  (`kubectl -n monitoring-collector logs ds/vlagent-vm --tail=50`) ;
+  disque de VictoriaLogs (5 Gi) plein ? pare-feu réseau
+  `vlsingle-from-collector` modifié ?
 
 ## Tableaux de bord
 
@@ -168,6 +198,40 @@ for i in $(seq 20); do curl -s -o /dev/null localhost:9093/-/ready && break; sle
 curl -sS -w 'HTTP %{http_code}\n' -X POST localhost:9093/api/v2/alerts \
   -H 'Content-Type: application/json' \
   -d '[{"labels":{"alertname":"TestEmail","severity":"warning"},"annotations":{"summary":"Test from the Ops host"}}]'
+# Fermer le tunnel
+kill %1
+```
+
+**Alertes de sécurité testées** le 07/11 (ticket #106) :
+
+- syntaxe : `vmalert -dryRun`, même version que le cluster (1.155.0) ;
+- tests unitaires sur des données simulées (`vmalert-tool unittest`,
+  outil officiel de VictoriaMetrics), 6 cas : rafale de 4xx en prod,
+  sur un compteur neuf ou ancien (alerte) ; même rafale en staging, 30
+  réponses en prod ou 100 sur les sondes (pas d'alerte) ; journaux
+  arrêtés, puis VictoriaLogs arrêté (alerte après 15 min).
+  Contre-épreuve : une règle cassée exprès fait échouer les tests ;
+- conditions rejouées sur l'historique depuis le 05/11 : aucune fausse
+  alerte. Sans le délai `for: 5m`, `LogIngestionStopped` aurait sonné à
+  tort 3 fois (30 s à l'installation et au démarrage du poste, 2 min
+  pendant un remplacement de VictoriaLogs) ;
+- 1er test réel en prod (18:30, 60 réponses 404) : **alerte manquée**.
+  Les tests unitaires simulaient un compteur né à 1, pas à 44 :
+  `increase` ignorait la rafale (voir « Compter des événements »).
+  Corrigé avec `increase_pure`, et le cas réel ajouté aux tests ;
+- 2e test réel, après correction (18:57, 60 réponses 404) : e-mail
+  « FIRING » reçu à 18:58, « RESOLVED » à 19:03 ; côté Alertmanager,
+  aucun envoi en échec.
+
+Test annoncé de `MicrocrmClientErrorSpike` : 60 requêtes vers une
+adresse qui n'existe pas (réponses 404, rien n'est écrit), à travers le
+front, comme un visiteur :
+
+```shell
+kubectl -n prod port-forward svc/microcrm-front 18080:8080 &
+# Attendre que le tunnel réponde (20 s au plus)
+for i in $(seq 20); do curl -s -o /dev/null localhost:18080/ && break; sleep 1; done
+for i in $(seq 60); do curl -s -o /dev/null -w '%{http_code}\n' localhost:18080/api/orion-security-test; done | sort | uniq -c
 # Fermer le tunnel
 kill %1
 ```
@@ -241,4 +305,8 @@ kill %1
 | Grafana sans disque : un tableau de bord modifié à la main disparaît au redémarrage | Voulu : les tableaux de bord sont du code (dossier `dashboards/`) |
 | Tableaux de bord de la communauté non installés | Les copier dans `dashboards/`, figés à une version |
 | Alertes par e-mail seulement | Messagerie d'équipe (Slack, Teams), astreinte |
+| `Watchdog` n'est envoyée nulle part : si toute la chaîne tombe (machine éteinte, Alertmanager arrêté), aucun e-mail ne le dit | Service externe qui prévient quand `Watchdog` n'arrive plus (*dead man's switch*, ex. Healthchecks.io, open source, BSD-3) |
+| Les alertes de sécurité **détectent** une attaque sans la **bloquer** | Limiter le débit par client (nginx `limit_req`) ; en cloud, pare-feu applicatif (WAF) devant l'application |
+| Règles d'alerte testées à la main (`vmalert-tool`, 07/11), pas à chaque PR | Tests unitaires des règles dans la CI |
+| `LogIngestionStopped` jamais déclenchée pour de vrai (il faudrait couper la collecte 15 min) | Exercice planifié sur un environnement de test |
 | Pas d'objectif de disponibilité chiffré | SLO (ex. 99,5 %) et alertes sur le budget d'erreur |

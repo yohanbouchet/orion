@@ -5,7 +5,7 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataire : Maria, CTO)           |
 | Auteur  | Yohan Bouchet                               |
-| Version | 1.2 (07/11/2026 : renvois vers le choix révisé de la supervision, 2.3.7) |
+| Version | 1.2 (07/11/2026 : renvois vers le choix révisé de la supervision, 2.3.7 ; consommation mesurée corrigée) |
 | Date    | 29/10/2026                                  |
 
 ## 1. Introduction
@@ -183,7 +183,7 @@ de l'audit : des journaux aujourd'hui en texte libre et non centralisés.
 > licence Apache 2.0, avec **Grafana** (AGPL v3) pour les tableaux de bord
 > et **Alertmanager** pour les alertes par e-mail. Raisons : open source,
 > très utilisés, conseillés par le mentor pour leur faible consommation
-> (mesurée : environ 0,8 Gio de mémoire pour toute la pile) ; les alertes
+> (mesurée : environ 1 Gio de mémoire pour toute la pile) ; les alertes
 > sont gratuites, sans limite de l'offre gratuite. La pile est installée
 > **dans le cluster** (namespaces dédiés), par Terraform, et non plus hors
 > du cluster avec Docker Compose (2.3.6 et R6) : un seul outil
