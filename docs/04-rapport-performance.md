@@ -23,7 +23,7 @@ après une approbation humaine, et se surveille elle-même.
 | Fréquence de livraison en production | non mesurable | **2,8 par semaine**, 0 % d'échec |
 | Délai entre une fusion et la production | non mesurable | **0,3 h** (médiane) |
 | Temps de réponse au test de rupture (p95) | 1,07 s (mesuré avant correction) | **6,5 ms**, 0 erreur |
-| Supervision | aucune | **3 tableaux de bord, 6 alertes** envoyées par e-mail |
+| Supervision | aucune | **3 tableaux de bord, 8 alertes** (dont 2 de sécurité) envoyées par e-mail |
 | Perte d'un serveur d'API en production (exercice du 07/11) | non testée | **0 erreur** pour l'utilisateur, remplacement prêt en 11 s |
 
 **Trois recommandations prioritaires** (détail en section 8) :
@@ -220,6 +220,35 @@ Le tableau de bord **Orion - Security** suit les réponses en erreur
 (4xx, 5xx), les accès refusés (401, 403) et les journaux d'erreurs ; les
 alertes sont décrites en section 6.1.
 
+**Deux alertes de sécurité** (07/11, ticket #106), au titre de la
+catégorie A09 de l'OWASP Top 10 2025, « Security Logging and Alerting
+Failures » :
+
+- `MicrocrmClientErrorSpike` : plus de 50 réponses refusées (4xx) par
+  l'API de la prod en 5 min, signe d'un balayage ou d'une tentative
+  d'intrusion ; depuis le 05/11, il n'y en a jamais eu plus de 5 ;
+- `LogIngestionStopped` : aucune ligne de journal reçue depuis 15 min ;
+  sans journaux, une intrusion ne laisserait plus de trace, et un
+  panneau « Error logs » vide ne voudrait plus dire « aucune erreur ».
+
+Elles ont été testées sur des données simulées (`vmalert-tool`, outil
+officiel de VictoriaMetrics) et rejouées sur l'historique depuis le
+05/11 : aucune fausse alerte. Un **test réel annoncé** en prod (60
+requêtes vers une adresse inexistante, rien d'écrit) a d'abord révélé
+un défaut : les requêtes, tombées entre deux relevés, n'étaient pas
+comptées (fonction `increase`). La formule a été corrigée
+(`increase_pure`) et ce cas ajouté aux tests. Au second essai : e-mail
+« FIRING » une minute après la rafale (18:58), « RESOLVED » 5 minutes
+plus tard (19:03). `LogIngestionStopped` n'a été testée que sur des
+données simulées : la déclencher pour de vrai demanderait de couper la
+collecte des journaux 15 minutes. **Limite** : ces alertes détectent
+une attaque sans la bloquer (limitation du débit ou pare-feu
+applicatif : évolution).
+
+![E-mail « FIRING » de l'alerte de sécurité MicrocrmClientErrorSpike (groupe orion.security, gravité warning) pendant le test du 07/11, adresse du destinataire masquée](rapport-performance/alerte-securite-email.png)
+
+![E-mail « RESOLVED » de la même alerte de sécurité, 5 minutes plus tard](rapport-performance/alerte-securite-email-resolue.png)
+
 **Défaut trouvé en préparant ce rapport (corrigé le 07/11, PR #100 et
 #101)** : le panneau des journaux d'erreurs cherchait des mots entiers en
 respectant la casse ; il ne trouvait ni `ERROR` (format de Spring) ni
@@ -262,6 +291,8 @@ Choix justifié dans le document 1 (section 2.3.7).
 | PodRestartLoop | un conteneur redémarre plus de 3 fois en 30 min | stabilité |
 | HostDiskAlmostFull | disque de la machine rempli à plus de 85 % | capacité |
 | BackupTooOld | dernière sauvegarde de la prod il y a plus de 26 h | données |
+| MicrocrmClientErrorSpike | plus de 50 réponses 4xx de l'API en prod en 5 min | sécurité |
+| LogIngestionStopped | aucune ligne de journal reçue depuis 15 min | sécurité |
 
 Chaque alerte renvoie vers une fiche de premiers gestes
 (`infra/monitoring/README.md`).
@@ -454,7 +485,7 @@ dans les indicateurs DORA.
 | Disponibilité | Perte d'un serveur d'API en prod | jamais testée | **0 erreur**, remplacement prêt en 11 s | 7.3 |
 | Disponibilité | Sauvegarde de la base | aucune | quotidienne, restauration vérifiée chaque semaine | 3.3 |
 | Performance | p95 au point de rupture (1 réplique) | 1,07 s (06/11, avant correction) | **6,5 ms** | 6.3 |
-| Supervision | Tableaux de bord et alertes | aucun | **3 tableaux de bord, 6 alertes** par e-mail, chaîne vérifiée | 5.2, 6.1 |
+| Supervision | Tableaux de bord et alertes | aucun | **3 tableaux de bord, 8 alertes** (dont 2 de sécurité) par e-mail, chaîne vérifiée | 5.2, 6.1 |
 
 ### 8.2 Observations sur les déploiements et les releases
 
@@ -500,7 +531,7 @@ constat de ce rapport.
 | 8 | Faire suivre les images d'outils de la CI par Dependabot (fichier dédié) ; passer Trivy à 0.76.2 | mise à jour de sécurité de Trivy non proposée (8.2) | faible | Ops |
 | 9 | Garder 2 répliques minimum en prod ; pour les pics prévisibles, ajouter des pods à l'avance ; étudier une mise à l'échelle sur le nombre de requêtes (KEDA) | renfort arrivé après la fin du pic (6.3) | faible à moyen | Ops |
 | 10 | Annoter automatiquement les déploiements dans Grafana | relier une dégradation à une version d'un coup d'œil | faible | Ops |
-| 11 | Fixer un objectif de disponibilité (ex. 99,5 %) et alerter sur son budget d'erreur ; envoyer les alertes aussi vers la messagerie d'équipe | alertes par e-mail seulement, pas d'objectif chiffré | faible | Ops et direction |
+| 11 | Fixer un objectif de disponibilité (ex. 99,5 %) et alerter sur son budget d'erreur ; envoyer les alertes aussi vers la messagerie d'équipe ; faire surveiller l'alerte de contrôle `Watchdog` par un service externe | alertes par e-mail seulement, pas d'objectif chiffré ; personne n'est prévenu si la supervision elle-même s'arrête | faible | Ops et direction |
 | 12 | Déclarer chaque incident de prod avec le formulaire prévu, pour mesurer le temps de rétablissement | indicateur DORA non mesurable | faible | Dev et Ops |
 | 13 | Rejouer les tests de charge sur une machine dédiée, à chaque version majeure, avec le rapport HTML de k6 | point de rupture réel non atteint sur le poste | moyen | Ops |
 | 14 | Exclure les pods de test (ZAP, k6) de la recherche des journaux d'erreurs | lignes inoffensives mêlées aux vraies erreurs (5.2) | faible | Ops |
@@ -543,4 +574,5 @@ passage dans le cloud, la séparation de la CI et de l'application.
 | Charge | k6 2.3.0 dans staging ; métriques VictoriaMetrics ; compteurs TCP des pods | 06/11/2026 |
 | Tableaux de bord, recherche des journaux | requêtes rejouées sur VictoriaMetrics et VictoriaLogs | 07/11/2026 |
 | Chaîne d'alerte | alerte de test envoyée à Alertmanager, e-mails reçus | 07/11/2026 |
+| Alertes de sécurité | `vmalert -dryRun` et `vmalert-tool unittest` 1.155.0 ; conditions rejouées sur VictoriaMetrics depuis le 05/11 ; test annoncé en prod | 07/11/2026 |
 | Exercice de panne | sonde (1 requête par seconde, codes HTTP horodatés), `kubectl get pods -w`, journaux du pod dans VictoriaLogs | 07/11/2026 |

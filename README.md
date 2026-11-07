@@ -475,11 +475,13 @@ sauf Grafana en AGPL v3), installée par Terraform dans deux namespaces :
 `monitoring` (« restricted ») et `monitoring-collector` (collecteur de
 journaux seul, verrouillé). Elle lit les métriques de l'API (Spring Boot
 Actuator, port de gestion 8081), de Kubernetes et de la machine
-(node_exporter), et les journaux des conteneurs (gardés 7 jours). Six
-alertes sont envoyées par e-mail (prod arrêtée, erreurs 5xx, lenteur,
-disque, sauvegarde, redémarrages en boucle). Trois tableaux de bord sont
-disponibles : disponibilité, performance, sécurité. Consommation mesurée :
-≈ 0,8 Gio et 0,1 cœur. Détails, premiers gestes face à une alerte,
+(node_exporter), et les journaux des conteneurs (gardés 7 jours). Huit
+alertes sont envoyées par e-mail : disponibilité (prod arrêtée,
+redémarrages en boucle), performance (erreurs 5xx, lenteur), machine
+(disque, sauvegarde) et sécurité (rafale de requêtes refusées, journaux
+qui n'arrivent plus). Trois tableaux de bord sont disponibles :
+disponibilité, performance, sécurité. Consommation mesurée le 07/11 :
+≈ 1,1 Gio et 0,1 cœur. Détails, premiers gestes face à une alerte,
 sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.md).
 
 ## Sécurité
