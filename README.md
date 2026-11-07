@@ -59,7 +59,7 @@ Au 07/11/2026 :
 | Tests de charge k6 (6 profils) ; test de fumée k6 avant chaque mise en prod ; autoscaling (HPA) du back en `staging` et en `prod` | ✅ [`load-test.sh`](scripts/README.md#load-testsh) |
 | Indicateurs DORA, calculés chaque lundi et à la demande | ✅ [`dora.py`](scripts/README.md#dorapy) |
 | Rapport de performance (mesures avant/après, recommandations) | ✅ [`docs/04`](docs/04-rapport-performance.md) |
-| Documentation CI/CD complète (plans de tests et de sécurité, de déploiement, de release) | ⏳ à venir |
+| Documentation CI/CD complète (plans de tests et de sécurité, de conteneurs et de déploiement, de release, cible AWS) | ✅ [`docs/03`](docs/03-documentation-ci-cd.md) |
 
 ## Architecture
 
@@ -131,8 +131,8 @@ infra/
   arc/                    runner local de la CI (image durcie, réglages)
   systemd/                démarrage automatique de Minikube
 scripts/                  scripts d'automatisation et leurs tests
-docs/                     audit, normalisation et plan CI, mesures de départ,
-                          rapport de performance
+docs/                     audit, normalisation et plan CI, documentation
+                          CI/CD, mesures de départ, rapport de performance
 sonar-project.properties  réglages de l'analyse SonarQube
 .trivyignore              failles acceptées, justifiées et datées
 ```
@@ -526,7 +526,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 
 | Limite | Évolution | Détails |
 |---|---|---|
-| Tout tourne sur une seule machine (Minikube) | Cible cloud (schéma AWS, à venir) | — |
+| Tout tourne sur une seule machine (Minikube) | Cible cloud AWS : EKS sur 2 zones, RDS Multi-AZ, S3 | [documentation CI/CD, 5.2.1](docs/03-documentation-ci-cd.md#521-schéma-dinfrastructure-cloud) |
 | Sauvegarde quotidienne complète, non chiffrée fichier par fichier sur la machine (la copie hors site, elle, est chiffrée) | Restauration à un instant donné (WAL, CloudNativePG ou RDS), sauvegarde incrémentale | [scripts](scripts/README.md#backupsh) |
 | Poste Ops : SSH accepte encore les mots de passe ; un seul poste ; rôles Ansible testés par lint et idempotence, sans machine jetable | Clé SSH seule, inventaire multi-machines, Molecule | [Ansible](infra/ansible/README.md#limites-et-évolutions) |
 | Déploiement « poussé » par la CI : un jeton du cluster est rangé dans GitHub, une modification faite à la main dans le cluster n'est pas détectée | GitOps avec Argo CD : le cluster lit lui-même Git et corrige tout écart | [CI](#déploiement-continu-ci) |
@@ -562,6 +562,7 @@ Règles complètes : [normalisation](docs/02-normalisation-plan-ci.md#2-normes-e
 | [Normalisation et plan CI](docs/02-normalisation-plan-ci.md) | Règles communes, pipeline cible, étapes, risques |
 | [Mesures de départ](docs/mesures-avant/README.md) | Pipeline, qualité et sécurité de l'application d'origine |
 | [Scripts](scripts/README.md) | Chaque script : but, fonctionnement, paramètres, tests |
+| [Documentation CI/CD complète](docs/03-documentation-ci-cd.md) | Tests, architecture (actuelle et cible AWS), sécurité, releases, retour arrière, sauvegardes, supervision |
 | [Rapport de performance](docs/04-rapport-performance.md) | Mesures avant/après (DORA, tests, sécurité, charge), incidents, recommandations |
 | [Chart Helm](infra/helm/microcrm/README.md) | Déploiement Kubernetes, environnements, sécurité, limites |
 | [Terraform](infra/terraform/README.md) | Socle du cluster, comptes de déploiement, installation de la supervision |
