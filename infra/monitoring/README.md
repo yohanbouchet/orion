@@ -155,12 +155,20 @@ kubectl delete vlagent vm -n monitoring-collector
 ```
 
 Tester l'envoi d'un e-mail (alerte de test, résolue après 5 min ;
-testé le 05/11 : e-mails « FIRING » puis « RESOLVED » reçus) :
+testé le 05/11 : e-mails « FIRING » puis « RESOLVED » reçus ; le
+07/11 : « FIRING » reçu). Le tunnel met quelques secondes à s'ouvrir : sans l'attente,
+le `curl` part trop tôt et l'alerte est perdue sans message (vu le
+07/11) ; `-sS` affiche les erreurs, `HTTP 200` confirme la réception :
 
 ```shell
 kubectl -n monitoring port-forward svc/vmalertmanager-vm 9093:9093 &
-curl -s -X POST localhost:9093/api/v2/alerts -H 'Content-Type: application/json' \
+# Attendre que le tunnel réponde (20 s au plus)
+for i in $(seq 20); do curl -s -o /dev/null localhost:9093/-/ready && break; sleep 1; done
+curl -sS -w 'HTTP %{http_code}\n' -X POST localhost:9093/api/v2/alerts \
+  -H 'Content-Type: application/json' \
   -d '[{"labels":{"alertname":"TestEmail","severity":"warning"},"annotations":{"summary":"Test from the Ops host"}}]'
+# Fermer le tunnel
+kill %1
 ```
 
 ## Sécurité
