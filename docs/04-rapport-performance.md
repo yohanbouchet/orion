@@ -144,9 +144,13 @@ chaîne contrôle **3 fois plus de choses en 2,5 fois moins de temps**.
 | Quality Gate | « Passed » sans aucune condition | **3 conditions bloquantes** : nouveau code couvert à 80 %, 3 % de duplication au plus, 0 nouveau problème |
 | Problèmes | 37 | 30 |
 | Note de sécurité | C | **B** |
-| Note de fiabilité | D | **C** |
+| Note de fiabilité | D | D (1 problème grave, hérité) |
 | Note de maintenabilité | A | A |
 | Duplication | 2,5 % | 0,0 % |
+
+Notes lues dans l'interface de SonarQube (mode MQR, comme la photo
+avant). L'API donne aussi l'ancienne échelle, où la fiabilité vaut C :
+les deux échelles ne se comparent pas (vérifié le 07/11).
 
 **Lecture** : le code ajouté depuis le projet respecte les règles (le
 Quality Gate bloque sinon) ; les problèmes restants sont dans le code
@@ -155,16 +159,29 @@ beaucoup de cas (erreurs, données absentes) ne sont jamais testés.
 
 **Où est la dette restante** (vue par qualité de SonarQube, 07/11) :
 
-- **Fiabilité** : 29 problèmes, presque tous dans le front. En tête :
-  des promesses JavaScript dont l'erreur n'est pas traitée (12), des
-  champs de formulaire et des libellés mal reliés (7 et 6), ce qui nuit
-  aussi à l'**accessibilité**. À traiter avec la mise à jour d'Angular
-  (recommandation 1).
+- **Fiabilité** : 29 problèmes, tous dans le front.
+  - 1 seul de gravité haute, qui maintient la note D : un chargement de
+    données lancé dans un constructeur (`person-details`, règle S7059) ;
+  - **14 nuisent à l'accessibilité**, dont 8 rattachés au niveau A des
+    règles WCAG 2 (le minimum) : champs et libellés de formulaire mal
+    reliés (7 et 6) et un tableau sans en-têtes ; un lecteur d'écran ne
+    sait pas annoncer ces champs ;
+  - 12 promesses JavaScript dont l'erreur n'est pas traitée et 2
+    conversions de nombre à moderniser (`Number.parseInt`).
+
+  À traiter avec la mise à jour d'Angular (recommandation 1).
 - **Sécurité** : 1 problème, de gravité faible : la feuille de style
   Bulma est chargée depuis un site externe (CDN) sans contrôle
   d'intégrité (règle Web:S5725). Déjà relevé par le test d'intrusion ZAP
   du 03/11, il reste à corriger par l'équipe Dev (recommandation 6).
+  Aucun point sensible (*security hotspot*) à revoir : SonarQube 26.10
+  abandonne cette notion, et l'ancien point sensible est justement ce
+  problème Bulma (vérifié dans l'interface le 07/11).
 - **Maintenabilité** : 3 problèmes.
+- **Limite de l'analyse** : SonarQube signale qu'il ne reçoit pas les
+  bibliothèques du back (réglage `sonar.java.libraries` absent) ;
+  l'analyse du code Java est donc moins précise. Correction prévue dans
+  la CI.
 - Sur les 30 derniers jours, 13 problèmes ont été corrigés (3 de
   sécurité, 8 de fiabilité, 2 de maintenabilité). Une même règle peut
   compter dans deux qualités : ces totaux ne s'additionnent pas.
@@ -429,7 +446,7 @@ dans les indicateurs DORA.
 | Sécurité | Secrets dans le dépôt | non contrôlés | contrôlés à chaque PR, aucun trouvé | 5.1 |
 | Qualité | Couverture des tests | non mesurée | **39,7 %**, mesurée à chaque PR | 4.2 |
 | Qualité | Quality Gate | sans condition | **3 conditions bloquantes** | 4.2 |
-| Qualité | Notes SonarQube (sécurité, fiabilité) | C et D | **B et C** | 4.2 |
+| Qualité | Notes SonarQube (sécurité, fiabilité) | C et D | **B** et D (1 problème grave hérité) | 4.2 |
 | Livraison | Contrôles automatiques sur chaque PR | 4 tâches, rien de bloquant | **12 tâches** | 3.2 |
 | Livraison | Durée de ces contrôles | 4,67 min | **1,9 min** (médiane) | 3.2 |
 | Livraison | Déploiement en production | manuel, non tracé | **automatique après approbation** : 2,8 par semaine, 0 % d'échec, 0,3 h après la fusion | 3.1 |
