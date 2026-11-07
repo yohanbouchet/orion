@@ -304,11 +304,10 @@ Aucune donnée réelle n'est copiée dans un environnement de test.
   relaie `/api` vers l'API : une seule adresse pour le navigateur.
 - **Aujourd'hui** : tout tourne **en local**, sur le poste Ops Ubuntu,
   dans un cluster Kubernetes **Minikube**. GitHub héberge le code, la CI
-  et le registre d'images (GHCR). Raison, validée avec le mentor : l'offre
-  gratuite d'AWS (100 à 200 $ de crédits, 6 mois au plus, pour un
-  nouveau compte) ne suffit pas à faire tourner en continu un cluster
-  Kubernetes, SonarQube et la supervision ; la chaîne demande un cluster
-  de 4 cœurs et 10 Gio de mémoire.
+  et le registre d'images (GHCR). Raison exposée au mentor, qui a validé
+  ce choix : les ressources de l'offre gratuite d'AWS ne suffiraient pas
+  à faire tourner en continu un cluster Kubernetes, SonarQube et la
+  supervision, qui demandent ici 4 cœurs et 10 Gio de mémoire.
 - **IaC** : **Terraform** décrit le socle du cluster (namespaces, comptes
   de déploiement aux droits limités, supervision) ; **Helm** décrit
   l'application ; **Ansible** configure et durcit le poste Ops.
