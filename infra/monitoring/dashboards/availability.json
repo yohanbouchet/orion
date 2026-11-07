@@ -398,7 +398,9 @@
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "no firing alert"
+        },
         "overrides": []
       },
       "options": {},

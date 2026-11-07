@@ -90,6 +90,15 @@ les 4 h tant qu'elles durent.
   `increase_prometheus`. Ils sont publiés avec tout leur passé ; après
   une réinstallation, `increase` compterait d'anciens redémarrages.
 
+**Chercher dans les journaux** (corrigé le 07/11/2026) : dans
+VictoriaLogs, un mot cherché respecte la casse et doit être un mot
+entier ; `error` ne trouvait ni `ERROR` (niveau des journaux de Spring)
+ni `ConversionFailedException`. Le panneau *Error logs* cherche donc un
+motif insensible à la casse :
+`~"(?i)(error|exception|denied|forbidden|unauthorized)"` (en staging,
+190 → 236 lignes trouvées, dont 2 `ERROR` et les exceptions d'une
+erreur 500 du 05/11, jusque-là invisibles).
+
 **Premiers gestes** (lien `runbook` de chaque alerte) :
 
 - `MicrocrmProdDown` : `kubectl -n prod get pods`, puis
@@ -114,6 +123,10 @@ les 4 h tant qu'elles durent.
 
 Un sélecteur d'environnement (`prod`, `staging`, `dev`) en haut de
 chaque tableau.
+
+Un panneau sans donnée affiche ce que cela veut dire (`no traffic`,
+`no firing alert`, `no error logged`) : « No data » reste réservé aux
+cas anormaux (collecte en panne, requête fausse).
 
 ## Utilisation
 

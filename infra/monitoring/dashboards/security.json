@@ -177,7 +177,7 @@
     {
       "id": 5,
       "title": "Error logs",
-      "description": "Log lines mentioning an error, exception or refusal in the selected environment.",
+      "description": "Log lines mentioning an error, exception or refusal in the selected environment (any case, also inside words such as ConversionFailedException).",
       "type": "logs",
       "gridPos": {
         "x": 0,
@@ -192,12 +192,14 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "kubernetes.pod_namespace:$env AND (error OR exception OR denied OR forbidden OR unauthorized) | sort by (_time) desc | limit 200",
+          "expr": "kubernetes.pod_namespace:$env AND ~\"(?i)(error|exception|denied|forbidden|unauthorized)\" | sort by (_time) desc | limit 200",
           "queryType": "instant"
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "no error logged"
+        },
         "overrides": []
       },
       "options": {
