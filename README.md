@@ -40,7 +40,7 @@ DevOps » (OpenClassrooms, option B), à partir de
 
 ## État d'avancement
 
-Au 04/11/2026 :
+Au 07/11/2026 :
 
 | Étape | État |
 |---|---|
@@ -50,13 +50,16 @@ Au 04/11/2026 :
 | Scripts : dépendances, tests, notification, avec leurs tests | ✅ [`scripts/`](scripts/README.md) |
 | Chart Helm de l'application (testé dans `dev`) | ✅ [`infra/helm/microcrm/`](infra/helm/microcrm/README.md) |
 | Script de déploiement avec test de fumée et retour arrière | ✅ [`scripts/deploy.sh`](scripts/README.md#deploysh) |
-| Déploiement continu : `dev` puis `staging` à chaque fusion, `prod` sur une version après approbation | ✅ [`deploy.yml`](.github/workflows/deploy.yml) (1er passage en `prod` : à la prochaine version) |
+| Déploiement continu : `dev` puis `staging` à chaque fusion, `prod` sur une version après approbation | ✅ [`deploy.yml`](.github/workflows/deploy.yml) |
 | Test d'intrusion automatisé (ZAP) : passif à chaque déploiement de `staging` (bloque la prod), actif à la demande | ✅ [`zap.yml`](.github/workflows/zap.yml), [règles](infra/zap/rules.tsv) |
 | Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée au démarrage du poste et chaque jour, restauration vérifiée chaque semaine, copie hors site chiffrée |
 | Socle du cluster en Terraform (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) | ✅ [`infra/ansible/`](infra/ansible/README.md) |
 | Supervision : métriques, journaux, alertes par e-mail, 3 tableaux de bord (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) |
-| Indicateurs DORA, rapport de performance | ⏳ à venir |
+| Tests de charge k6 (6 profils) ; test de fumée k6 avant chaque mise en prod ; autoscaling (HPA) du back en `staging` et en `prod` | ✅ [`load-test.sh`](scripts/README.md#load-testsh) |
+| Indicateurs DORA, calculés chaque lundi et à la demande | ✅ [`dora.py`](scripts/README.md#dorapy) |
+| Rapport de performance (mesures avant/après, recommandations) | ✅ [`docs/04`](docs/04-rapport-performance.md) |
+| Documentation CI/CD complète (plans de tests et de sécurité, de déploiement, de release) | ⏳ à venir |
 
 ## Architecture
 
@@ -105,6 +108,9 @@ orchestre la CI et héberge le registre d'images.
   workflows/ci.yml        pipeline CI
   workflows/deploy.yml    déploiement d'un environnement (appelé par ci.yml)
   workflows/zap.yml       test d'intrusion de staging (ci.yml ou à la main)
+  workflows/load-test.yml test de charge k6 de staging (ci.yml ou à la main)
+  workflows/dora.yml      indicateurs DORA (chaque lundi ou à la main)
+  workflows/runner-smoke-test.yml  test du runner local (à la main)
   actions/kube-access/    accès au cluster des jobs du runner local
   dependabot.yml          mises à jour automatiques des dépendances
   release/                semantic-release (versions figées)
@@ -118,13 +124,15 @@ infra/
   monitoring/             supervision : réglages, alertes, tableaux de bord
   ansible/                configuration et durcissement du poste Ops
   zap/                    règles du test d'intrusion (bloquant ou non)
+  k6/                     scénario des tests de charge
   helm/microcrm/          chart Helm de l'application
   postgres/               image PostgreSQL durcie (sans gosu, sans root)
   sonarqube/              SonarQube dans le cluster
   arc/                    runner local de la CI (image durcie, réglages)
   systemd/                démarrage automatique de Minikube
 scripts/                  scripts d'automatisation et leurs tests
-docs/                     audit, normalisation et plan CI, mesures de départ
+docs/                     audit, normalisation et plan CI, mesures de départ,
+                          rapport de performance
 sonar-project.properties  réglages de l'analyse SonarQube
 .trivyignore              failles acceptées, justifiées et datées
 ```
@@ -152,7 +160,8 @@ main depuis l'onglet **Actions**.
 | `publish` | Publication des images sur GHCR (sur `main`) | Docker | GitHub |
 | `deploy-dev`, `deploy-staging` | Déploiement de l'image du commit (`sha-xxxxxxx`) dans `dev`, puis `staging` (sur `main`) | `deploy.yml`, `deploy.sh` | runner local |
 | `zap` | Test d'intrusion passif de `staging` ; une alerte réglée sur FAIL bloque la prod | `zap.yml`, `zap-scan.sh` (ZAP) | runner local |
-| `deploy-prod` | Déploiement de la version `vX.Y.Z` dans `prod`, après approbation (si une version vient d'être publiée et si ZAP n'a rien trouvé de bloquant) | `deploy.yml`, `deploy.sh` | runner local |
+| `load-test` | Test de fumée k6 de `staging` (1 utilisateur simulé, 30 s) : un seuil dépassé bloque la prod | `load-test.yml`, `load-test.sh` (k6) | runner local |
+| `deploy-prod` | Déploiement de la version `vX.Y.Z` dans `prod`, après approbation (si une version vient d'être publiée, si ZAP n'a rien trouvé de bloquant et si le test de fumée k6 a réussi) | `deploy.yml`, `deploy.sh` | runner local |
 | `notify` | Ticket et e-mail si la CI échoue sur `main` | `notify.py` | GitHub |
 
 **Règles** :
@@ -161,7 +170,10 @@ main depuis l'onglet **Actions**.
   et si elle est à jour avec `main` ; les échecs de Trivy portent sur les
   failles **hautes et critiques** ;
 - les actions sont figées par empreinte de commit et les images des
-  outils par empreinte (digest) ; Dependabot propose leurs mises à jour ;
+  outils par empreinte (digest) ; Dependabot propose les mises à jour des
+  actions et des images de base des Dockerfiles, mais pas celles des
+  images d'outils citées dans les workflows (Trivy, gitleaks, hadolint,
+  ShellCheck), mises à jour à la main ;
   seules les actions d'une liste d'autorisation peuvent s'exécuter
   (Settings → Actions → General) ;
 - chaque job n'a que les droits dont il a besoin (`GITHUB_TOKEN`) ;
@@ -234,8 +246,10 @@ Lancé seul, il affiche les pages mais n'a pas d'API : le relais `/api`
 lui est fourni au déploiement, par le chart Helm.
 
 Les images publiées par la CI se récupèrent avec
-`docker pull ghcr.io/yohanbouchet/orion-back:v1.1.0` (et de même pour le
-front).
+`docker pull ghcr.io/yohanbouchet/orion-back:<version>` (par exemple
+`v1.5.2`, liste dans les
+[Releases](https://github.com/yohanbouchet/orion/releases) ; de même pour
+le front).
 
 ## Déployer sur Kubernetes
 
@@ -291,10 +305,12 @@ runner local, avec le workflow réutilisable
 [`deploy.yml`](.github/workflows/deploy.yml) :
 
 ```text
-publish ──▶ deploy-dev ──▶ deploy-staging ──▶ zap ─────────▶ deploy-prod
-            image          même image         test passif    vX.Y.Z, si release
-            sha-xxxxxxx    (promotion)        (FAIL : arrêt) en a publié une ;
-                                                             approbation
+publish ──▶ deploy-dev ──▶ deploy-staging ──▶ zap ──────▶ load-test ──▶ deploy-prod
+            image          même image         test        test de      vX.Y.Z, si
+            sha-xxxxxxx    (promotion)        passif      fumée k6     release en a
+                                              (FAIL :     (seuil       publié une ;
+                                              arrêt)      dépassé :    approbation
+                                                          arrêt)
 ```
 
 | Environnement (GitHub / namespace) | Branche | Type de déploiement | Accès | Particularités |
@@ -513,7 +529,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Poste Ops : SSH accepte encore les mots de passe ; un seul poste ; rôles Ansible testés par lint et idempotence, sans machine jetable | Clé SSH seule, inventaire multi-machines, Molecule | [Ansible](infra/ansible/README.md#limites-et-évolutions) |
 | Déploiement « poussé » par la CI : un jeton du cluster est rangé dans GitHub, une modification faite à la main dans le cluster n'est pas détectée | GitOps avec Argo CD : le cluster lit lui-même Git et corrige tout écart | [CI](#déploiement-continu-ci) |
 | Jetons de déploiement de longue durée, état Terraform local | Fédération OIDC GitHub → cluster (jetons de quelques minutes) ; état distant chiffré et verrouillé | [Terraform](infra/terraform/README.md#limites-connues-et-évolutions) |
-| Versions de `kubectl`, `helm` et de l'image ZAP mises à jour à la main (Dependabot ne les suit pas) | Image du runner contenant ces outils, mise à jour par Dependabot ; ZAP dans un fichier suivi par Dependabot | [CI](#déploiement-continu-ci) |
+| Versions de `kubectl` et `helm` (jobs du runner local) et images d'outils des workflows (Trivy, gitleaks, hadolint, ShellCheck) mises à jour à la main : Dependabot ne les suit pas (l'image ZAP, elle, est suivie via `infra/zap/Dockerfile`) | Image du runner contenant ces outils, et fichier d'images d'outils, suivis par Dependabot | [CI](#déploiement-continu-ci) |
 | Test d'intrusion limité au front : l'API ne publie pas de description OpenAPI, le scan actif n'atteint donc pas ses routes ; scan actif lancé à la main | OpenAPI (`springdoc`, équipe Dev) puis `zap-api-scan` ; scan actif planifié chaque semaine | [ZAP](#test-dintrusion-zap) |
 | Image ZAP : 421 failles hautes ou critiques sans correctif, dans le système de base de l'image officielle | Suivre les versions de ZAP ; pod éphémère, isolé par le pare-feu, sans root (risque accepté) | [ZAP](#test-dintrusion-zap) |
 | Une seule personne : elle approuve ses propres déploiements en prod | En équipe : une autre personne approuve (« Prevent self-review ») | [CI](#déploiement-continu-ci) |
@@ -544,17 +560,21 @@ Règles complètes : [normalisation](docs/02-normalisation-plan-ci.md#2-normes-e
 | [Normalisation et plan CI](docs/02-normalisation-plan-ci.md) | Règles communes, pipeline cible, étapes, risques |
 | [Mesures de départ](docs/mesures-avant/README.md) | Pipeline, qualité et sécurité de l'application d'origine |
 | [Scripts](scripts/README.md) | Chaque script : but, fonctionnement, paramètres, tests |
+| [Rapport de performance](docs/04-rapport-performance.md) | Mesures avant/après (DORA, tests, sécurité, charge), incidents, recommandations |
 | [Chart Helm](infra/helm/microcrm/README.md) | Déploiement Kubernetes, environnements, sécurité, limites |
+| [Terraform](infra/terraform/README.md) | Socle du cluster, comptes de déploiement, installation de la supervision |
+| [Ansible](infra/ansible/README.md) | Configuration et durcissement du poste Ops |
+| [Supervision](infra/monitoring/README.md) | Métriques, journaux, alertes, tableaux de bord, premiers gestes |
 | [Démarrage de Minikube](infra/systemd/README.md) | Service systemd du cluster |
 
 ## Versions des outils
 
-Vérifiées le 04/11/2026 (dernière version publiée et fin de support sur
+Vérifiées le 07/11/2026 (dernière version publiée et fin de support sur
 [endoflife.date](https://endoflife.date)) :
 
 | Outil | Version |
 |---|---|
-| Spring Boot / Java | 4.1.2 / 17 |
+| Spring Boot / Java | 4.1.2 / 17 (image 17.0.20.1 ; 17.0.21, correctif trimestriel, disponible depuis le 05/11) |
 | Angular / Node.js | 17.3 / 24 |
 | PostgreSQL | 18.6 |
 | Kubernetes (Minikube 1.39.0) | 1.37.0 (correctif 1.37.2 disponible) |
@@ -565,7 +585,9 @@ Vérifiées le 04/11/2026 (dernière version publiée et fin de support sur
 | metrics-server / node_exporter | 0.9.1 / 1.12.1 |
 | ARC (runner local) | 0.15.1, runner 2.338.2 |
 | SonarQube Community Build | 26.10 |
-| Trivy / hadolint / gitleaks / ShellCheck | 0.76.1 / 2.15.1 / 8.30.1 / 0.11.0 |
+| Trivy / hadolint / gitleaks / ShellCheck | 0.76.1 (0.76.2 sorti le 05/11, correctifs de sécurité) / 2.15.1 / 8.30.1 / 0.11.0 |
+| Grafana / chart victoria-metrics-k8s-stack | 13.2.5 (dernière 13.2 ; 13.3.0 sortie) / 0.97.1 |
+| k6 (tests de charge) | 2.3.0 |
 
 Angular 17 n'est plus maintenu : sa montée de version est recommandée à
 l'équipe Dev ([audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance)) ;
