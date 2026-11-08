@@ -1,6 +1,10 @@
 # Fichier  : infra/helm/microcrm/values-prod.yaml
 # Rôle     : différences de l'environnement prod par rapport à values.yaml
 # Utilisé par : scripts/deploy.sh prod (après approbation) ; ticket #64
+front:
+  # 2 répliques : si un pod du front tombe, l'autre répond (exercice de
+  # panne du 07/11 : seul le back en avait 2)
+  replicas: 2
 back:
   # Au moins 2 répliques : une mise à jour ne coupe jamais le service
   autoscaling:
