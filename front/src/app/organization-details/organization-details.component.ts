@@ -1,16 +1,16 @@
-import { AsyncPipe, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { Person, PersonService } from '../person.service';
+import { Person } from '../person.service';
 import { Organization, OrganizationService } from '../organization.service';
 
 @Component({
-    selector: 'app-organization-details',
-    imports: [FormsModule, AsyncPipe, RouterLink, DatePipe],
-    templateUrl: './organization-details.component.html',
-    changeDetection: ChangeDetectionStrategy.Eager,
-    styleUrl: './organization-details.component.css'
+  selector: 'app-organization-details',
+  imports: [FormsModule, RouterLink, DatePipe],
+  templateUrl: './organization-details.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  styleUrl: './organization-details.component.css'
 })
 export class OrganizationDetailsComponent implements OnInit {
   org: Organization = {
@@ -23,40 +23,45 @@ export class OrganizationDetailsComponent implements OnInit {
 
   isNew: boolean = false;
 
-  constructor(private route: ActivatedRoute, private personService: PersonService, private organizationService: OrganizationService, private router: Router) {
+  constructor(
+    private readonly route: ActivatedRoute,
+    private readonly organizationService: OrganizationService,
+    private readonly router: Router
+  ) { }
+
+  // « void » : le résultat n'est pas attendu ici, une erreur remonte au
+  // gestionnaire d'erreurs d'Angular (SonarQube typescript:S9383)
+  ngOnInit(): void {
+    void this.load()
   }
 
-  ngOnInit(): void {
-    const routeParams = this.route.snapshot.paramMap;
-    const orgIdParam = routeParams.get('orgId');
+  private async load() {
+    const orgIdParam = this.route.snapshot.paramMap.get('orgId')
 
     if (orgIdParam === 'new') {
       this.isNew = true
-    } else if (typeof orgIdParam === 'string') {
-      const orgId = parseInt(orgIdParam)
-      this.organizationService.fetchById(orgId).then(org => {
-        this.org = org
-        this.isNew = false
-      })
-
+    } else if (orgIdParam !== null) {
+      this.org = await this.organizationService.fetchById(
+        Number.parseInt(orgIdParam, 10))
+      this.isNew = false
     }
   }
 
-  saveOrg() {
-    this.organizationService.save({
-      ...this.org
-    }).then(o => {
-      this.org = o
-      if (this.isNew) {
-        this.router.navigate(["organizations", o.id])
-      }
-    })
+  // Chaque appel au back est attendu (await) avant l'étape suivante
+  async saveOrg() {
+    const saved = await this.organizationService.save({ ...this.org })
+    this.org = saved
+    // Angular garde le même composant en changeant d'adresse : la fiche
+    // n'est plus « nouvelle » une fois enregistrée
+    if (this.isNew) {
+      this.isNew = false
+      await this.router.navigate(["organizations", saved.id])
+    }
   }
 
-  deleteOrg() {
+  async deleteOrg() {
     if (this.org.id === undefined) return
-    this.organizationService.deleteById(this.org.id).then(() => {
-      this.router.navigate([""])
-    })
+    await this.organizationService.deleteById(this.org.id)
+    await this.router.navigate([""])
   }
 }

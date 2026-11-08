@@ -2,16 +2,15 @@ import { TestBed } from '@angular/core/testing';
 
 import { PersonService } from './person.service';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
+import { provideHttpClient } from '@angular/common/http';
 
 describe('PersonService', () => {
   let service: PersonService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-    imports: [],
-    providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()]
-});
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
     service = TestBed.inject(PersonService);
   });
 

@@ -24,5 +24,14 @@
     "strictInjectionParameters": true,
     "strictInputAccessModifiers": true,
     "strictTemplates": true
-  }
+  },
+  // Fichier « aiguilleur » (modèle des projets Angular récents) : il ne
+  // compile rien lui-même ; l'éditeur prend tsconfig.app.json pour le code
+  // et tsconfig.spec.json pour les tests (types de Vitest), sans l'erreur
+  // rootDir de TypeScript 6
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.spec.json" }
+  ]
 }

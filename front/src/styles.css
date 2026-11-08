@@ -1,1 +1,4 @@
-/* You can add global styles to this file, and also import other style files */
+/* Styles globaux. Bulma (MIT) est installé avec npm et intégré au site
+   à la construction : plus de CDN, donc aucun fichier venu d'un autre site
+   (SonarQube Web:S5725, ZAP) et une CSP limitée au site lui-même */
+@import "bulma/css/bulma.min.css";

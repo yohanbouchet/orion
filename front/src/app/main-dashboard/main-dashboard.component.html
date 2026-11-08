@@ -5,11 +5,14 @@
         <h2 class="title is-size-2">Persons</h2>
       </div>
       <div class="level-right">
+        <!-- aria-label : nom lu par les lecteurs d'écran (« + » seul ne dit
+             rien) -->
         <a
           class="button is-primary is-medium level-item"
+          aria-label="New person"
           [routerLink]="['persons/new']"
-          >
-          <span class="has-text-weight-bold">+</span>
+        >
+          <span class="has-text-weight-bold" aria-hidden="true">+</span>
         </a>
       </div>
     </div>
@@ -17,76 +20,77 @@
       <table class="table is-fullwidth">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Updated at</th>
+            <th scope="col">Name</th>
+            <th scope="col">Email</th>
+            <th scope="col">Updated at</th>
           </tr>
         </thead>
         <tbody>
-          @for (pers of persons; track pers; let isFirst = $first) {
+          @for (pers of persons; track pers.id) {
             <tr>
               <td>
                 <a [routerLink]="['persons', pers.id]"
                   >{{ pers.firstName }} {{ pers.lastName }}</a
-                  >
-                </td>
-                <td>{{ pers.email }}</td>
-                <td>{{ pers.updatedAt | date }}</td>
-              </tr>
-            }
-            @if (persons.length === 0) {
-              <tr>
-                <td colspan="3" class="has-text-centered is-italic">
-                  No person yet.
-                  <a [routerLink]="['persons/new']">Create one</a>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div class="column">
-      <div class="level is-mobile">
-        <div class="level-left">
-          <h2 class="title is-size-2">Organizations</h2>
-        </div>
-        <div class="level-right">
-          <a
-            class="button is-primary is-medium level-item"
-            [routerLink]="['organizations/new']"
-            >
-            <span class="has-text-weight-bold">+</span>
-          </a>
-        </div>
-      </div>
-      <div class="table-container">
-        <table class="table is-fullwidth">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Updated at</th>
+                >
+              </td>
+              <td>{{ pers.email }}</td>
+              <td>{{ pers.updatedAt | date }}</td>
             </tr>
-          </thead>
-          <tbody>
-            @for (org of organizations; track org) {
-              <tr>
-                <td>
-                  <a [routerLink]="['organizations', org.id]">{{ org.name }}</a>
-                </td>
-                <td>{{ org.updatedAt | date }}</td>
-              </tr>
-            }
-            @if (organizations.length === 0) {
-              <tr>
-                <td colspan="3" class="has-text-centered is-italic">
-                  No organization yet.
-                  <a [routerLink]="['organization/new']">Create one</a>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+          } @empty {
+            <tr>
+              <td colspan="3" class="has-text-centered is-italic">
+                No person yet.
+                <a [routerLink]="['persons/new']">Create one</a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
     </div>
   </div>
+  <div class="column">
+    <div class="level is-mobile">
+      <div class="level-left">
+        <h2 class="title is-size-2">Organizations</h2>
+      </div>
+      <div class="level-right">
+        <a
+          class="button is-primary is-medium level-item"
+          aria-label="New organization"
+          [routerLink]="['organizations/new']"
+        >
+          <span class="has-text-weight-bold" aria-hidden="true">+</span>
+        </a>
+      </div>
+    </div>
+    <div class="table-container">
+      <table class="table is-fullwidth">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Updated at</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (org of organizations; track org.id) {
+            <tr>
+              <td>
+                <a [routerLink]="['organizations', org.id]">{{ org.name }}</a>
+              </td>
+              <td>{{ org.updatedAt | date }}</td>
+            </tr>
+          } @empty {
+            <!-- Lien corrigé : « organization/new » menait à une page
+                 inexistante (retour à l'accueil) -->
+            <tr>
+              <td colspan="2" class="has-text-centered is-italic">
+                No organization yet.
+                <a [routerLink]="['organizations/new']">Create one</a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
