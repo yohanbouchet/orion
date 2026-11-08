@@ -145,7 +145,7 @@ main depuis l'onglet **Actions**.
 
 | Job | Rôle | Outil | Où |
 |---|---|---|---|
-| `test-front` | Dépendances, tests et couverture du front | `install-deps.sh`, `run-tests.sh` (Karma, lcov) | GitHub |
+| `test-front` | Dépendances, tests et couverture du front | `install-deps.sh`, `run-tests.sh` (Vitest, lcov) | GitHub |
 | `test-back` | Dépendances, tests et couverture du back | `install-deps.sh`, `run-tests.sh` (JUnit, JaCoCo) | GitHub |
 | `sonarqube` | Analyse statique et **Quality Gate** | SonarQube Community Build | runner local |
 | `gitleaks` | Secrets oubliés dans tout l'historique | gitleaks | GitHub |
@@ -204,7 +204,8 @@ Détails et choix : [normalisation et plan CI](docs/02-normalisation-plan-ci.md)
 
 ## Lancer l'application sur un poste
 
-Prérequis : Java 17, Node.js 24, Google Chrome (tests du front).
+Prérequis : Java 17, Node.js 24 (les tests du front n'ont plus besoin de
+navigateur depuis Vitest).
 
 ```shell
 # API sur http://localhost:8080, base HSQLDB en mémoire
@@ -378,14 +379,18 @@ dépendaient de l'exploitation :
 |---|---|---|
 | En-tête CSP absent | Moyen | **Corrigé** : `front/nginx.conf` ; règle passée en FAIL |
 | En-têtes Permissions-Policy et d'isolation (Spectre) absents | Faible | **Corrigés** avec la CSP ; règles en FAIL |
-| Angular 17.3.12 vulnérable (bibliothèque JavaScript) | Élevé | Risque accepté jusqu'à la montée de version (audit, R4 ; `.trivyignore`) |
-| CSS Bulma chargé d'un CDN sans contrôle d'intégrité (SRI) | Moyen | Équipe Dev (attribut `integrity`, ou Bulma installé avec npm) |
+| Angular 17.3.12 vulnérable (bibliothèque JavaScript) | Élevé | **Corrigé** le 08/11 : Angular 22 (ticket #113) ; règle passée en FAIL |
+| CSS Bulma chargé d'un CDN sans contrôle d'intégrité (SRI) | Moyen | **Corrigé** le 08/11 : Bulma installé avec npm et servi par le site, CSP limitée au site ; règle passée en FAIL |
 
 Vérifié avant la fusion : avec les règles en FAIL, le front sans les
 en-têtes fait échouer ZAP (3 alertes FAIL, prod bloquée) ; avec les
 en-têtes, 0 FAIL et 64 règles passées ; l'application fonctionne dans
 Chromium et Firefox, sans aucune violation de la CSP (liste, détail,
 création).
+
+Revérifié le 08/11 avec Angular 22 et Bulma servi par le site : ZAP en
+local, 0 FAIL, 0 WARN, 66 règles passées ; pages affichées dans Chrome
+avec la CSP stricte, sans aucune erreur.
 
 Les protections déjà en place (anti-cadre, `nosniff`, aucune version du
 serveur affichée, aucune injection ni XSS trouvée…) sont réglées sur
@@ -539,7 +544,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Supervision sur un seul nœud ; journaux techniques gardés 7 jours, masqués à la source seulement ; pas de journal d'audit (l'application n'a pas d'authentification) | VictoriaMetrics/VictoriaLogs en cluster ; Vector ou Alloy pour masquer centralement ; authentification puis audit pseudonymisé (6 mois à 1 an) | [supervision](infra/monitoring/README.md#limites-et-évolutions) |
 | Table de liens sans clé primaire | Migration Flyway (équipe Dev) | [scripts](scripts/README.md#backupsh) |
 | CSP sans style en ligne : un futur style de composant Angular serait bloqué | Jeton par page (« nonce », `ngCspNonce`) servi par nginx | [ZAP](#test-dintrusion-zap) |
-| Angular 17 hors maintenance, pas d'ESLint | Montée de version et ESLint (équipe Dev) | [audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance) |
+| Pas d'ESLint dans le front | ESLint (équipe Dev) | [audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance) |
 
 ## Contribuer
 
@@ -578,7 +583,7 @@ Vérifiées le 07/11/2026 (dernière version publiée et fin de support sur
 | Outil | Version |
 |---|---|
 | Spring Boot / Java | 4.1.2 / 17 (image 17.0.20.1 ; 17.0.21, correctif trimestriel, disponible depuis le 05/11) |
-| Angular / Node.js | 17.3 / 24 |
+| Angular / Node.js | 22.2 (TypeScript 6.0, Vitest 5) / 24 |
 | PostgreSQL | 18.6 |
 | Kubernetes (Minikube 1.39.0) | 1.37.0 (correctif 1.37.2 disponible) |
 | Helm / kubectl (jobs du runner local) | 4.3.1 / 1.37.2 |
@@ -592,7 +597,6 @@ Vérifiées le 07/11/2026 (dernière version publiée et fin de support sur
 | Grafana / chart victoria-metrics-k8s-stack | 13.2.5 (dernière 13.2 ; 13.3.0 sortie) / 0.97.1 |
 | k6 (tests de charge) | 2.3.0 |
 
-Angular 17 n'est plus maintenu : sa montée de version est recommandée à
-l'équipe Dev ([audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance)) ;
-en attendant, ses failles sans correctif sont suivies et datées dans
-`.trivyignore`.
+Angular est passé de 17 (plus maintenu) à 22 le 08/11, une version
+majeure à la fois ([audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance),
+ticket #113) : `.trivyignore` ne contient plus aucune exception.
