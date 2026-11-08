@@ -61,7 +61,7 @@ apparition et dans le glossaire ([annexe A](#annexe-a-glossaire)).
 | CI/CD | **GitHub Actions** (à la place de GitLab CI, avec l'accord du mentor) | exécute le pipeline : contrôles sur des machines jetables de GitHub ; analyse et déploiements par un runner local dans le cluster (ARC 0.15.1) |
 | Versions | **semantic-release** | calcule le numéro de version (SemVer) à partir des messages de commit, crée l'étiquette et la release |
 | Qualité | **SonarQube** Community Build 26.10 | analyse statique, couverture, Quality Gate bloquant |
-| Sécurité | **Trivy** 0.76.1, **gitleaks** 8.30.1, **hadolint** 2.15.1, **ShellCheck** 0.11.0, **OWASP ZAP** 2.17.0, **Dependabot** | failles des dépendances et des images, secrets, bonnes pratiques, test d'intrusion, mises à jour |
+| Sécurité | **Trivy** 0.76.2, **gitleaks** 8.30.1, **hadolint** 2.15.1, **ShellCheck** 0.11.0, **OWASP ZAP** 2.17.0, **Dependabot** | failles des dépendances et des images, secrets, bonnes pratiques, test d'intrusion, mises à jour |
 | Tests | Karma + Jasmine, JUnit 5 + JaCoCo, bashunit, pytest, **k6** 2.3.0 | tests du front, du back, des scripts ; tests de charge |
 | Conteneurs | **Docker** (images multi-étapes durcies), **GHCR** (registre de GitHub) | images de l'application, versionnées et publiées |
 | Orchestration | **Kubernetes** 1.37 (Minikube 1.39.0), **Helm** 4 | trois environnements, déploiement progressif, autoscaling |
@@ -412,6 +412,7 @@ Secrets Manager.
 | --- | --- | --- |
 | Minikube, un seul nœud | EKS, nœuds dans 2 zones, mise à l'échelle des nœuds (Karpenter ou Cluster Autoscaler) | plus de point unique de défaillance ; capacité qui suit la charge |
 | CI et application sur la même machine | groupes de nœuds séparés pour la CI et l'application | un test lourd ne peut plus saturer la prod (incident du 05/11) |
+| Aucun budget de perturbation (un seul nœud, jamais vidé) | budget de perturbation (*PodDisruptionBudget*) du front et de l'API ; droit ajouté au compte de déploiement | la mise à jour d'un nœud ne retire qu'un pod à la fois |
 | PostgreSQL dans le cluster, une instance | RDS Multi-AZ, sauvegardes automatiques, restauration à un instant donné | bascule automatique ; perte de données réduite à quelques minutes |
 | Accès par `kubectl port-forward` | ALB + WAF + certificat ACM | accès HTTPS public, filtré |
 | Secrets Kubernetes créés par script | Secrets Manager + External Secrets Operator, rotation | rotation, audit des accès |
@@ -465,7 +466,7 @@ ouvert et un e-mail envoyé.
 | --- | --- | --- | --- | --- |
 | Development (`dev`) | `main` | automatique à chaque fusion, image du commit (`sha-xxxxxxx`) | aucune URL publique : `kubectl -n dev port-forward svc/microcrm-front 8080:8080` | 1 réplique par composant ; base de 1 Gio |
 | Staging (`staging`) | `main` | automatique après `dev`, **même image** (promotion) | idem, `-n staging` | API de 1 à 4 répliques (autoscaling) ; cible de ZAP et de k6, seuls autorisés par le pare-feu ; base de 2 Gio |
-| Production (`prod`) | `main`, versions `vX.Y.Z` | après ZAP et k6, **sur approbation** | idem, `-n prod` (cible AWS : nom de domaine derrière l'ALB) | API de 2 à 4 répliques (autoscaling à 70 % du processeur) ; base de 5 Gio, sauvegardée chaque jour |
+| Production (`prod`) | `main`, versions `vX.Y.Z` | après ZAP et k6, **sur approbation** | idem, `-n prod` (cible AWS : nom de domaine derrière l'ALB) | front à 2 répliques ; API de 2 à 4 répliques (autoscaling à 70 % du processeur) ; base de 5 Gio, sauvegardée chaque jour |
 
 Chaque environnement a son **namespace** Kubernetes (niveau Pod Security
 « restricted ») et son **compte de déploiement**, qui n'a de droits que
@@ -550,9 +551,9 @@ validé par la direction.
   puis lance le test de fumée (section 7.4).
 - **Scalabilité** : autoscaling horizontal (**HPA**) de l'API en
   `staging` (1 à 4 pods) et en `prod` (2 à 4), quand le processeur
-  dépasse 70 % de la réservation ; testé sous charge avec k6. Limites :
-  le front reste à 1 réplique (recommandation de passer à 2) ; un seul
-  nœud, donc pas de mise à l'échelle des machines (cible AWS).
+  dépasse 70 % de la réservation ; testé sous charge avec k6. Le front a
+  2 répliques fixes en `prod`. Limite : un seul nœud, donc pas de mise à
+  l'échelle des machines (cible AWS).
 - **Mises à jour sans interruption** : mise à jour progressive
   (`maxSurge: 1`, `maxUnavailable: 0`) : un nouveau pod doit être prêt
   avant qu'un ancien s'arrête ; sondes de démarrage, de disponibilité et
@@ -567,9 +568,9 @@ validé par la direction.
 
 ### 5.7 Fiabilité, réseau et stockage
 
-- **Fiabilité** : API en 2 répliques minimum en prod ; retour arrière
-  automatique ; sauvegarde quotidienne vérifiée chaque semaine ; alerte
-  si la prod n'a plus de pod prêt. **Point de défaillance unique
+- **Fiabilité** : front et API en 2 répliques minimum en prod ; retour
+  arrière automatique ; sauvegarde quotidienne vérifiée chaque semaine ;
+  alerte si la prod n'a plus de pod prêt. **Point de défaillance unique
   assumé** : le poste Ops (cluster, CI et supervision sur une machine),
   levé par la cible AWS.
 - **Réseau** : aucun service exposé hors du poste (accès par tunnel
@@ -621,8 +622,8 @@ Top 10 2025 (application) et OWASP Top 10 CI/CD Security Risks (chaîne).
 | --- | --- | --- |
 | **SonarQube** 26.10 | SAST (analyse statique du code) | failles, bugs et mauvaises pratiques du front et du back ; Quality Gate bloquant |
 | **hadolint** 2.15.1, **ShellCheck** 0.11.0, ansible-lint, `terraform validate` | Linting | bonnes pratiques des Dockerfiles, erreurs des scripts Bash, du code Ansible et Terraform |
-| **Trivy** 0.76.1 (`fs`) + **Dependabot** | SCA (dépendances) | failles connues des dépendances npm et Gradle, y compris l'outillage de développement ; mises à jour proposées chaque semaine, tout de suite pour une faille |
-| **Trivy** 0.76.1 (`image`) | Container scanning | failles du système et des bibliothèques de chaque image, avant sa publication |
+| **Trivy** 0.76.2 (`fs`) + **Dependabot** | SCA (dépendances) | failles connues des dépendances npm et Gradle, y compris l'outillage de développement ; mises à jour proposées chaque semaine, tout de suite pour une faille |
+| **Trivy** 0.76.2 (`image`) | Container scanning | failles du système et des bibliothèques de chaque image, avant sa publication |
 | **gitleaks** 8.30.1 + protection de GitHub | Secrets detection | mots de passe, jetons ou clés dans tout l'historique ; poussée bloquée par GitHub si un secret connu est détecté |
 | **OWASP ZAP** 2.17.0 | DAST (test d'intrusion) | en-têtes de sécurité, fuites d'information, injections ; passif à chaque déploiement de `staging`, actif à la demande |
 | Pod Security « restricted » | Contrôle d'admission Kubernetes | refuse tout pod root, privilégié ou avec des capacités |

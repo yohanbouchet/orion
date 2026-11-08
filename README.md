@@ -317,7 +317,7 @@ publish ──▶ deploy-dev ──▶ deploy-staging ──▶ zap ────
 |---|---|---|---|---|
 | `dev` / `dev` | `main` | automatique, à chaque fusion (image `sha-xxxxxxx`) | `kubectl -n dev port-forward svc/microcrm-front 8080:8080` | 1 réplique par composant ; réglages par défaut du chart |
 | `staging` / `staging` | `main` | automatique, après la réussite de `dev` (même image) | idem, `-n staging` | back de 1 à 4 répliques (autoscaling HPA, comme la prod mais à partir d'une), autres composants à 1 ; cible des tests ZAP et k6 : seuls ces pods peuvent joindre le front |
-| `production` / `prod` | `main` | à chaque version `vX.Y.Z`, **après approbation** | idem, `-n prod` | 2 répliques du back au minimum, autoscaling (HPA), mise à jour progressive sans coupure |
+| `production` / `prod` | `main` | à chaque version `vX.Y.Z`, **après approbation** | idem, `-n prod` | front à 2 répliques ; back à 2 répliques au minimum, autoscaling (HPA) ; mise à jour progressive sans coupure |
 
 Chaque environnement GitHub garde le secret `KUBE_TOKEN`, jeton du
 compte `deployer` de son namespace. `ci.yml` transmet ce seul secret à
@@ -588,7 +588,7 @@ Vérifiées le 07/11/2026 (dernière version publiée et fin de support sur
 | metrics-server / node_exporter | 0.9.1 / 1.12.1 |
 | ARC (runner local) | 0.15.1, runner 2.338.2 |
 | SonarQube Community Build | 26.10 |
-| Trivy / hadolint / gitleaks / ShellCheck | 0.76.1 (0.76.2 sorti le 05/11, correctifs de sécurité) / 2.15.1 / 8.30.1 / 0.11.0 |
+| Trivy / hadolint / gitleaks / ShellCheck | 0.76.2 / 2.15.1 / 8.30.1 / 0.11.0 |
 | Grafana / chart victoria-metrics-k8s-stack | 13.2.5 (dernière 13.2 ; 13.3.0 sortie) / 0.97.1 |
 | k6 (tests de charge) | 2.3.0 |
 
