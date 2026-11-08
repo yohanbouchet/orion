@@ -4,7 +4,8 @@ Rôle     : API Spring Boot : adresse fixe (Service), Deployment avec
            mise à jour progressive sans coupure, et mise à l'échelle
            automatique (HPA) si back.autoscaling.enabled
 Utilise  : values.yaml (back.*, postgres.*) ; image GHCR orion-back ;
-           Secret de la base ; _helpers.tpl
+           image de la base (psql) ; Secrets des 2 comptes de la base ;
+           templates/postgres-app-role.yaml ; _helpers.tpl
 Utilisé par : le front (relais /api, templates/front.yaml) ; vmagent
               (métriques, port 8081) ; tickets #64 et #84
 */}}
@@ -13,6 +14,9 @@ Utilisé par : le front (relais /api, templates/front.yaml) ; vmagent
 {{- $db := include "microcrm.name" (dict "root" $ "component" "postgres") }}
 {{- $pg := .Values.postgres }}
 {{- $url := printf "jdbc:postgresql://%s:5432/%s" $db $pg.database }}
+{{- $appRoleFile := print $.Template.BasePath "/postgres-app-role.yaml" }}
+{{- $appRole := include $appRoleFile $ }}
+{{- $pgImage := include "microcrm.image" (dict "root" $ "image" $pg.image) }}
 {{- with .Values.back }}
 apiVersion: v1
 kind: Service
@@ -52,11 +56,63 @@ spec:
     metadata:
       labels:
         {{- include "microcrm.labels" $ctx | nindent 8 }}
+      annotations:
+        # Empreinte du script SQL : s'il change, les pods sont recréés et
+        # le conteneur d'initialisation le rejoue
+        checksum/app-role: {{ $appRole | sha256sum }}
     spec:
       automountServiceAccountToken: false
       securityContext:
         # Compte « app » de l'image (numéro 1001), comme back/Dockerfile
         {{- include "microcrm.podSecurityContext" 1001 | nindent 8 }}
+      # Avant l'API : crée ou met à jour le compte limité de l'appli
+      # (psql de l'image de la base, connecté en superutilisateur) ; ce
+      # conteneur s'arrête avant que l'API démarre
+      initContainers:
+        - name: db-app-role
+          image: {{ $pgImage }}
+          imagePullPolicy: {{ $pg.image.pullPolicy }}
+          # Attend que la base accepte les connexions, puis lance le script
+          # (ON_ERROR_STOP : la 1re erreur arrête tout, code de sortie 3)
+          command: ["sh", "-c"]
+          args:
+            - |
+              until pg_isready --quiet; do sleep 2; done
+              exec psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+                --file=/sql/app-role.sql
+          # Variables lues par psql (PG*) et par le script (APP_*)
+          env:
+            - name: PGHOST
+              value: {{ $db | quote }}
+            - name: PGDATABASE
+              value: {{ $pg.database | quote }}
+            - name: PGUSER
+              value: {{ $pg.username | quote }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pg.existingSecret }}
+                  key: {{ $pg.secretKey }}
+            - name: APP_USER
+              value: {{ $pg.appUsername | quote }}
+            - name: APP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pg.appExistingSecret }}
+                  key: {{ $pg.secretKey }}
+          securityContext:
+            {{- include "microcrm.containerSecurityContext" . | nindent 12 }}
+          # psql n'ouvre qu'une connexion : très peu de ressources
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: app-role-sql
+              mountPath: /sql
+              readOnly: true
       containers:
         - name: back
           image: {{ include "microcrm.image" (dict "root" $ "image" .image) }}
@@ -69,13 +125,23 @@ spec:
             - name: management
               containerPort: 8081
           env:
-            # Connexion à la base du même environnement (ticket #66) ; le
-            # mot de passe vient du Secret, jamais du chart
+            # Connexion à la base du même environnement (ticket #66) avec
+            # le compte limité ; mots de passe lus dans les Secrets, jamais
+            # écrits dans le chart
             - name: SPRING_DATASOURCE_URL
               value: {{ $url | quote }}
             - name: SPRING_DATASOURCE_USERNAME
-              value: {{ $pg.username | quote }}
+              value: {{ $pg.appUsername | quote }}
             - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pg.appExistingSecret }}
+                  key: {{ $pg.secretKey }}
+            # Flyway (création des tables, au démarrage seulement) garde
+            # le compte propriétaire des tables, sur sa propre connexion
+            - name: SPRING_FLYWAY_USER
+              value: {{ $pg.username | quote }}
+            - name: SPRING_FLYWAY_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ $pg.existingSecret }}
@@ -116,6 +182,10 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        # Script SQL du compte limité, en lecture seule
+        - name: app-role-sql
+          configMap:
+            name: {{ $db }}-app-role
 {{- if .autoscaling.enabled }}
 ---
 apiVersion: autoscaling/v2

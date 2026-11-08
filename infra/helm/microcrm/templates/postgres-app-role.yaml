@@ -1,0 +1,54 @@
+{{- /*
+Fichier  : infra/helm/microcrm/templates/postgres-app-role.yaml
+Rôle     : script SQL du compte limité de l'application : lire et écrire
+           des lignes, rien d'autre (ni table, ni compte, ni commande
+           système). Rejouable : crée le compte s'il manque, sinon remet
+           ses droits et son mot de passe à jour
+Utilise  : _helpers.tpl ; variables d'environnement du conteneur
+           d'initialisation (APP_USER, APP_PASSWORD, PGDATABASE)
+Utilisé par : templates/back.yaml (conteneur d'initialisation db-app-role)
+*/}}
+{{- $ctx := dict "root" $ "component" "postgres" }}
+{{- $name := include "microcrm.name" $ctx }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-app-role
+  labels:
+    {{- include "microcrm.labels" $ctx | nindent 4 }}
+data:
+  # Lancé par psql avec le superutilisateur ; les valeurs viennent de
+  # l'environnement (\getenv), jamais de la ligne de commande
+  app-role.sql: |
+    \getenv app_user APP_USER
+    \getenv app_password APP_PASSWORD
+    \getenv db PGDATABASE
+
+    -- 1. Crée le compte s'il n'existe pas (\gexec exécute la commande
+    --    produite par le SELECT ; aucune ligne si le compte existe)
+    SELECT format('CREATE ROLE %I', :'app_user')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'app_user')
+    \gexec
+
+    -- 2. Peut se connecter, et rien d'autre ; mot de passe du Secret,
+    --    remis à chaque démarrage (changement du Secret pris en compte)
+    ALTER ROLE :"app_user" WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
+      NOREPLICATION NOBYPASSRLS PASSWORD :'app_password';
+
+    -- 3. Entre dans la base et voit le schéma, sans pouvoir y créer de
+    --    table (droit CREATE retiré à tous depuis PostgreSQL 15)
+    GRANT CONNECT ON DATABASE :"db" TO :"app_user";
+    GRANT USAGE ON SCHEMA public TO :"app_user";
+
+    -- 4. Lit et écrit les lignes des tables existantes ; tire les
+    --    numéros d'identifiant (séquences person_seq, organization_seq)
+    GRANT SELECT, INSERT, UPDATE, DELETE
+      ON ALL TABLES IN SCHEMA public TO :"app_user";
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"app_user";
+
+    -- 5. Mêmes droits sur les tables que Flyway créera plus tard avec ce
+    --    compte (superutilisateur) : droits « par défaut »
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"app_user";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+      GRANT USAGE, SELECT ON SEQUENCES TO :"app_user";

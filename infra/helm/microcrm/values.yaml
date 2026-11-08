@@ -57,6 +57,12 @@ postgres:
   # mot de passe n'est jamais écrit dans Git ni dans les valeurs Helm
   existingSecret: microcrm-db
   secretKey: password
+  # Compte limité de l'application (lire et écrire des lignes, rien
+  # d'autre), créé par le conteneur d'initialisation du back ; le compte
+  # ci-dessus (superutilisateur) ne sert plus qu'à Flyway et aux
+  # sauvegardes. Son mot de passe : 2e Secret, même clé, même script
+  appUsername: microcrm_app
+  appExistingSecret: microcrm-db-app
   storage: 1Gi
   resources:
     requests:

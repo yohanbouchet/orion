@@ -227,10 +227,14 @@ scripts/deploy.sh rollback prod 3         # révision choisie (helm history)
 2. le namespace doit exister et imposer le niveau Pod Security
    « restricted ». Le script ne le crée pas : c'est une étape
    d'installation, qui demande des droits sur tout le cluster ;
-3. Secret `microcrm-db` : créé **une seule fois**, avec une valeur
-   aléatoire (`openssl rand`) passée à kubectl par un tube, donc jamais
-   visible dans la ligne de commande ni affichée ; jamais remplacé, car la
-   base garde le mot de passe de sa création ;
+3. Secrets `microcrm-db` (superutilisateur de la base) et
+   `microcrm-db-app` (compte limité de l'application), par la même
+   fonction : chacun créé **une seule fois**, avec une valeur aléatoire
+   (`openssl rand`) passée à kubectl par un tube, donc jamais visible dans
+   la ligne de commande ni affichée ; jamais remplacé, car la base garde
+   le mot de passe de sa création. Sur un environnement déjà installé,
+   seul le Secret manquant est créé (test
+   `test_missing_app_secret_is_created_and_admin_secret_kept`) ;
 4. `helm lint` avec les réglages de l'environnement ;
 5. `helm upgrade --install --wait --rollback-on-failure` : si les pods ne
    sont pas prêts en 6 minutes, Helm remet lui-même la version précédente ;
@@ -453,7 +457,11 @@ scripts/backup.sh restore dev <fichier> --table person
 - **restore** : contrôles d'abord (nom de table, clé primaire, empreinte
   du fichier), puis **sauvegarde de sécurité** de l'état actuel, puis :
   - toute la base : `pg_restore --clean --single-transaction`, tout ou
-    rien ;
+    rien. Les droits du compte limité de l'application font partie de la
+    sauvegarde ; une sauvegarde qui ne les contient pas (faite avant ce
+    compte) se restaure aussi : les tables recréées par le
+    superutilisateur reçoivent ses droits « par défaut » (testé le 08/11
+    en restaurant sans les droits, `pg_restore -x`) ;
   - une table (`--table`) : sur place, c'est impossible sans casser les
     liens (clés étrangères). La sauvegarde est donc restaurée dans une
     base annexe, puis seules les lignes **absentes** sont recopiées
@@ -522,7 +530,7 @@ cron (environnement vide) : sauvegarde et vérification réussies.
 | Sauvegarde complète à chaque fois | Complète hebdomadaire et incrémentale quotidienne (pgBackRest, ou `pg_basebackup --incremental` de PostgreSQL 17+), utile quand la base grossit ; la base fait 7 Ko |
 | Deux copies : sur la machine, et hors site (Google Drive, dans l'archive chiffrée GPG AES-256 de la machine, chaque jour) | Règle 3-2-1 complète : 3e copie sur un autre support ; stockage S3 versionné dans la cible cloud |
 | Sur la machine, fichiers non chiffrés un par un (protégés par le chiffrement du disque et les droits) ; la copie hors site est chiffrée | Chiffrement de chaque fichier (age) dès sa création, clé gardée hors de la machine |
-| Le compte `microcrm` de l'application est superutilisateur PostgreSQL (réglage par défaut de l'image officielle) | Compte applicatif aux droits limités, propriétaire du seul schéma de l'application |
+| Sauvegarde faite avec le superutilisateur `microcrm` (l'application, elle, utilise un compte limité) | Compte de sauvegarde en lecture seule (rôle prédéfini `pg_read_all_data`) ; la restauration garde le superutilisateur |
 | La table de liens `organization_persons` n'a pas de clé primaire : restauration par table impossible, liens en double possibles | Clé primaire `(organizations_id, persons_id)` par une migration Flyway (demande à l'équipe Dev) |
 
 ## lib/common.sh
