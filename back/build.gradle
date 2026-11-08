@@ -68,3 +68,14 @@ jacocoTestReport {
 		html.required = true
 	}
 }
+
+// Bibliothèques du code et des tests, copiées pour SonarQube
+// (sonar.java.libraries) : le job sonarqube n'a pas Gradle ; sans elles,
+// son analyse du Java est moins précise. Tests : seulement celles en plus
+tasks.register('copySonarLibraries', Sync) {
+	into layout.buildDirectory.dir('sonar-libraries')
+	from(configurations.compileClasspath) { into 'main' }
+	from(configurations.testCompileClasspath - configurations.compileClasspath) {
+		into 'test'
+	}
+}
