@@ -6,11 +6,10 @@ import { Person, PersonService } from '../person.service';
 import { Organization, OrganizationService } from '../organization.service';
 
 @Component({
-  selector: 'app-person-details',
-  standalone: true,
-  imports: [NgIf, FormsModule, AsyncPipe, NgFor, RouterLink],
-  templateUrl: './person-details.component.html',
-  styleUrl: './person-details.component.css'
+    selector: 'app-person-details',
+    imports: [NgIf, FormsModule, AsyncPipe, NgFor, RouterLink],
+    templateUrl: './person-details.component.html',
+    styleUrl: './person-details.component.css'
 })
 export class PersonDetailsComponent implements OnInit {
   person: Person = {
