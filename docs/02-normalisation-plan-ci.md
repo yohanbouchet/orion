@@ -5,8 +5,8 @@
 | Projet    | Démarche DevOps pour l'application MicroCRM      |
 | Client    | Orion (destinataire : Maria, CTO)                |
 | Auteur    | Yohan Bouchet                                    |
-| Version   | 1.1 (ESLint reporté, documentation des scripts) |
-| Date      | 29/10/2026, mis à jour le 02/11/2026             |
+| Version   | 1.2 (Vitest et Angular 22 le 08/11)             |
+| Date      | 29/10/2026, mis à jour le 08/11/2026             |
 
 ## 1. Introduction
 
@@ -208,7 +208,7 @@ flowchart TB
         subgraph checks["Contrôles en parallèle"]
             direction TB
             lint["Style<br/>hadolint, ShellCheck"]
-            tests["Tests + couverture<br/>Karma + lcov, JUnit + JaCoCo"]
+            tests["Tests + couverture<br/>Vitest + lcov, JUnit + JaCoCo"]
             sca["Dépendances<br/>Trivy"]
             secrets["Secrets<br/>gitleaks"]
         end
@@ -237,7 +237,7 @@ flowchart TB
 | Contrôle | Outil | Bloquant |
 | --- | --- | --- |
 | Style et erreurs courantes | hadolint, ShellCheck (ESLint : évolution, 4.2) | oui |
-| Tests et couverture | Karma, JUnit, JaCoCo | oui |
+| Tests et couverture | Vitest (Karma avant le 08/11), JUnit, JaCoCo | oui |
 | Quality Gate | SonarQube | oui |
 | Failles des dépendances (production et outillage) et des images | Trivy | oui (critiques et hautes corrigeables) |
 | Secrets | gitleaks | oui |
@@ -256,7 +256,7 @@ flowchart TB
 
 | Test | Outil | Quand | Bloquant |
 | --- | --- | --- | --- |
-| Unitaires front | Karma + Jasmine (existant) | chaque PR | oui |
+| Unitaires front | Karma + Jasmine (existant), remplacés par Vitest le 08/11 (Angular 22, ticket #113) | chaque PR | oui |
 | Unitaires et d'intégration back | JUnit 5 + Spring Boot Test (existant) | chaque PR | oui |
 | Couverture | JaCoCo (back), lcov (front), envoyés à SonarQube | chaque PR | oui, via le Quality Gate |
 | Scripts | bashunit (Bash, version figée et vérifiée par empreinte), pytest (Python) | chaque PR (job `script-tests`) | oui |
@@ -291,7 +291,7 @@ Règles :
   s'applique **jamais** aux mises à jour de sécurité, proposées tout de
   suite. Les versions majeures d'Angular (et TypeScript, zone.js, qui en
   dépendent) sont exclues : elles se font pas à pas avec `ng update`
-  (recommandation R4), comme les versions majeures de Jasmine. Pour les
+  (recommandation R4, faite le 08/11), comme celles de Vitest. Pour les
   images Docker, les changements de version de Java, de Node et de
   PostgreSQL (migration des données) se décident et ne sont pas proposés ;
   nginx reste sur sa branche stable. Une mise à jour de sécurité qui saute
@@ -482,11 +482,13 @@ résultats de `main` dans le tableau de bord jusqu'à la fusion suivante, dont
 l'analyse les rétablit. Évolutions possibles : Developer Edition, ou plugin
 communautaire non supporté par SonarSource (écarté pour cette raison).
 
-**Limite connue (rapport JUnit du front)** : Karma, abandonné par ses
-auteurs, n'a plus de module JUnit maintenu ; SonarQube voit donc la
-couverture du front, mais pas le détail de ses 8 tests. Le passage à Vitest,
-lanceur de tests par défaut d'Angular, est prévu avec la montée de version
-du socle (recommandation R4).
+**Limite connue (détail des tests du front)** : SonarQube voit la
+couverture du front, mais pas le détail de ses tests. Karma, abandonné par
+ses auteurs, n'avait plus de module de rapport maintenu ; il a été
+remplacé par Vitest le 08/11 (Angular 22). Pour les tests JavaScript,
+SonarQube lit le détail au format générique
+(`sonar.testExecutionReportPaths`), que Vitest ne produit pas seul :
+évolution.
 
 ## 4. Conclusion
 

@@ -1,15 +1,22 @@
+<!-- Accessibilité (WCAG 2, niveau A) : le champ a un id relié à son
+     libellé (for) -->
 <form name="org" #orgForm="ngForm">
   <div>
     <div class="level">
       <div class="level-left">
         <h2 class="title level-item is-size-2">
-          <span *ngIf="isNew">New organization</span>
-          <span *ngIf="!isNew">Organization "{{ org.name }}"</span>
+          @if (isNew) {
+            <span>New organization</span>
+          } @else {
+            <span>Organization "{{ org.name }}"</span>
+          }
         </h2>
       </div>
       <div class="level-right">
         <div class="buttons">
+          <!-- type="button" : un clic n'envoie pas le formulaire -->
           <button
+            type="button"
             (click)="saveOrg()"
             class="button is-primary is-medium level-item"
             [disabled]="!orgForm.valid"
@@ -17,6 +24,7 @@
             Save
           </button>
           <button
+            type="button"
             (click)="deleteOrg()"
             class="button is-danger is-medium level-item"
             [disabled]="!org.id"
@@ -29,9 +37,10 @@
     <div class="columns">
       <div class="column">
         <div class="field">
-          <label class="label">Name *</label>
+          <label class="label" for="org-name">Name *</label>
           <div class="control">
             <input
+              id="org-name"
               class="input {{
                 name.invalid && (name.dirty || name.touched) ? 'is-danger' : ''
               }}"
@@ -43,37 +52,36 @@
               #name="ngModel"
             />
           </div>
-          <p
-            *ngIf="name.invalid && (name.dirty || name.touched)"
-            class="help is-danger"
-          >
-            <span *ngIf="name.errors?.['required']">Name is required.</span>
-          </p>
+          @if (name.invalid && (name.dirty || name.touched)) {
+            <p class="help is-danger">
+              @if (name.errors?.['required']) {
+                <span>Name is required.</span>
+              }
+            </p>
+          }
         </div>
         <h3 class="title is-size-3 mt-5">Persons</h3>
         <div class="table-container">
           <table class="table is-fullwidth">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Updated at</th>
+                <th scope="col">Name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Updated at</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let person of org.persons">
-                <td>
-                  <a [routerLink]="['/persons', person.id]"
-                    >{{ person.firstName }} {{ person.lastName }}</a
-                  >
-                </td>
-                <td>
-                  {{ person.email }}
-                </td>
-                <td>
-                  {{ person.updatedAt | date }}
-                </td>
-              </tr>
+              @for (person of org.persons; track person.id) {
+                <tr>
+                  <td>
+                    <a [routerLink]="['/persons', person.id]"
+                      >{{ person.firstName }} {{ person.lastName }}</a
+                    >
+                  </td>
+                  <td>{{ person.email }}</td>
+                  <td>{{ person.updatedAt | date }}</td>
+                </tr>
+              }
             </tbody>
           </table>
         </div>

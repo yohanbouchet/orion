@@ -1,26 +1,36 @@
-import { AsyncPipe, DatePipe, NgFor, NgIf } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Person, PersonService } from '../person.service';
 import { Organization, OrganizationService } from '../organization.service';
 
 @Component({
   selector: 'app-main-dashboard',
-  standalone: true,
-  imports: [RouterLink, NgFor, NgIf, AsyncPipe, DatePipe],
+  imports: [RouterLink, DatePipe],
   templateUrl: './main-dashboard.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './main-dashboard.component.css'
 })
 export class MainDashboardComponent implements OnInit {
   organizations: Organization[] = [];
   persons: Person[] = [];
 
-  constructor(private personService: PersonService, private organizationService: OrganizationService) { }
+  constructor(
+    private readonly personService: PersonService,
+    private readonly organizationService: OrganizationService
+  ) { }
 
-
+  // « void » : le résultat n'est pas attendu ici, une erreur remonte au
+  // gestionnaire d'erreurs d'Angular (SonarQube typescript:S9383)
   ngOnInit(): void {
-    this.personService.fetchAll().then(persons => this.persons = persons);
-    this.organizationService.fetchAll().then(orgs => this.organizations = orgs);
+    void this.load()
+  }
+
+  // Les deux listes sont demandées en même temps au back
+  private async load() {
+    [this.persons, this.organizations] = await Promise.all([
+      this.personService.fetchAll(),
+      this.organizationService.fetchAll(),
+    ])
   }
 }
-

@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # Fichier  : scripts/run-tests.sh
-# Rôle     : lance les tests du front (Karma) ou du back (JUnit) une seule
+# Rôle     : lance les tests du front (Vitest) ou du back (JUnit) une seule
 #            fois, puis vérifie que le rapport de couverture attendu par
 #            SonarQube existe ; la même commande en local et dans la CI
-# Utilise  : scripts/lib/common.sh ; node, npx, Chrome (front) ; java,
+# Utilise  : scripts/lib/common.sh ; node, npx (front) ; java,
 #            gradlew (back) ; dépendances installées par install-deps.sh
 # Utilisé par : jobs test-front et test-back de ci.yml ; ticket #56
 # Usage    : scripts/run-tests.sh front|back
-# Paramètre : KARMA_BROWSER (défaut ChromeHeadless, bac à sable de Chrome
-#             actif ; la CI passe ChromeHeadlessNoSandbox)
 
 # Arrêt à la première erreur, variable inconnue, erreur dans un tube
 set -Eeuo pipefail
@@ -36,20 +34,19 @@ usage() {
 check_report() {
   [[ -s "$ROOT_DIR/$1" ]] ||
     die "coverage report $1 missing or empty;" \
-      "fix: check the coverage settings (karma.conf.js, build.gradle)"
+      "fix: check the coverage settings (angular.json, build.gradle)"
   log INFO "coverage report ready: $1"
 }
 
-# Front : une seule exécution (pas de surveillance), Chrome sans écran
+# Front : une seule exécution (pas de surveillance) ; Vitest lance les
+# tests dans Node avec jsdom, un navigateur simulé : plus besoin de Chrome
 run_front() {
   require_cmd node npx
   [[ -d "$ROOT_DIR/front/node_modules" ]] ||
     die "front dependencies not installed;" \
       "fix: run scripts/install-deps.sh front"
-  local browser="${KARMA_BROWSER:-ChromeHeadless}"
-  log INFO "running front tests (Karma, $browser)"
-  (cd "$ROOT_DIR/front" && npx ng test --no-watch --no-progress \
-    --browsers="$browser")
+  log INFO "running front tests (Vitest)"
+  (cd "$ROOT_DIR/front" && npx ng test --no-watch --no-progress)
   check_report "$FRONT_COVERAGE"
 }
 

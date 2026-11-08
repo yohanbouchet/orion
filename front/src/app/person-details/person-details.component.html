@@ -1,17 +1,22 @@
+<!-- Accessibilité (WCAG 2, niveau A) : chaque champ a un id relié à son
+     libellé (for), chaque bouton sans texte lisible a un nom (aria-label) -->
 <form name="person" #personForm="ngForm">
   <div>
     <div class="level">
       <div class="level-left">
         <h2 class="title level-item is-size-2">
-          <span *ngIf="isNew">New person</span>
-          <span *ngIf="!isNew"
-            >Person "{{ person.firstName }} {{ person.lastName }}"</span
-          >
+          @if (isNew) {
+            <span>New person</span>
+          } @else {
+            <span>Person "{{ person.firstName }} {{ person.lastName }}"</span>
+          }
         </h2>
       </div>
       <div class="level-right">
         <div class="buttons">
+          <!-- type="button" : un clic n'envoie pas le formulaire -->
           <button
+            type="button"
             (click)="savePerson()"
             class="button is-primary is-medium level-item"
             [disabled]="!personForm.valid"
@@ -19,6 +24,7 @@
             Save
           </button>
           <button
+            type="button"
             (click)="deletePerson()"
             class="button is-danger is-medium level-item"
             [disabled]="!person.id"
@@ -31,9 +37,10 @@
     <div class="columns">
       <div class="column">
         <div class="field">
-          <label class="label">First name *</label>
+          <label class="label" for="person-first-name">First name *</label>
           <div class="control">
             <input
+              id="person-first-name"
               class="input {{
                 firstName.invalid && (firstName.dirty || firstName.touched)
                   ? 'is-danger'
@@ -47,19 +54,19 @@
               #firstName="ngModel"
             />
           </div>
-          <p
-            *ngIf="firstName.invalid && (firstName.dirty || firstName.touched)"
-            class="help is-danger"
-          >
-            <span *ngIf="firstName.errors?.['required']"
-              >First name is required.</span
-            >
-          </p>
+          @if (firstName.invalid && (firstName.dirty || firstName.touched)) {
+            <p class="help is-danger">
+              @if (firstName.errors?.['required']) {
+                <span>First name is required.</span>
+              }
+            </p>
+          }
         </div>
         <div class="field">
-          <label class="label">Last name *</label>
+          <label class="label" for="person-last-name">Last name *</label>
           <div class="control">
             <input
+              id="person-last-name"
               class="input {{
                 lastName.invalid && (lastName.dirty || lastName.touched)
                   ? 'is-danger'
@@ -73,77 +80,63 @@
               #lastName="ngModel"
             />
           </div>
-          <p
-            *ngIf="lastName.invalid && (lastName.dirty || lastName.touched)"
-            class="help is-danger"
-          >
-            <span *ngIf="lastName.errors?.['required']"
-              >Last name is required.</span
-            >
-          </p>
+          @if (lastName.invalid && (lastName.dirty || lastName.touched)) {
+            <p class="help is-danger">
+              @if (lastName.errors?.['required']) {
+                <span>Last name is required.</span>
+              }
+            </p>
+          }
         </div>
         <div class="field">
-          <label class="label">Email</label>
+          <label class="label" for="person-email">Email</label>
           <div class="control">
             <input
+              id="person-email"
               class="input {{
                 email.invalid && (email.dirty || email.touched)
                   ? 'is-danger'
                   : ''
               }}"
               type="email"
+              email
               placeholder="jdoe@gmail.com"
               [(ngModel)]="person.email"
               name="email"
               #email="ngModel"
             />
           </div>
-          <p
-            *ngIf="email.invalid && (email.dirty || email.touched)"
-            class="help is-danger"
-          >
-            <span *ngIf="email.errors?.['email']"
-              >Email must be a valid email address.</span
-            >
-          </p>
+          @if (email.invalid && (email.dirty || email.touched)) {
+            <p class="help is-danger">
+              @if (email.errors?.['email']) {
+                <span>Email must be a valid email address.</span>
+              }
+            </p>
+          }
         </div>
         <div class="field">
-          <label class="label">Phone</label>
+          <label class="label" for="person-phone">Phone</label>
           <div class="control">
             <input
-              class="input {{
-                phone.invalid && (phone.dirty || phone.touched)
-                  ? 'is-danger'
-                  : ''
-              }}"
+              id="person-phone"
+              class="input"
               [(ngModel)]="person.phone"
               name="phone"
-              #phone="ngModel"
               type="tel"
               placeholder="+1 (988) 112-8197"
             />
           </div>
-          <p
-            *ngIf="phone.invalid && (phone.dirty || phone.touched)"
-            class="help is-danger"
-          >
-            <span *ngIf="phone.errors?.['tel']"
-              >Phone must be a valid phone number.</span
-            >
-          </p>
         </div>
       </div>
       <div class="column">
         <div class="field">
-          <label class="label">Bio</label>
+          <label class="label" for="person-bio">Bio</label>
           <div class="control">
             <textarea
-              class="textarea {{
-                bio.invalid && (bio.dirty || bio.touched) ? 'is-danger' : ''
-              }}"
+              id="person-bio"
+              class="textarea"
               [(ngModel)]="person.bio"
               name="bio"
-              #bio="ngModel"
             ></textarea>
           </div>
         </div>
@@ -154,47 +147,68 @@
         <h3 class="title is-size-3">Organizations</h3>
         <div class="field has-addons">
           <div class="control is-expanded">
+            <!-- Libellé lu par les lecteurs d'écran, caché à l'écran -->
+            <label class="is-sr-only" for="person-organization"
+              >Organization to add</label
+            >
             <div class="select is-large is-fullwidth">
               <select
+                id="person-organization"
                 [(ngModel)]="selectedOrganization"
                 [ngModelOptions]="{ standalone: true }"
               >
                 <option [ngValue]="null">Add organization</option>
-                <option [ngValue]="org" *ngFor="let org of organizations">
-                  {{ org.name }}
-                </option>
+                @for (org of organizations; track org.id) {
+                  <option [ngValue]="org">{{ org.name }}</option>
+                }
               </select>
             </div>
           </div>
           <p class="control">
-            <button class="button is-primary is-large">
-              <span
-                class="has-text-weight-bold"
-                (click)="addSelectedOrganization()"
-                >+</span
-              >
+            <!-- Clic sur tout le bouton (et non plus sur le seul « + ») -->
+            <button
+              type="button"
+              class="button is-primary is-large"
+              aria-label="Add the selected organization"
+              [disabled]="!person.id || !selectedOrganization"
+              (click)="addSelectedOrganization()"
+            >
+              <span class="has-text-weight-bold" aria-hidden="true">+</span>
             </button>
           </p>
         </div>
+        <!-- Organisations DE LA PERSONNE (person.organizations) : la liste
+             affichait par erreur toutes les organisations -->
         <table class="table is-fullwidth">
-          <tbody>
-            <tr *ngFor="let org of organizations">
-              <td>
-                <a
-                  class="is-size-4"
-                  [routerLink]="['/organizations', org.id]"
-                  >{{ org.name }}</a
-                >
-              </td>
-              <td>
-                <button
-                  class="button is-danger ml-5 is-pulled-right"
-                  (click)="removeOrganization(org)"
-                >
-                  <span class="has-text-weight-bold">X</span>
-                </button>
-              </td>
+          <thead>
+            <tr>
+              <th scope="col">Organization</th>
+              <th scope="col"><span class="is-sr-only">Actions</span></th>
             </tr>
+          </thead>
+          <tbody>
+            @for (org of person.organizations; track org.id) {
+              <tr>
+                <td>
+                  <a
+                    class="is-size-4"
+                    [routerLink]="['/organizations', org.id]"
+                  >{{ org.name }}</a>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="button is-danger ml-5 is-pulled-right"
+                    [attr.aria-label]="'Remove ' + org.name"
+                    (click)="removeOrganization(org)"
+                  >
+                    <span class="has-text-weight-bold" aria-hidden="true"
+                      >X</span
+                    >
+                  </button>
+                </td>
+              </tr>
+            }
           </tbody>
         </table>
       </div>

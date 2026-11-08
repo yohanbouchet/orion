@@ -62,13 +62,13 @@ apparition et dans le glossaire ([annexe A](#annexe-a-glossaire)).
 | Versions | **semantic-release** | calcule le numéro de version (SemVer) à partir des messages de commit, crée l'étiquette et la release |
 | Qualité | **SonarQube** Community Build 26.10 | analyse statique, couverture, Quality Gate bloquant |
 | Sécurité | **Trivy** 0.76.2, **gitleaks** 8.30.1, **hadolint** 2.15.1, **ShellCheck** 0.11.0, **OWASP ZAP** 2.17.0, **Dependabot** | failles des dépendances et des images, secrets, bonnes pratiques, test d'intrusion, mises à jour |
-| Tests | Karma + Jasmine, JUnit 5 + JaCoCo, bashunit, pytest, **k6** 2.3.0 | tests du front, du back, des scripts ; tests de charge |
+| Tests | **Vitest** 5 (front), JUnit 5 + JaCoCo, bashunit, pytest, **k6** 2.3.0 | tests du front, du back, des scripts ; tests de charge |
 | Conteneurs | **Docker** (images multi-étapes durcies), **GHCR** (registre de GitHub) | images de l'application, versionnées et publiées |
 | Orchestration | **Kubernetes** 1.37 (Minikube 1.39.0), **Helm** 4 | trois environnements, déploiement progressif, autoscaling |
 | IaC | **Terraform** 1.17, **Ansible** 2.21 | socle du cluster et supervision ; configuration du poste Ops |
 | Supervision | **VictoriaMetrics** 1.155, **VictoriaLogs** 1.53, **Grafana** 13.2.5, **Alertmanager** 0.34.2 | métriques, journaux, tableaux de bord, alertes par e-mail |
 | Cloud | **AWS** (cible proposée, [section 5.2.1](#521-schéma-dinfrastructure-cloud)) | aujourd'hui, tout tourne en local sur le poste Ops : l'offre gratuite d'AWS ne suffit pas à faire tourner la chaîne en continu (section 5.1) ; choix validé avec le mentor |
-| Application | Angular 17.3, Spring Boot 4.1.2 (Java 17), PostgreSQL 18.6 | code de l'équipe Dev |
+| Application | Angular 22.2, Spring Boot 4.1.2 (Java 17), PostgreSQL 18.6 | code de l'équipe Dev |
 
 Ces outils sont **open source**, sauf les services de GitHub (Actions,
 GHCR, Dependabot), AWS, et Terraform, passé en 2023 sous une licence à
@@ -196,10 +196,10 @@ manuelle ratée.
 
 | Type de test | Outil | Déclenchement | Couverture cible |
 | --- | --- | --- | --- |
-| Unitaires | Karma + Jasmine (front, 8 tests) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; aujourd'hui 39,7 % de l'ensemble (lignes 43,2 %, branches 17,2 %) |
+| Unitaires | Vitest, navigateur simulé jsdom (front, 16 tests, back simulé : chargement, création, suppression, liens entre personnes et organisations) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; aujourd'hui 39,7 % de l'ensemble (lignes 43,2 %, branches 17,2 %) |
 | Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `terraform test` (6 tests) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle Terraform |
 | E2E | **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | chaque déploiement (dev, staging, prod) | le parcours complet ; un échec remet la version précédente |
-| Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (64 règles) |
+| Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
 | Scripts d'exploitation | bashunit (71 tests), pytest (28 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
 | Infrastructure | `terraform fmt` et `validate`, `ansible-playbook --syntax-check`, ansible-lint (profil production) | chaque PR | 100 % des fichiers Terraform et Ansible |
@@ -282,7 +282,7 @@ Aucune donnée réelle n'est copiée dans un environnement de test.
   assigné, avec e-mail (`notify.py`) ; un test instable est corrigé, pas
   relancé jusqu'à ce qu'il passe.
 - **Outils de test** à jour : Dependabot propose chaque semaine les
-  nouvelles versions (Karma, JUnit, actions de la CI…), testées par la CI
+  nouvelles versions (Vitest, JUnit, actions de la CI…), testées par la CI
   comme toute PR.
 - **Responsabilités** : l'équipe Dev maintient les tests de l'application
   (`front/`, `back/`) ; l'équipe Ops ceux des scripts et de
@@ -682,11 +682,12 @@ et la faille est réévaluée.
 
 **Exemples réels** : le 31/10, Trivy a trouvé 8 failles critiques et 31
 hautes dans le back (Tomcat, Spring) : corrigées le jour même par la
-montée en Spring Boot 4.1.2 (PR #26). Les failles d'Angular 17 sans
-correctif dans cette version sont acceptées jusqu'au 31/01/2027, date à
-laquelle la montée d'Angular (recommandation à l'équipe Dev) doit être
-faite. Le 03/11, ZAP a signalé l'absence d'en-tête CSP : corrigé avant
-la prod, puis la règle a été rendue bloquante.
+montée en Spring Boot 4.1.2 (PR #26). Les failles d'Angular 17, sans
+correctif dans cette version, ont été acceptées et datées le 30/10, puis
+corrigées le 08/11 par la montée vers Angular 22 (ticket #113) :
+`.trivyignore` ne contient plus aucune exception. Le 03/11, ZAP a
+signalé l'absence d'en-tête CSP : corrigé avant la prod, puis la règle a
+été rendue bloquante.
 
 ### 6.5 Plan de sécurité de la chaîne CI
 

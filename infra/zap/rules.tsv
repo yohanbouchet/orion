@@ -34,11 +34,11 @@
 10063	FAIL	(Permissions Policy Header Not Set)
 90004	FAIL	(Insufficient Site Isolation Against Spectre)
 
-# WARN : risque accepté, correction par l'équipe Dev ; Angular 17 hors
-# maintenance (audit, R4 ; voir aussi .trivyignore) ; CSS Bulma chargé
-# depuis un CDN sans contrôle d'intégrité (SRI)
-10003	WARN	(Vulnerable JS Library)
-90003	WARN	(Sub Resource Integrity Attribute Missing)
+# FAIL depuis Angular 22 et Bulma intégré au site (08/11/2026, avant :
+# WARN) : une bibliothèque JavaScript vulnérable, ou un fichier d'un autre
+# site sans contrôle d'intégrité (SRI), bloque la prod
+10003	FAIL	(Vulnerable JS Library)
+90003	FAIL	(Sub Resource Integrity Attribute Missing)
 
 # INFO : constats sans risque pour cette application
 10049	INFO	(Storable and Cacheable Content)
