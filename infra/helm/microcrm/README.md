@@ -69,10 +69,15 @@ Le HPA a besoin de l'addon **metrics-server** de Minikube
   le front, et rien d'autre (ni Internet, ni le back, ni la base en
   direct) ; de même pour le pod du test de charge k6
   (`networkPolicy.allowK6`), qui peut en plus envoyer ses mesures à
-  VictoriaMetrics (namespace `monitoring`, port 8428). La base ne peut joindre personne, le back n'a pas accès à
-  Internet.
+  VictoriaMetrics (namespace `monitoring`, port 8428). La base ne peut
+  joindre personne, le back n'a pas accès à Internet.
 - **Mises à jour sans coupure** : un nouveau pod doit être prêt avant
-  qu'un ancien soit arrêté (`maxUnavailable: 0`) ; sondes de
+  qu'un ancien soit arrêté (`maxUnavailable: 0`) ; à l'arrêt, chaque pod
+  du front et du back répond encore 10 s (`lifecycle.preStop`), le temps
+  que le Service cesse de lui envoyer des requêtes, puis s'arrête en
+  douceur. Sans cette pause, des requêtes étaient perdues à chaque
+  redémarrage (mesure du 08/11 : 22 échecs en 6 redémarrages, dont 16
+  enregistrements ; 0 en 8 redémarrages avec la pause). Sondes de
   disponibilité et de vie sur chaque composant, plus une sonde de
   démarrage pour le back (Spring Boot démarre lentement).
 

@@ -494,6 +494,41 @@ les indicateurs DORA.
   programme, sinon elle grossit jusqu'à la limite et le conteneur est
   arrêté. Aucune alerte n'a signalé cette hausse pendant 37 h.
 
+### 7.5 08/11 : requêtes perdues à chaque mise à jour (constat et correction)
+
+Constat fait **hors production**, en testant le compte de base de
+données limité (v1.8.0) : il n'entre pas dans les indicateurs DORA.
+
+- **Symptôme** : pendant un redémarrage du back, 1 à 2 requêtes sur 120
+  échouaient, toujours à l'instant où l'ancien pod s'arrête.
+- **Mesure** (namespace de test jetable, une réplique de chaque,
+  10 requêtes par seconde à travers le front, dont une sur cinq en
+  écriture, pendant chaque redémarrage) :
+
+| Redémarrage | Sans pause | Avec une pause de 10 s |
+| --- | --- | --- |
+| Back | **6 échecs** en 3 redémarrages : erreurs 502, et 2 requêtes bloquées 30 s | **0** en 5 redémarrages |
+| Front | **16 échecs** en 3 redémarrages, **tous des enregistrements** | **0** en 3 redémarrages |
+
+- **Cause** : une course connue de Kubernetes. L'ordre d'arrêt est
+  envoyé au conteneur en même temps que le pod est retiré des
+  destinataires du Service ; pendant un court instant, des requêtes
+  arrivent encore sur un serveur qui n'accepte plus de connexions. Le
+  client relance seul une lecture échouée (un navigateur aussi), pas un
+  enregistrement : ce sont donc les **saisies des utilisateurs** qui se
+  perdaient, à chaque version, puisque chaque version redémarre le front
+  et le back.
+- **Pourquoi l'exercice du 07/11 (7.3) ne l'avait pas vu** : sa sonde
+  n'envoyait que des lectures, à une requête par seconde.
+- **Correction** (v1.8.1) : pause de 10 s avant l'arrêt (`preStop`,
+  action intégrée à Kubernetes) sur le front et le back. Le pod continue
+  de servir pendant que le trafic est détourné vers les autres, puis
+  s'arrête en douceur. Coût : environ 10 s de plus par pod à chaque mise
+  à jour, sans effet pour l'utilisateur.
+- **Enseignement** : « sans coupure » se vérifie sous charge et avec des
+  écritures. Une sonde côté utilisateur (recommandation 5) doit donc
+  aussi écrire, et à un rythme suffisant.
+
 ## 8. Gains obtenus et recommandations d'amélioration continue
 
 ### 8.1 Gains obtenus
@@ -605,3 +640,4 @@ passage dans le cloud, la séparation de la CI et de l'application.
 | Alertes de sécurité | `vmalert -dryRun` et `vmalert-tool unittest` 1.155.0 ; conditions rejouées sur VictoriaMetrics depuis le 05/11 ; test annoncé en prod | 07/11/2026 |
 | Exercice de panne | sonde (1 requête par seconde, codes HTTP horodatés), `kubectl get pods -w`, journaux du pod dans VictoriaLogs | 07/11/2026 |
 | Incident SonarQube | état et événements du pod (`kubectl`), journaux du conteneur arrêté, mémoire du conteneur dans VictoriaMetrics, réglages Java par défaut lus dans l'image 26.10 | 07/11/2026 |
+| Requêtes perdues aux redémarrages | namespace de test jetable (chart v1.8.0) ; sonde Python et k6 2.3.0 (10 requêtes par seconde, codes et erreurs horodatés) pendant des `kubectl rollout restart`, avant et après la pause `preStop` | 08/11/2026 |
