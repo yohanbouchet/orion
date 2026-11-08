@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fichier  : scripts/tests/run_tests_test.sh
 # Rôle     : tests unitaires de scripts/run-tests.sh (bashunit), avec de
-#            faux outils (doublures) : aucun vrai test lancé, aucun Chrome
+#            faux outils (doublures) : aucun vrai test lancé
 # Utilise  : bashunit 0.52.0, scripts/run-tests.sh, scripts/lib/common.sh
 # Utilisé par : job script-tests de la CI ; en local : bashunit scripts/tests
 
@@ -63,18 +63,12 @@ function test_front_stops_when_dependencies_are_missing() {
   assert_contains "fix: run scripts/install-deps.sh front" "$output"
 }
 
-function test_front_runs_karma_once_with_sandboxed_chrome_by_default() {
+function test_front_runs_vitest_once_without_browser() {
   run_tests front >/dev/null
   assert_successful_code
   assert_contains "npx ng test --no-watch --no-progress" \
     "$(cat "$FAKE_REPO/calls.log")"
-  assert_contains "--browsers=ChromeHeadless" "$(cat "$FAKE_REPO/calls.log")"
-}
-
-function test_front_uses_karma_browser_parameter() {
-  KARMA_BROWSER=ChromeHeadlessNoSandbox run_tests front >/dev/null
-  assert_contains "--browsers=ChromeHeadlessNoSandbox" \
-    "$(cat "$FAKE_REPO/calls.log")"
+  assert_not_contains "--browsers" "$(cat "$FAKE_REPO/calls.log")"
 }
 
 function test_front_failure_stops_the_script() {

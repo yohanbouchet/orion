@@ -34,7 +34,7 @@ updates:
           - patch
     # Montent avec Angular, pas à pas avec ng update (recommandation R4) :
     # Angular en version majeure ; TypeScript et zone.js imposés par
-    # Angular 17, même en version mineure
+    # Angular 22, même en version mineure
     ignore:
       - dependency-name: "@angular/*"
         update-types:
@@ -50,12 +50,12 @@ updates:
         update-types:
           - version-update:semver-major
           - version-update:semver-minor
-      # Tests : Jasmine 6+ incompatible avec Karma et Angular 17 (passage à
-      # Vitest prévu avec R4)
-      - dependency-name: jasmine-core
+      # Tests : versions majeures de Vitest acceptées par Angular 22
+      # (@angular/build : 4 ou 5) ; la suivante montera avec Angular
+      - dependency-name: vitest
         update-types:
           - version-update:semver-major
-      - dependency-name: "@types/jasmine"
+      - dependency-name: "@vitest/*"
         update-types:
           - version-update:semver-major
       # Outil de version (.github/release) : la v10 exige un générateur de
