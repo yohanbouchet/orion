@@ -8,8 +8,8 @@
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Avant chaque test : un faux dépôt avec une copie du script et de faux
-# outils ; par défaut, tout va bien (namespace « restricted », Secret
-# présent, test de fumée réussi)
+# outils ; par défaut, tout va bien (namespace « restricted », les 2
+# Secrets de la base présents, test de fumée réussi)
 function set_up() {
   FAKE_REPO="$(mktemp -d)"
   mkdir -p "$FAKE_REPO"/{scripts/lib,bin,infra/helm/microcrm}
@@ -21,7 +21,8 @@ function set_up() {
   printf '#!/usr/bin/env bash\nprintf "%%064d\\n" 7\n' \
     >"$FAKE_REPO/bin/openssl"
   chmod +x "$FAKE_REPO/bin/openssl"
-  export PSS_LEVEL="restricted" SECRET_EXISTS=1 SMOKE_EXIT=0
+  export PSS_LEVEL="restricted" SECRET_EXISTS=1 APP_SECRET_EXISTS=1
+  export SMOKE_EXIT=0
 }
 
 # Après chaque test : suppression du faux dépôt
@@ -40,6 +41,7 @@ case "$*" in
   "config current-context") echo "orion" ;;
   *"get namespace"*) [[ -n "$PSS_LEVEL" ]] || exit 1
     [[ "$PSS_LEVEL" == none ]] || echo "$PSS_LEVEL" ;;
+  *"get secret microcrm-db-app"*) [[ "$APP_SECRET_EXISTS" == 1 ]] || exit 1 ;;
   *"get secret"*) [[ "$SECRET_EXISTS" == 1 ]] || exit 1 ;;
   *"create secret"*) echo "stdin: $(cat)" >>"$CALLS_LOG" ;;
   *exec*) exit "$SMOKE_EXIT" ;;
@@ -121,6 +123,15 @@ function test_missing_secret_is_created_through_a_pipe() {
 function test_existing_secret_is_kept() {
   run_deploy dev >/dev/null
   assert_not_contains "create secret" "$(calls)"
+}
+
+# Environnement déjà installé : seul le Secret du compte limité manque ;
+# celui du superutilisateur (base existante) est gardé tel quel
+function test_missing_app_secret_is_created_and_admin_secret_kept() {
+  APP_SECRET_EXISTS=0 run_deploy dev >/dev/null
+  assert_successful_code
+  assert_contains "create secret generic microcrm-db-app" "$(calls)"
+  assert_not_contains "create secret generic microcrm-db " "$(calls)"
 }
 
 function test_deploy_lints_then_upgrades_with_environment_values() {

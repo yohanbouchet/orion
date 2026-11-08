@@ -25,8 +25,10 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 CHART_DIR="$ROOT_DIR/infra/helm/microcrm"
 RELEASE="microcrm"
-# Secret du mot de passe de la base, lu par le chart (postgres.existingSecret)
+# Secrets des mots de passe de la base, lus par le chart : superutilisateur
+# (postgres.existingSecret) et compte limité de l'appli (appExistingSecret)
 DB_SECRET="microcrm-db"
+DB_APP_SECRET="microcrm-db-app"
 # Attente maximale des pods : Spring Boot met environ une minute à démarrer
 TIMEOUT="6m"
 
@@ -62,19 +64,19 @@ check_namespace() {
       "pod-security.kubernetes.io/enforce=restricted)"
 }
 
-# Mot de passe de la base : créé une seule fois, jamais remplacé (la base
-# existante le garde) ; la valeur aléatoire passe par un tube, jamais par
-# la ligne de commande (visible des autres programmes avec ps)
+# Mot de passe d'un compte de la base : créé une seule fois, jamais
+# remplacé (la base existante le garde) ; la valeur aléatoire passe par un
+# tube, jamais par la ligne de commande (visible des autres programmes avec ps)
 ensure_db_secret() {
-  local ns="$1"
-  if kubectl -n "$ns" get secret "$DB_SECRET" >/dev/null 2>&1; then
-    log INFO "database secret already exists: kept"
+  local ns="$1" secret="$2"
+  if kubectl -n "$ns" get secret "$secret" >/dev/null 2>&1; then
+    log INFO "database secret $secret already exists: kept"
     return
   fi
   openssl rand -hex 32 | tr -d '\n' |
-    kubectl -n "$ns" create secret generic "$DB_SECRET" \
+    kubectl -n "$ns" create secret generic "$secret" \
       --from-file=password=/dev/stdin >/dev/null
-  log INFO "database secret created (random value, never shown)"
+  log INFO "database secret $secret created (random value, never shown)"
 }
 
 # Numéro de la version installée (1re colonne de la dernière ligne de
@@ -119,7 +121,8 @@ deploy() {
   log INFO "cluster: $(kubectl config current-context 2>/dev/null ||
     echo in-cluster)"
   check_namespace "$env"
-  ensure_db_secret "$env"
+  ensure_db_secret "$env" "$DB_SECRET"
+  ensure_db_secret "$env" "$DB_APP_SECRET"
   log INFO "checking the chart (helm lint)"
   helm lint --quiet "$CHART_DIR" "${args[@]}"
   # --rollback-on-failure : si les pods ne sont pas prêts à temps, Helm
