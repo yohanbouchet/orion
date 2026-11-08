@@ -1,8 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { PersonDetailsComponent } from './person-details.component';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { RouterTestingModule } from "@angular/router/testing";
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 
 describe('IndividualDetailsComponent', () => {
@@ -11,8 +12,9 @@ describe('IndividualDetailsComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [PersonDetailsComponent, HttpClientTestingModule, RouterTestingModule]
-    })
+    imports: [PersonDetailsComponent, RouterTestingModule],
+    providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+})
       .compileComponents();
 
     fixture = TestBed.createComponent(PersonDetailsComponent);
