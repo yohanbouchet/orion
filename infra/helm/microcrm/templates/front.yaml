@@ -75,6 +75,12 @@ spec:
               port: http
             periodSeconds: 20
             failureThreshold: 3
+          # Arrêt sans requête perdue, comme le back (templates/back.yaml) :
+          # 10 s de service encore assuré, puis arrêt en douceur de nginx
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
           resources:
             {{- toYaml .resources | nindent 12 }}
           volumeMounts:

@@ -173,6 +173,15 @@ spec:
               port: management
             periodSeconds: 20
             failureThreshold: 3
+          # Arrêt sans requête perdue : à l'ordre d'arrêt, le pod continue
+          # de répondre 10 s, le temps que le Service cesse de lui envoyer
+          # des requêtes ; ensuite seulement, Spring Boot s'arrête en
+          # douceur (requêtes en cours terminées) ; le tout tient dans les
+          # 30 s laissées par Kubernetes avant l'arrêt forcé
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
           resources:
             {{- toYaml .resources | nindent 12 }}
           volumeMounts:
