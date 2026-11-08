@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MainDashboardComponent } from './main-dashboard.component';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { RouterTestingModule } from "@angular/router/testing";
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 
 
 describe('MainDashboardComponent', () => {
@@ -13,7 +13,7 @@ describe('MainDashboardComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
     imports: [MainDashboardComponent, RouterTestingModule],
-    providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()]
 })
       .compileComponents();
 

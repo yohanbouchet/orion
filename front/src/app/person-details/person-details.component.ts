@@ -1,5 +1,5 @@
 import { AsyncPipe } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Person, PersonService } from '../person.service';
@@ -9,6 +9,7 @@ import { Organization, OrganizationService } from '../organization.service';
     selector: 'app-person-details',
     imports: [FormsModule, AsyncPipe, RouterLink],
     templateUrl: './person-details.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './person-details.component.css'
 })
 export class PersonDetailsComponent implements OnInit {

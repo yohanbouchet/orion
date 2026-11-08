@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { OrganizationDetailsComponent } from './organization-details.component';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { RouterTestingModule } from "@angular/router/testing";
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 
 
 describe('IndividualDetailsComponent', () => {
@@ -13,7 +13,7 @@ describe('IndividualDetailsComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
     imports: [OrganizationDetailsComponent, RouterTestingModule],
-    providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+    providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()]
 })
       .compileComponents();
 
