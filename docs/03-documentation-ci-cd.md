@@ -557,9 +557,13 @@ validé par la direction.
 - **Mises à jour sans interruption** : mise à jour progressive
   (`maxSurge: 1`, `maxUnavailable: 0`) : un nouveau pod doit être prêt
   avant qu'un ancien s'arrête ; sondes de démarrage, de disponibilité et
-  de vie sur l'API ; arrêt propre de Spring Boot (vérifié le 07/11 : un
-  pod de l'API supprimé en prod, 0 erreur pour l'utilisateur, remplaçant
-  prêt en 11 s).
+  de vie sur l'API ; à l'arrêt, pause de 10 s du front et de l'API
+  (`preStop`), le temps que le Service cesse de leur envoyer des
+  requêtes, puis arrêt propre (nginx, Spring Boot). Mesure du 08/11
+  (rapport de performance, 7.5) : sans la pause, 22 requêtes perdues en
+  6 redémarrages, dont 16 enregistrements ; avec, 0 en 8. Exercice du
+  07/11 : un pod de l'API supprimé en prod, 0 erreur pour l'utilisateur,
+  remplaçant prêt en 11 s.
 - **Sécurité** : namespaces au niveau Pod Security « restricted » ;
   conteneurs sans root, système de fichiers en lecture seule, aucune
   capacité Linux ; pare-feu entre pods ; images figées et scannées ;
@@ -763,10 +767,12 @@ pour garder la trace et mesurer le temps de rétablissement (DORA).
 
 **Mise à jour progressive** (*rolling update*) de Kubernetes, sans
 coupure : un nouveau pod doit être prêt avant qu'un ancien s'arrête
-(`maxUnavailable: 0`), et le test de fumée valide le tout. Raisons :
+(`maxUnavailable: 0`), chaque pod qui s'arrête répond encore 10 s
+(`preStop`, section 5.6), et le test de fumée valide le tout. Raisons :
 aucune ressource en double à payer, intégrée à Kubernetes, retour arrière
 en une commande, et suffisante pour le trafic d'Orion (vérifiée par
-l'exercice de panne du 07/11 : 0 erreur).
+l'exercice de panne du 07/11 et par la mesure sous charge du 08/11 :
+0 erreur).
 
 Écartés pour l'instant : **blue-green** (deux environnements complets,
 coût double) et **canary** (demande un routage fin du trafic, et assez
