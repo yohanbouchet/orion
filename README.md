@@ -94,8 +94,10 @@ orchestre la CI et héberge le registre d'images.
   une seule adresse pour le navigateur, sans réglage CORS.
 - Le **back** utilise PostgreSQL quand les variables
   `SPRING_DATASOURCE_*` sont fournies (Kubernetes), sinon une base
-  HSQLDB en mémoire (tests, poste de développement). Les tables sont
-  créées par **Flyway** (`back/src/main/resources/db/migration/`).
+  HSQLDB en mémoire (tests, poste de développement). Dans Kubernetes, il
+  se connecte avec un compte aux droits limités ; les tables sont créées
+  par **Flyway** (`back/src/main/resources/db/migration/`), avec le
+  compte propriétaire de la base.
 - Le runner local n'a ni Docker, ni sudo, ni droits élevés : tout ce qui
   construit ou exécute du code tourne sur les machines jetables de GitHub.
   Le test d'intrusion tourne dans un pod jetable de `staging`, lancé par
@@ -507,6 +509,12 @@ sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.m
   conteneurs en lecture seule et sans capacité Linux, pare-feu entre pods
   (NetworkPolicy, refus par défaut) ; un compte de déploiement par
   namespace, sans droit ailleurs (Terraform).
+- **Base de données** : l'API se connecte avec un compte limité
+  (`microcrm_app`) qui ne peut que lire et écrire des lignes : une
+  injection SQL ne pourrait ni supprimer une table, ni créer un compte,
+  ni lancer une commande système. Le superutilisateur ne sert qu'aux
+  migrations Flyway et aux sauvegardes
+  ([détails](infra/helm/microcrm/README.md#sécurité)).
 - **CI** : actions figées par empreinte et limitées par une liste
   d'autorisation du dépôt (actions de GitHub,
   `SonarSource/sonarqube-scan-action`, `hashicorp/setup-terraform`) :
@@ -540,7 +548,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Test d'intrusion limité au front : l'API ne publie pas de description OpenAPI, le scan actif n'atteint donc pas ses routes ; scan actif lancé à la main | OpenAPI (`springdoc`, équipe Dev) puis `zap-api-scan` ; scan actif planifié chaque semaine | [ZAP](#test-dintrusion-zap) |
 | Image ZAP : 421 failles hautes ou critiques sans correctif, dans le système de base de l'image officielle | Suivre les versions de ZAP ; pod éphémère, isolé par le pare-feu, sans root (risque accepté) | [ZAP](#test-dintrusion-zap) |
 | Une seule personne : elle approuve ses propres déploiements en prod | En équipe : une autre personne approuve (« Prevent self-review ») | [CI](#déploiement-continu-ci) |
-| Compte `microcrm` superutilisateur PostgreSQL | Compte applicatif aux droits limités | [chart](infra/helm/microcrm/README.md#limites-connues) |
+| L'API utilise un compte limité, mais le mot de passe du superutilisateur de la base reste dans son pod (migrations Flyway au démarrage) | Migrations dans un Job séparé avant le déploiement ; API sans ce mot de passe | [chart](infra/helm/microcrm/README.md#limites-connues) |
 | Supervision sur un seul nœud ; journaux techniques gardés 7 jours, masqués à la source seulement ; pas de journal d'audit (l'application n'a pas d'authentification) | VictoriaMetrics/VictoriaLogs en cluster ; Vector ou Alloy pour masquer centralement ; authentification puis audit pseudonymisé (6 mois à 1 an) | [supervision](infra/monitoring/README.md#limites-et-évolutions) |
 | Table de liens sans clé primaire | Migration Flyway (équipe Dev) | [scripts](scripts/README.md#backupsh) |
 | CSP sans style en ligne : un futur style de composant Angular serait bloqué | Jeton par page (« nonce », `ngCspNonce`) servi par nginx | [ZAP](#test-dintrusion-zap) |

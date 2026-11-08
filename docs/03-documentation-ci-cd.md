@@ -638,7 +638,8 @@ GitHub) ; chaque secret est rangé au plus près de son seul utilisateur.
 | Jetons de déploiement (`KUBE_TOKEN`) | un par environnement GitHub (`dev`, `staging`, `production`) | le seul job de déploiement de cet environnement, depuis `main` ; la prod après approbation |
 | Jeton d'analyse SonarQube | environnement GitHub `sonarqube` | le seul job `sonarqube` ; jeton limité au projet |
 | `GITHUB_TOKEN` | créé par GitHub pour chaque exécution | droits minimaux par job ; expire à la fin du job |
-| Mot de passe de la base | Secret Kubernetes `microcrm-db`, valeur aléatoire créée par `deploy.sh`, jamais affichée | pods de l'API et de la base |
+| Mot de passe du superutilisateur de la base (`microcrm`) | Secret Kubernetes `microcrm-db`, valeur aléatoire créée par `deploy.sh`, jamais affichée | pod de la base ; pod de l'API, seulement pour Flyway et pour le conteneur d'initialisation (limite : section 6.5) |
+| Mot de passe du compte de l'application (`microcrm_app`) | Secret Kubernetes `microcrm-db-app`, créé de la même façon | pod de l'API (connexions de l'application) |
 | Mot de passe d'application Gmail (alertes) | Secret Kubernetes, saisi sans écho par l'Ops | Alertmanager |
 | Clé de l'application GitHub du runner local, mots de passe de SonarQube | Secrets Kubernetes ; copies sur le poste Ops en droits 600 | ARC ; Ops |
 | État Terraform (contient les jetons) | hors du dépôt, sur le poste Ops, droits 600 | Ops |
@@ -701,6 +702,13 @@ signalé l'absence d'en-tête CSP : corrigé avant la prod, puis la règle a
   seul le runner local peut joindre SonarQube (pare-feu réseau) ; l'Ops
   ouvre SonarQube et Grafana par tunnel depuis son poste ; Grafana n'a
   pas de compte anonyme.
+- Base de données (moindre privilège) : l'API se connecte avec un compte
+  qui ne peut que lire et écrire des lignes (`microcrm_app`) ; une
+  injection SQL ne pourrait ni supprimer une table, ni créer un compte,
+  ni lancer une commande système (refus testés). Le superutilisateur ne
+  sert qu'aux migrations Flyway, au démarrage, et aux sauvegardes.
+  **Limite** : son mot de passe reste dans le pod de l'API ; évolution :
+  migrations dans un Job séparé, avant le déploiement.
 
 **Durcissement des outils de la CI**
 

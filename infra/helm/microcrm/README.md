@@ -10,7 +10,7 @@ navigateur ──► microcrm-front (nginx, :8080)
                  │  /api/… relayé vers le back (préfixe /api retiré)
                  ▼
                microcrm-back (Spring Boot, :8080)
-                 │  JDBC ; tables créées par Flyway
+                 │  JDBC, compte limité ; tables créées par Flyway
                  ▼
                microcrm-postgres (PostgreSQL 18, :5432, disque persistant)
 ```
@@ -27,6 +27,7 @@ navigateur ──► microcrm-front (nginx, :8080)
 | `templates/front-nginx-config.yaml` | Relais `/api` (ConfigMap), inclus par `front/nginx.conf` |
 | `templates/back.yaml` | Service, Deployment et HPA (si activé) du back |
 | `templates/postgres.yaml` | Service et StatefulSet de la base, avec son disque |
+| `templates/postgres-app-role.yaml` | Script SQL du compte limité de l'application (ConfigMap), lancé avant l'API par le conteneur d'initialisation du back |
 | `templates/network-policy.yaml` | Pare-feu entre pods |
 
 ## Environnements
@@ -41,8 +42,21 @@ Le HPA a besoin de l'addon **metrics-server** de Minikube
 
 ## Sécurité
 
-- **Aucun secret dans le chart** : le mot de passe de la base est lu dans
-  le Secret `microcrm-db`, créé hors du chart avec une valeur aléatoire.
+- **Aucun secret dans le chart** : les mots de passe de la base sont lus
+  dans les Secrets `microcrm-db` (superutilisateur) et `microcrm-db-app`
+  (compte de l'application), créés hors du chart par `scripts/deploy.sh`
+  avec une valeur aléatoire.
+- **Moindre privilège dans la base** : l'API se connecte avec le compte
+  `microcrm_app`, qui ne peut que lire et écrire des lignes ; il ne peut
+  ni créer, modifier, vider ou supprimer une table, ni créer un compte ou
+  une base, ni lire un fichier du serveur, ni lancer une commande système
+  (refus testés le 08/11). Le superutilisateur `microcrm` (réglage par
+  défaut de l'image officielle) ne sert plus qu'à Flyway, au démarrage,
+  sur sa propre connexion, et aux sauvegardes. Le compte limité est créé
+  ou remis à jour avant l'API par le conteneur d'initialisation
+  `db-app-role` (`psql` de l'image de la base, script
+  `templates/postgres-app-role.yaml`, rejouable) ; ses droits valent
+  aussi pour les tables créées plus tard (`ALTER DEFAULT PRIVILEGES`).
 - **Conteneurs durcis**, conformes au niveau Pod Security
   **« restricted »** appliqué au namespace : utilisateur non root (101,
   1001, 70), aucune élévation de droits, aucune capacité Linux, disque
@@ -69,8 +83,9 @@ Les namespaces `dev`, `staging` et `prod` (niveau de sécurité
 une seule fois par Terraform : voir [`infra/terraform`](../../terraform/README.md).
 
 ```shell
-# 1. Déploiement : Secret de la base (créé une seule fois, aléatoire),
-#    helm lint, installation, test de fumée, retour arrière si besoin
+# 1. Déploiement : Secrets des 2 comptes de la base (créés une seule
+#    fois, aléatoires), helm lint, installation, test de fumée, retour
+#    arrière si besoin
 scripts/deploy.sh dev
 
 # 2. Accès depuis le poste : http://localhost:8080 (transfert de port
@@ -86,10 +101,13 @@ arrière : `scripts/deploy.sh rollback dev`. Détails :
 
 - La taille du disque de la base ne se change plus après la création
   (champ figé d'un StatefulSet).
-- Le compte `microcrm` de l'application est **superutilisateur**
-  PostgreSQL (réglage par défaut de l'image officielle) ; un compte aux
-  droits limités, propriétaire du seul schéma de l'application, serait
-  plus sûr.
+- Le mot de passe du superutilisateur `microcrm` est encore remis au pod
+  du back : Flyway s'en sert pour créer les tables au démarrage, et le
+  conteneur d'initialisation pour créer le compte limité. Le compte
+  limité peut aussi écrire dans la table d'historique de Flyway
+  (`flyway_schema_history`), comme dans toute table du schéma.
+  Évolution : migrations lancées par un Job séparé avant le déploiement
+  (hook Helm), API sans ce mot de passe, droits retirés sur cette table.
 - Sauvegardes : par `scripts/backup.sh`, avec leurs propres limites
   ([détails](../../../scripts/README.md#backupsh)).
 - Ressources (`requests`, `limits`) : valeurs de départ, à ajuster après
