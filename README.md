@@ -400,6 +400,7 @@ dépendaient de l'exploitation :
 | En-têtes Permissions-Policy et d'isolation (Spectre) absents | Faible | **Corrigés** avec la CSP ; règles en FAIL |
 | Angular 17.3.12 vulnérable (bibliothèque JavaScript) | Élevé | **Corrigé** le 08/11 : Angular 22 (ticket #113) ; règle passée en FAIL |
 | CSS Bulma chargé d'un CDN sans contrôle d'intégrité (SRI) | Moyen | **Corrigé** le 08/11 : Bulma installé avec npm et servi par le site, CSP limitée au site ; règle passée en FAIL |
+| Contenu gardé par les caches sans durée fixée (*Storable and Cacheable Content*, 09/11) | Information | **Corrigé** : `Cache-Control` par type d'adresse ; API `no-store` (données personnelles) ; fichiers à empreinte gardés un an ; le reste revalidé |
 
 Vérifié avant la fusion : avec les règles en FAIL, le front sans les
 en-têtes fait échouer ZAP (3 alertes FAIL, prod bloquée) ; avec les
@@ -519,7 +520,8 @@ sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.m
   à jour après un délai de refroidissement (sécurité : immédiat).
 - **En-têtes de sécurité du front** (nginx) : CSP stricte (scripts du
   site seulement, aucun style en ligne), anti-cadre, `nosniff`,
-  `Referrer-Policy`, `Permissions-Policy`, isolation (COOP, CORP, COEP).
+  `Referrer-Policy`, `Permissions-Policy`, isolation (COOP, CORP, COEP),
+  `Cache-Control` (réponses de l'API jamais gardées par un cache).
 - **Images durcies** : sans root, versions figées, seulement le
   nécessaire ; image PostgreSQL sans `gosu`.
 - **Cluster** : namespaces au niveau Pod Security « restricted »,
@@ -569,6 +571,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Supervision sur un seul nœud ; journaux techniques gardés 7 jours, masqués à la source seulement ; pas de journal d'audit (l'application n'a pas d'authentification) | VictoriaMetrics/VictoriaLogs en cluster ; Vector ou Alloy pour masquer centralement ; authentification puis audit pseudonymisé (6 mois à 1 an) | [supervision](infra/monitoring/README.md#limites-et-évolutions) |
 | Table de liens sans clé primaire | Migration Flyway (équipe Dev) | [scripts](scripts/README.md#backupsh) |
 | CSP sans style en ligne : un futur style de composant Angular serait bloqué | Jeton par page (« nonce », `ngCspNonce`) servi par nginx | [ZAP](#test-dintrusion-zap) |
+| Outil de version (semantic-release, CI seulement) : 2 failles moyennes (déni de service) dans `glob` et `minimatch`, **intégrées au paquet npm** qu'il embarque : aucune surcharge de version possible, même la dernière version de npm (12.2.2, 04/11) les contient. Non bloquantes (seuil : haute), jamais livrées, et le module qui utilise npm n'est pas chargé (`.releaserc.yml`) | Mise à jour dès que npm les corrige (proposée par Dependabot) | [`.github/release/`](.github/release/package.json) |
 | Pas d'ESLint dans le front | ESLint (équipe Dev) | [audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance) |
 | Réglage par défaut de Spring Boot `spring.jpa.open-in-view` actif (avertissement au démarrage du back) : chaque requête garde sa connexion à la base jusqu'à la fin de sa réponse ; sous forte charge, la réserve de connexions s'épuise plus vite | Le désactiver, après les tests du back et un test de charge avant et après (équipe Dev) | [réglages du back](back/src/main/resources/application.properties) |
 | Après une création, l'API renvoie l'adresse du nouvel élément (en-tête `Location`) sans le préfixe `/api` ni le port : le relais du front ne transmet pas l'adresse d'origine ; le front ne se sert pas de cet en-tête | Relais qui transmet le préfixe et l'hôte d'origine (`X-Forwarded-Prefix`, `X-Forwarded-Host`), lus par Spring Boot (`server.forward-headers-strategy=framework`) | [chart](infra/helm/microcrm/README.md#limites-connues) |

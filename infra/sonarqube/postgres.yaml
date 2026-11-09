@@ -75,6 +75,11 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+            # Disque système en lecture seule, comme la base de MicroCRM :
+            # un attaquant ne peut ni modifier un programme ni en déposer
+            # un ; seuls les volumes ci-dessous sont inscriptibles (alerte
+            # KSV-0014 de trivy config, corrigée le 09/11/2026)
+            readOnlyRootFilesystem: true
           # Prêt à recevoir du trafic quand PostgreSQL répond
           readinessProbe:
             exec:
@@ -97,6 +102,17 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql
+            # Seuls dossiers inscriptibles hors données : prise de connexion
+            # locale et fichiers temporaires
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
   # Un disque persistant par pod, conservé si le pod est recréé
   volumeClaimTemplates:
     - metadata:
