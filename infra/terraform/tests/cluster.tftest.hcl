@@ -1,12 +1,23 @@
 # Fichier  : infra/terraform/tests/cluster.tftest.hcl
-# Rôle     : tests unitaires du socle et de la supervision (terraform
-#            test), avec de faux fournisseurs Kubernetes et Helm : aucun
-#            cluster nécessaire
+# Rôle     : tests unitaires du socle et de la supervision (tofu test),
+#            avec de faux fournisseurs Kubernetes et Helm : aucun cluster
+#            nécessaire
 # Utilise  : les fichiers .tf du dossier parent
-# Utilisé par : job terraform de la CI ; en local : terraform test
+# Utilisé par : job opentofu de la CI ; en local : tofu test
 
 # Faux fournisseurs : les ressources sont « planifiées » sans cluster
-mock_provider "kubernetes" {}
+mock_provider "kubernetes" {
+  # Secrets des jetons : OpenTofu remplit les attributs calculés d'une
+  # table vide ; jeton et certificat fictifs, lus par outputs.tf
+  mock_resource "kubernetes_secret_v1" {
+    defaults = {
+      data = {
+        token    = "test-token"
+        "ca.crt" = "test-ca"
+      }
+    }
+  }
+}
 mock_provider "helm" {}
 
 # Adresse fictive pour les tests (la vraie n'est jamais dans le dépôt)

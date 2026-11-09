@@ -1,8 +1,8 @@
 # Fichier  : infra/ansible/roles/ops_tools/tasks/main.yml
-# Rôle     : outils du poste Ops (kubectl, minikube, helm) dans
-#            ~/.local/bin, sans sudo, à la version figée et à l'empreinte
-#            vérifiée ; contrôle de la version de Terraform
-# Utilise  : group_vars/all.yml (ops_tools, helm_*, terraform_min_version)
+# Rôle     : outils du poste Ops (kubectl, minikube, helm, OpenTofu)
+#            dans ~/.local/bin, sans sudo, à la version figée et à
+#            l'empreinte vérifiée
+# Utilise  : group_vars/all.yml (ops_tools, helm_*, tofu_*)
 # Utilisé par : site.yml
 
 - name: Create the user binary folder
@@ -51,19 +51,29 @@
         extra_opts: [--strip-components=1]
         mode: "0755"
 
-# Terraform est installé par le dépôt apt de HashiCorp (signé) : on vérifie
-# seulement qu'il est assez récent pour infra/terraform
-- name: Read the Terraform version
-  ansible.builtin.command: terraform version -json
-  register: ops_tools_terraform
+# OpenTofu est livré dans une archive, comme helm : on ne la traite que
+# si la version installée n'est pas la bonne
+- name: Read the installed OpenTofu version
+  ansible.builtin.command: "{{ ops_home }}/.local/bin/tofu version"
+  register: ops_tools_tofu
   changed_when: false
   # Simple lecture : aussi en mode simulation (--check)
   check_mode: false
+  failed_when: false
 
-- name: Check the Terraform version
-  ansible.builtin.assert:
-    that: >-
-      (ops_tools_terraform.stdout | from_json).terraform_version
-      is version(terraform_min_version, '>=')
-    fail_msg: "Terraform >= {{ terraform_min_version }} is required"
-    quiet: true
+- name: Install OpenTofu
+  when: ("v" ~ tofu_version) not in ops_tools_tofu.stdout | default('')
+  block:
+    - name: Download the OpenTofu archive
+      ansible.builtin.get_url:
+        url: "{{ tofu_release_url }}/tofu_{{ tofu_version }}_linux_amd64.tar.gz"
+        dest: "/tmp/tofu-{{ tofu_version }}.tar.gz"
+        checksum: "sha256:{{ tofu_sha256 }}"
+        mode: "0600"
+    - name: Extract OpenTofu
+      ansible.builtin.unarchive:
+        src: "/tmp/tofu-{{ tofu_version }}.tar.gz"
+        dest: "{{ ops_home }}/.local/bin"
+        remote_src: true
+        include: [tofu]
+        mode: "0755"

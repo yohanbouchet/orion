@@ -5,7 +5,7 @@
 #            SonarQube et son Quality Gate sur le runner local ; en
 #            parallèle, les scans de sécurité (gitleaks, hadolint,
 #            ShellCheck, Trivy), les tests des scripts (bashunit, pytest),
-#            les contrôles du socle Terraform (fmt, validate, test) et du
+#            les contrôles du socle OpenTofu (fmt, validate, test) et du
 #            code Ansible (syntaxe, ansible-lint), et la construction des
 #            images Docker analysées ; après une fusion sur main,
 #            si tout est vert, numéro de version (semantic-release :
@@ -316,10 +316,10 @@ jobs:
       - name: Run Python script tests
         run: python -m pytest -p no:cacheprovider scripts/tests
 
-  # Socle Terraform du cluster (namespaces, comptes deployer) : mise en
-  # forme, validité et tests avec un faux fournisseur, sans cluster ni
-  # état ; ticket #64
-  terraform:
+  # Socle du cluster (namespaces, comptes deployer) et supervision, en
+  # langage Terraform exécuté par OpenTofu : mise en forme, validité et
+  # tests avec de faux fournisseurs, sans cluster ni état ; ticket #64
+  opentofu:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:
@@ -330,21 +330,22 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Version figée, la même qu'en local ; sans « wrapper » (inutile ici)
-      - name: Install Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      # Version figée, la même qu'en local ; binaire vérifié par l'action
+      # (empreinte SHA-256 publiée avec la version) ; sans « wrapper »
+      - name: Install OpenTofu
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
-          terraform_version: 1.17.1
-          terraform_wrapper: false
+          tofu_version: 1.13.9
+          tofu_wrapper: false
       - name: Check formatting
-        run: terraform fmt -check -recursive
-      # Fournisseur vérifié par .terraform.lock.hcl ; aucun état lu
+        run: tofu fmt -check -recursive
+      # Fournisseurs vérifiés par .terraform.lock.hcl ; aucun état lu
       - name: Initialize without state
-        run: terraform init -backend=false -input=false
+        run: tofu init -backend=false -input=false
       - name: Validate
-        run: terraform validate
+        run: tofu validate
       - name: Unit tests
-        run: terraform test
+        run: tofu test
 
   # Code Ansible du poste Ops (infra/ansible) : syntaxe et bonnes pratiques
   # (ansible-lint, profil « production ») ; le playbook n'est JAMAIS lancé
@@ -496,7 +497,7 @@ jobs:
       - hadolint
       - shellcheck
       - script-tests
-      - terraform
+      - opentofu
       - ansible
       - trivy
       - images
@@ -551,7 +552,7 @@ jobs:
       - hadolint
       - shellcheck
       - script-tests
-      - terraform
+      - opentofu
       - ansible
       - trivy
       - images
@@ -691,7 +692,7 @@ jobs:
       - hadolint
       - shellcheck
       - script-tests
-      - terraform
+      - opentofu
       - ansible
       - trivy
       - images

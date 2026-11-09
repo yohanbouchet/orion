@@ -20,8 +20,12 @@ ops_tools:
     sha256: b738496da01be06bbaf80c688f57ce25acd3849fbb518155f3a88e03ef555aa4
 helm_version: v4.3.1
 helm_sha256: 0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b
-# Terraform vient du dépôt apt de HashiCorp : on vérifie seulement sa version
-terraform_min_version: 1.17.0
+# OpenTofu (infra/terraform) : archive officielle ; empreinte tirée du
+# fichier SHA256SUMS de la version, dont la signature GPG d'OpenTofu
+# (E3E6 E43D … E5FD 9F80) a été vérifiée le 09/11/2026
+tofu_version: 1.13.9
+tofu_release_url: "https://github.com/opentofu/opentofu/releases/download/v{{ tofu_version }}"
+tofu_sha256: b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857
 
 # Images construites sur le poste et chargées dans Minikube
 cluster_images:
