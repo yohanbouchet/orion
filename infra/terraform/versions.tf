@@ -1,6 +1,6 @@
 # Fichier  : infra/terraform/versions.tf
-# Rôle     : versions exigées d'OpenTofu et des fournisseurs Kubernetes
-#            et Helm ; dossier d'état choisi au lancement (hors du dépôt)
+# Rôle     : versions exigées d'OpenTofu et des fournisseurs Kubernetes,
+#            Helm et TLS ; dossier d'état choisi au lancement (hors du dépôt)
 # Utilise  : rien
 # Utilisé par : tofu init (ce dossier) ; job opentofu de la CI
 
@@ -23,6 +23,12 @@ terraform {
     helm = {
       source  = "hashicorp/helm"
       version = "~> 3.3.0"
+    }
+    # Certificat TLS d'OpenBao (autorité propre au cluster) ; 4.4 =
+    # dernière version, vérifiée le 09/11/2026 sur registry.opentofu.org
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.4.0"
     }
   }
 
