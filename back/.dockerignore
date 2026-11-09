@@ -1,13 +1,13 @@
 # Fichier  : back/.dockerignore
 # Rôle     : fichiers exclus du contexte de construction de l'image back :
 #            construction plus rapide, aucun fichier local ou secret copié.
+#            Seul le jar de l'application est envoyé à Docker.
 # Utilise  : rien
 # Utilisé par : docker build (contexte back/)
 
-# Fichiers générés sur la machine : l'image les produit elle-même
-.gradle
-build
-bin
-# Secrets éventuels : jamais dans une image
-.env
-.env.*
+# Tout est exclu par défaut…
+*
+# … sauf le jar produit par `./gradlew bootJar` (le « ! » réintègre)
+!build/libs/microcrm-*.jar
+# Jamais le jar sans dépendances (tâche jar de Gradle), qui ne démarre pas
+build/libs/*-plain.jar
