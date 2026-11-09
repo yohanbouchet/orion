@@ -149,7 +149,7 @@
     {
       "id": 4,
       "title": "Front 4xx responses (logs)",
-      "description": "nginx access log lines with a 4xx status over time (probing, missing pages).",
+      "description": "nginx JSON access log lines whose status field is 4xx, over time (probing, missing pages); Kubernetes probes are not logged.",
       "type": "timeseries",
       "gridPos": {
         "x": 12,
@@ -164,7 +164,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "kubernetes.pod_namespace:$env AND kubernetes.container_name:front AND ~\"\\\" 4[0-9][0-9] \" | stats count() as requests_4xx",
+          "expr": "kubernetes.pod_namespace:$env AND kubernetes.container_name:front AND status:~\"^4\" | stats count() as requests_4xx",
           "queryType": "statsRange"
         }
       ],
@@ -177,7 +177,7 @@
     {
       "id": 5,
       "title": "Error logs",
-      "description": "Log lines mentioning an error, exception or refusal in the selected environment (any case, also inside words such as ConversionFailedException). No data here means no error in the period: logs panels cannot show a custom empty message.",
+      "description": "Back lines at level ERROR or WARN (JSON field log.level, full stack trace in error.stack_trace), plus any line mentioning an error, exception or refusal in the selected environment (any case, also inside words such as ConversionFailedException). No data here means no error in the period: logs panels cannot show a custom empty message.",
       "type": "logs",
       "gridPos": {
         "x": 0,
@@ -192,7 +192,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "kubernetes.pod_namespace:$env AND ~\"(?i)(error|exception|denied|forbidden|unauthorized)\" | sort by (_time) desc | limit 200",
+          "expr": "kubernetes.pod_namespace:$env AND (log.level:in(ERROR, WARN) OR ~\"(?i)(error|exception|denied|forbidden|unauthorized)\") | sort by (_time) desc | limit 200",
           "queryType": "instant"
         }
       ],
