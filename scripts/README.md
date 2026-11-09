@@ -257,7 +257,7 @@ le même test de fumée.
 
 **Conditions d'exécution** : `helm` 4, `kubectl`, `openssl` ; accès au
 cluster (contexte `orion` sur le poste, compte de service dans la CI) ;
-namespace créé par Terraform ([`infra/terraform`](../infra/terraform/README.md)) ;
+namespace créé par OpenTofu ([`infra/terraform`](../infra/terraform/README.md)) ;
 image PostgreSQL durcie chargée dans Minikube
 ([README racine](../README.md#déployer-sur-kubernetes)).
 
@@ -267,7 +267,7 @@ image PostgreSQL durcie chargée dans Minikube
 |---|---|---|
 | Environnement, étiquette ou révision invalide | 2 | syntaxe rappelée |
 | `helm`, `kubectl` ou `openssl` absent | 127 | installer l'outil |
-| Namespace absent, illisible avec ces identifiants, ou pas « restricted » | 1 | le créer ou le corriger par Terraform (`terraform apply`), ou vérifier le contexte kubectl |
+| Namespace absent, illisible avec ces identifiants, ou pas « restricted » | 1 | le créer ou le corriger par OpenTofu (`tofu apply`), ou vérifier le contexte kubectl |
 | Pods pas prêts à temps | 1 | version précédente gardée par Helm ; `kubectl -n ENV get pods` |
 | Test de fumée en échec | 1 | version précédente remise ; journaux du back |
 

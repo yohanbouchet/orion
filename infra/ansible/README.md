@@ -1,13 +1,13 @@
 # Configuration du poste Ops (Ansible)
 
-Terraform crée ce qui vit **dans** le cluster (namespaces, comptes de
+OpenTofu crée ce qui vit **dans** le cluster (namespaces, comptes de
 déploiement). Ansible configure et **durcit la machine** qui l'héberge :
 une seule commande, relançable sans effet si tout est déjà en place
 (**idempotente**).
 
 | Rôle | Ce qu'il fait | Pourquoi |
 |---|---|---|
-| `ops_tools` | kubectl 1.37.2, minikube 1.39.0, helm 4.3.1 dans `~/.local/bin`, **empreinte SHA-256 vérifiée** ; contrôle de Terraform ≥ 1.17 | mêmes versions sur chaque poste Ops, sans sudo |
+| `ops_tools` | kubectl 1.37.2, minikube 1.39.0, helm 4.3.1 dans `~/.local/bin`, **empreinte SHA-256 vérifiée** , OpenTofu 1.13.9 (empreinte tirée du fichier signé) | mêmes versions sur chaque poste Ops, sans sudo |
 | `docker_hygiene` | journaux des conteneurs limités (3 × 10 Mo), `live-restore` ; **nettoyage chaque vendredi** (13 h 30) des images et du cache de plus de 7 jours (jamais les volumes) | le disque plein est la 1re cause de panne d'un serveur unique (mesuré le 04/11 : 39 Go d'images et 16 Go de cache récupérables) |
 | `minikube_service` | service `minikube@<utilisateur>` ([`infra/systemd`](../systemd/README.md)) activé | le cluster redémarre avec la machine |
 | `cluster_images` | images `orion/postgres`, `orion/zap`, `orion/actions-runner` construites et chargées dans Minikube **seulement si elles manquent ou si leur Dockerfile a changé** | le cluster ne télécharge jamais ces images |
@@ -72,7 +72,6 @@ redémarrage de Docker.
 | SSH accepte encore les mots de passe (fail2ban limite les essais) | clé seule (`PasswordAuthentication no`), après vérification que chaque Ops se connecte par clé |
 | Docker gère ses propres règles réseau et contourne ufw pour les ports qu'il publie (ici, Minikube ne publie que sur `127.0.0.1`) | règles dans la chaîne `DOCKER-USER` si un port devait être publié sur le réseau |
 | Sur une machine neuve, la simulation (`--check`) échoue dès qu'une tâche dépend d'un dossier ou d'un paquet pas encore installé : dès `ops_tools` (`~/.local/bin` absent), puis node_exporter et fail2ban (testé le 04/11 sur Ubuntu 26.04 vierge) | conditions `ansible_check_mode` sur ces tâches |
-| Sans Terraform installé, le playbook s'arrête sur une erreur brute (« No such file or directory ») au lieu du message « Terraform >= 1.17 is required » | message clair, ou installation de Terraform par le dépôt apt signé de HashiCorp |
 | `ansible.cfg` impose le sudo classique (`sudo.ws`) : Ansible bloque avec sudo-rs, le sudo par défaut d'Ubuntu depuis la 25.10 (bug Launchpad #2122414) | retirer `become_exe` quand le correctif d'Ansible sera publié |
 | Un seul poste, en local (inventaire `localhost`) | inventaire de plusieurs machines, connexion SSH |
 | Collections et versions des outils mises à jour à la main (Dependabot ne suit ni Galaxy ni ces binaires) | Renovate, qui sait les suivre |

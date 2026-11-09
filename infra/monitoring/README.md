@@ -2,7 +2,7 @@
 
 La pile **VictoriaMetrics + VictoriaLogs + Grafana** surveille MicroCRM
 dans ses trois environnements, ainsi que la machine qui héberge le
-cluster. Elle est installée par Terraform
+cluster. Elle est installée par OpenTofu
 ([`infra/terraform/monitoring.tf`](../terraform/monitoring.tf)), avec le
 chart officiel `victoria-metrics-k8s-stack` **0.97.1** à version figée
 (ticket #83).
@@ -49,9 +49,9 @@ nœud entier utilise alors 5,7 Gio sur 15 et 0,8 cœur sur 8.
 
 | Fichier | Rôle |
 |---|---|
-| [`values.yaml.tftpl`](values.yaml.tftpl) | réglages de la pile ; modèle Terraform : l'adresse e-mail des alertes y est insérée à l'installation, **jamais écrite dans le dépôt** |
+| [`values.yaml.tftpl`](values.yaml.tftpl) | réglages de la pile ; modèle (fonction `templatefile` d'OpenTofu) : l'adresse e-mail des alertes y est insérée à l'installation, **jamais écrite dans le dépôt** |
 | [`extras.yaml`](extras.yaml) | cibles lues (API, machine), **nos alertes**, pare-feu réseau des 2 namespaces |
-| [`dashboards/`](dashboards/) | les 3 tableaux de bord (JSON), chargés dans Grafana par des ConfigMaps (Terraform) |
+| [`dashboards/`](dashboards/) | les 3 tableaux de bord (JSON), chargés dans Grafana par des ConfigMaps (OpenTofu) |
 
 ## Ce qui est surveillé
 
@@ -163,7 +163,7 @@ en prod le 07/11/2026 : 0 ligne, même sans tenir compte de la casse).
 
 ## Utilisation
 
-Installation et mise à jour : par Terraform
+Installation et mise à jour : par OpenTofu
 ([README](../terraform/README.md#supervision)). Accès à Grafana, depuis
 le poste Ops seulement :
 
@@ -175,7 +175,7 @@ kubectl -n monitoring get secret vm-grafana \
 kubectl -n monitoring port-forward svc/vm-grafana 3000:80
 ```
 
-Désinstaller (essai, ou `terraform destroy`) : supprimer **d'abord** le
+Désinstaller (essai, ou `tofu destroy`) : supprimer **d'abord** le
 collecteur, pendant que l'opérateur VictoriaMetrics tourne encore ;
 sinon son verrou de suppression (*finalizer*) n'est jamais levé et la
 désinstallation attend sans fin (vu le 04/11) :
@@ -279,8 +279,8 @@ kill %1
   (refusés par « restricted ») : ajoutés dans `values.yaml.tftpl`.
 - **Secrets** : mot de passe d'application Gmail dans le Secret
   `alertmanager-smtp`, créé par l'Ops depuis son terminal, jamais
-  dans le dépôt ni dans l'état Terraform. L'adresse des alertes, elle,
-  est dans l'état Terraform et dans la release Helm (en clair, hors du
+  dans le dépôt ni dans l'état OpenTofu. L'adresse des alertes, elle,
+  est dans l'état OpenTofu et dans la release Helm (en clair, hors du
   dépôt, lisibles par l'Ops seul).
 
 ### Failles connues des images (Trivy, gravité haute et critique, 04/11/2026)

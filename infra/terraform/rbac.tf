@@ -8,6 +8,13 @@
 #               CI (jeton) ; outputs.tf ; ticket #64
 
 locals {
+  # Comptes deployer réduits à leurs métadonnées (nom, namespace) : boucler
+  # sur l'objet complet reprendrait son attribut déprécié
+  # default_secret_name (signalé par OpenTofu)
+  deployers = {
+    for env, account in kubernetes_service_account_v1.deployer :
+    env => account.metadata[0]
+  }
   # Droits complets sur un type d'objet du chart
   manage = ["get", "list", "watch", "create", "update", "patch", "delete"]
   # Lecture seule
@@ -85,11 +92,11 @@ resource "kubernetes_role_v1" "deployer" {
 }
 
 resource "kubernetes_role_binding_v1" "deployer" {
-  for_each = kubernetes_service_account_v1.deployer
+  for_each = local.deployers
 
   metadata {
     name      = "deployer"
-    namespace = each.value.metadata[0].namespace
+    namespace = each.value.namespace
   }
   role_ref {
     api_group = "rbac.authorization.k8s.io"
@@ -98,8 +105,8 @@ resource "kubernetes_role_binding_v1" "deployer" {
   }
   subject {
     kind      = "ServiceAccount"
-    name      = each.value.metadata[0].name
-    namespace = each.value.metadata[0].namespace
+    name      = each.value.name
+    namespace = each.value.namespace
   }
 }
 
@@ -120,7 +127,7 @@ resource "kubernetes_cluster_role_v1" "namespace_reader" {
 }
 
 resource "kubernetes_cluster_role_binding_v1" "namespace_reader" {
-  for_each = kubernetes_service_account_v1.deployer
+  for_each = local.deployers
 
   metadata {
     name = "microcrm-deployer-${each.key}-namespace"
@@ -132,21 +139,21 @@ resource "kubernetes_cluster_role_binding_v1" "namespace_reader" {
   }
   subject {
     kind      = "ServiceAccount"
-    name      = each.value.metadata[0].name
-    namespace = each.value.metadata[0].namespace
+    name      = each.value.name
+    namespace = each.value.namespace
   }
 }
 
 # Jeton de longue durée du compte (limite connue : rotation manuelle ;
 # cible : fédération OIDC GitHub → cluster, jetons de quelques minutes)
 resource "kubernetes_secret_v1" "deployer_token" {
-  for_each = kubernetes_service_account_v1.deployer
+  for_each = local.deployers
 
   metadata {
     name      = "deployer-token"
-    namespace = each.value.metadata[0].namespace
+    namespace = each.value.namespace
     annotations = {
-      "kubernetes.io/service-account.name" = each.value.metadata[0].name
+      "kubernetes.io/service-account.name" = each.value.name
     }
   }
   type                           = "kubernetes.io/service-account-token"

@@ -114,9 +114,10 @@ updates:
     commit-message:
       prefix: build
       include: scope
-  # Socle Terraform : fournisseur Kubernetes (verrouillé par
-  # .terraform.lock.hcl) ; PR testée par le job terraform
-  - package-ecosystem: terraform
+  # Socle du cluster et supervision (OpenTofu) : fournisseurs Kubernetes
+  # et Helm (verrouillés par .terraform.lock.hcl) ; PR testée par le job
+  # opentofu
+  - package-ecosystem: opentofu
     directory: /infra/terraform
     schedule:
       interval: weekly

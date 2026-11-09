@@ -53,7 +53,7 @@ Au 08/11/2026 :
 | Déploiement continu : `dev` puis `staging` à chaque fusion, `prod` sur une version après approbation | ✅ [`deploy.yml`](.github/workflows/deploy.yml) |
 | Test d'intrusion automatisé (ZAP) : passif à chaque déploiement de `staging` (bloque la prod), actif à la demande | ✅ [`zap.yml`](.github/workflows/zap.yml), [règles](infra/zap/rules.tsv) |
 | Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée au démarrage du poste et chaque jour, restauration vérifiée chaque semaine, copie hors site chiffrée |
-| Socle du cluster en Terraform (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
+| Socle du cluster en code : fichiers Terraform, exécutés par OpenTofu depuis le 09/11 (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) | ✅ [`infra/ansible/`](infra/ansible/README.md) |
 | Supervision : métriques, journaux, alertes par e-mail, 3 tableaux de bord (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) |
 | Tests de charge k6 (6 profils) ; test de fumée k6 avant chaque mise en prod ; autoscaling (HPA) du back en `staging` et en `prod` | ✅ [`load-test.sh`](scripts/README.md#load-testsh) |
@@ -83,6 +83,9 @@ orchestre la CI et héberge le registre d'images.
  GHCR (registre d'images) ──────▶ Cluster Minikube « orion »
                                    ├─ arc-runners : runners de la CI
                                    ├─ sonarqube   : SonarQube + PostgreSQL
+                                   ├─ monitoring  : métriques, journaux,
+                                   │  Grafana, alertes (+ collecteur de
+                                   │  journaux : monitoring-collector)
                                    └─ dev, staging, prod : MicroCRM
                                       (+ pod ZAP éphémère en staging)
 
@@ -124,7 +127,8 @@ orchestre la CI et héberge le registre d'images.
 front/                    application Angular, Dockerfile, nginx.conf
 back/                     API Spring Boot (Gradle), Dockerfile
 infra/
-  terraform/              socle du cluster (namespaces, comptes deployer,
+  terraform/              socle du cluster, fichiers Terraform exécutés
+                          par OpenTofu (namespaces, comptes deployer,
                           installation de la supervision)
   monitoring/             supervision : réglages, alertes, tableaux de bord
   ansible/                configuration et durcissement du poste Ops
@@ -157,7 +161,7 @@ main depuis l'onglet **Actions**.
 | `hadolint` | Bonnes pratiques des Dockerfiles | hadolint | GitHub |
 | `shellcheck` | Erreurs courantes des scripts Bash | ShellCheck | GitHub |
 | `script-tests` | Tests des scripts | bashunit, pytest | GitHub |
-| `terraform` | Mise en forme, validité et tests du socle Terraform | Terraform (`fmt`, `validate`, `test`) | GitHub |
+| `opentofu` | Mise en forme, validité et tests du socle (fichiers Terraform) | OpenTofu (`fmt`, `validate`, `test`) | GitHub |
 | `ansible` | Syntaxe et bonnes pratiques du code Ansible (jamais exécuté par la CI) | ansible-playbook `--syntax-check`, ansible-lint (profil production) | GitHub |
 | `trivy` | Failles des dépendances (production et outillage) | Trivy | GitHub |
 | `images` | Construction et scan des images front et back | Docker, Trivy | GitHub |
@@ -271,7 +275,7 @@ le front).
 
 Prérequis : le cluster Minikube `orion`
 ([installation](#installer-la-chaîne-sur-le-poste-ops)), `kubectl`,
-`helm` 4 et Terraform 1.17.
+`helm` 4 et OpenTofu 1.13.
 
 Les images du projet (PostgreSQL durcie, ZAP, runner) sont construites et
 chargées dans Minikube par Ansible ([`infra/ansible`](infra/ansible/README.md),
@@ -289,7 +293,7 @@ docker build -t orion/zap:2.17.0-hardened infra/zap
 minikube -p orion image load orion/zap:2.17.0-hardened
 ```
 
-2. Socle du cluster, une seule fois, par Terraform : namespaces `dev`,
+2. Socle du cluster, une seule fois, par OpenTofu : namespaces `dev`,
    `staging` et `prod` au niveau de sécurité « restricted », et un compte
    de déploiement par namespace, enfermé dans celui-ci
    ([`infra/terraform`](infra/terraform/README.md#utilisation)).
@@ -347,7 +351,7 @@ résumé de l'exécution (image déployée).
 
 - Chaque job ne reçoit que le jeton de **son** environnement, et ce jeton
   ne permet d'agir que dans **son** namespace
-  ([Terraform](infra/terraform/README.md#droits-dun-compte-deployer)).
+  ([OpenTofu](infra/terraform/README.md#droits-dun-compte-deployer)).
 - Les règles s'appliquent aussi aux administrateurs du dépôt
   (contournement désactivé).
 - Le certificat public de l'autorité du cluster est la variable de dépôt
@@ -491,7 +495,7 @@ Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#
 ## Superviser
 
 Pile **VictoriaMetrics + VictoriaLogs + Grafana** (open source, Apache 2.0
-sauf Grafana en AGPL v3), installée par Terraform dans deux namespaces :
+sauf Grafana en AGPL v3), installée par OpenTofu dans deux namespaces :
 `monitoring` (« restricted ») et `monitoring-collector` (collecteur de
 journaux seul, verrouillé). Elle lit les métriques de l'API (Spring Boot
 Actuator, port de gestion 8081), de Kubernetes et de la machine
@@ -521,7 +525,7 @@ sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.m
 - **Cluster** : namespaces au niveau Pod Security « restricted »,
   conteneurs en lecture seule et sans capacité Linux, pare-feu entre pods
   (NetworkPolicy, refus par défaut) ; un compte de déploiement par
-  namespace, sans droit ailleurs (Terraform).
+  namespace, sans droit ailleurs (OpenTofu).
 - **Base de données** : l'API se connecte avec un compte limité
   (`microcrm_app`) qui ne peut que lire et écrire des lignes : une
   injection SQL ne pourrait ni supprimer une table, ni créer un compte,
@@ -530,7 +534,7 @@ sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.m
   ([détails](infra/helm/microcrm/README.md#sécurité)).
 - **CI** : actions figées par empreinte et limitées par une liste
   d'autorisation du dépôt (actions de GitHub,
-  `SonarSource/sonarqube-scan-action`, `hashicorp/setup-terraform`) :
+  `SonarSource/sonarqube-scan-action`, `opentofu/setup-opentofu`) :
   toute autre action est refusée au démarrage du pipeline ; droits
   minimaux par job ; runner local jetable et non privilégié, jamais
   utilisé par un fork ; jetons de déploiement rangés dans les
@@ -556,7 +560,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Sauvegarde quotidienne complète, non chiffrée fichier par fichier sur la machine (la copie hors site, elle, est chiffrée) | Restauration à un instant donné (WAL, CloudNativePG ou RDS), sauvegarde incrémentale | [scripts](scripts/README.md#backupsh) |
 | Poste Ops : SSH accepte encore les mots de passe ; un seul poste ; rôles Ansible testés par lint et idempotence, sans machine jetable | Clé SSH seule, inventaire multi-machines, Molecule | [Ansible](infra/ansible/README.md#limites-et-évolutions) |
 | Déploiement « poussé » par la CI : un jeton du cluster est rangé dans GitHub, une modification faite à la main dans le cluster n'est pas détectée | GitOps avec Argo CD : le cluster lit lui-même Git et corrige tout écart | [CI](#déploiement-continu-ci) |
-| Jetons de déploiement de longue durée, état Terraform local | Fédération OIDC GitHub → cluster (jetons de quelques minutes) ; état distant chiffré et verrouillé | [Terraform](infra/terraform/README.md#limites-connues-et-évolutions) |
+| Jetons de déploiement de longue durée, état OpenTofu local | Fédération OIDC GitHub → cluster (jetons de quelques minutes) ; état distant chiffré et verrouillé | [OpenTofu](infra/terraform/README.md#limites-connues-et-évolutions) |
 | Versions de `kubectl` et `helm` (jobs du runner local) et images d'outils des workflows (Trivy, gitleaks, hadolint, ShellCheck) mises à jour à la main : Dependabot ne les suit pas (l'image ZAP, elle, est suivie via `infra/zap/Dockerfile`) | Image du runner contenant ces outils, et fichier d'images d'outils, suivis par Dependabot | [CI](#déploiement-continu-ci) |
 | Test d'intrusion limité au front : l'API ne publie pas de description OpenAPI, le scan actif n'atteint donc pas ses routes ; scan actif lancé à la main | OpenAPI (`springdoc`, équipe Dev) puis `zap-api-scan` ; scan actif planifié chaque semaine | [ZAP](#test-dintrusion-zap) |
 | Image ZAP : 421 failles hautes ou critiques sans correctif, dans le système de base de l'image officielle | Suivre les versions de ZAP ; pod éphémère, isolé par le pare-feu, sans root (risque accepté) | [ZAP](#test-dintrusion-zap) |
@@ -596,7 +600,7 @@ Règles complètes : [normalisation](docs/02-normalisation-plan-ci.md#2-normes-e
 | [Documentation CI/CD complète](docs/03-documentation-ci-cd.md) | Tests, architecture (actuelle et cible AWS), sécurité, releases, retour arrière, sauvegardes, supervision |
 | [Rapport de performance](docs/04-rapport-performance.md) | Mesures avant/après (DORA, tests, sécurité, charge), incidents, recommandations |
 | [Chart Helm](infra/helm/microcrm/README.md) | Déploiement Kubernetes, environnements, sécurité, limites |
-| [Terraform](infra/terraform/README.md) | Socle du cluster, comptes de déploiement, installation de la supervision |
+| [OpenTofu](infra/terraform/README.md) | Socle du cluster, comptes de déploiement, installation de la supervision |
 | [Ansible](infra/ansible/README.md) | Configuration et durcissement du poste Ops |
 | [Supervision](infra/monitoring/README.md) | Métriques, journaux, alertes, tableaux de bord, premiers gestes |
 | [Démarrage de Minikube](infra/systemd/README.md) | Service systemd du cluster |
@@ -608,13 +612,13 @@ Vérifiées le 07/11/2026 (dernière version publiée et fin de support sur
 
 | Outil | Version |
 |---|---|
-| Spring Boot / Java | 4.1.2 / 17 (image 17.0.20.1 ; 17.0.21, correctif trimestriel, disponible depuis le 05/11) |
+| Spring Boot / Java | 4.1.2 / 17 (image 17.0.21, correctif trimestriel d'octobre, en prod depuis v1.8.2) |
 | Angular / Node.js | 22.2 (TypeScript 6.0, Vitest 5) / 24 |
 | PostgreSQL | 18.6 |
 | Kubernetes (Minikube 1.39.0) | 1.37.0 (correctif 1.37.2 disponible) |
 | Helm / kubectl (jobs du runner local) | 4.3.1 / 1.37.2 |
 | ZAP (test d'intrusion) | 2.17.0 |
-| Terraform / fournisseur Kubernetes | 1.17 (1.17.1 dans la CI) / 3.4.0 |
+| OpenTofu / fournisseurs Kubernetes et Helm | 1.13.9 (poste et CI) / 3.4.0 et 3.3.0 |
 | Ansible (ansible-core / ansible-lint / community.general) | 2.21 (2.21.6 dans la CI) / 26.10.1 / 14.0.0 |
 | metrics-server / node_exporter | 0.9.1 / 1.12.1 |
 | ARC (runner local) | 0.15.1, runner 2.338.2 |

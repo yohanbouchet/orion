@@ -18,8 +18,8 @@
 kubeconfig
 *.kubeconfig
 
-# --- Terraform ---
-# Dossier des fournisseurs téléchargés (régénéré par terraform init).
+# --- OpenTofu (fichiers Terraform) ---
+# Dossier des fournisseurs téléchargés (régénéré par tofu init).
 .terraform/
 # État : décrit l'infrastructure réelle et peut contenir des secrets.
 *.tfstate

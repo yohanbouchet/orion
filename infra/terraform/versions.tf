@@ -1,12 +1,15 @@
 # Fichier  : infra/terraform/versions.tf
-# Rôle     : versions exigées de Terraform et des fournisseurs Kubernetes
+# Rôle     : versions exigées d'OpenTofu et des fournisseurs Kubernetes
 #            et Helm ; dossier d'état choisi au lancement (hors du dépôt)
 # Utilise  : rien
-# Utilisé par : terraform init (ce dossier) ; job terraform de la CI
+# Utilisé par : tofu init (ce dossier) ; job opentofu de la CI
 
+# Fichiers écrits dans le langage de Terraform (HCL), exécutés par
+# OpenTofu, son successeur open source (licence MPL-2.0, fondation Linux),
+# depuis le 09/11/2026 ; le bloc s'appelle toujours « terraform »
 terraform {
-  # Branche 1.17 maintenue (vérifiée sur endoflife.date le 02/11/2026)
-  required_version = ">= 1.17.0, < 2.0.0"
+  # Branche 1.13, la plus récente (1.13.9 du 05/11/2026)
+  required_version = ">= 1.13.0, < 2.0.0"
 
   required_providers {
     kubernetes = {
@@ -25,6 +28,6 @@ terraform {
 
   # État local, rangé HORS du dépôt : il contient en clair les jetons des
   # comptes deployer et l'adresse des alertes ; chemin donné à
-  # terraform init (-backend-config)
+  # tofu init (-backend-config)
   backend "local" {}
 }
