@@ -83,6 +83,9 @@ orchestre la CI et héberge le registre d'images.
  GHCR (registre d'images) ──────▶ Cluster Minikube « orion »
                                    ├─ arc-runners : runners de la CI
                                    ├─ sonarqube   : SonarQube + PostgreSQL
+                                   ├─ monitoring  : métriques, journaux,
+                                   │  Grafana, alertes (+ collecteur de
+                                   │  journaux : monitoring-collector)
                                    └─ dev, staging, prod : MicroCRM
                                       (+ pod ZAP éphémère en staging)
 
@@ -124,7 +127,8 @@ orchestre la CI et héberge le registre d'images.
 front/                    application Angular, Dockerfile, nginx.conf
 back/                     API Spring Boot (Gradle), Dockerfile
 infra/
-  terraform/              socle du cluster (namespaces, comptes deployer,
+  terraform/              socle du cluster, fichiers Terraform exécutés
+                          par OpenTofu (namespaces, comptes deployer,
                           installation de la supervision)
   monitoring/             supervision : réglages, alertes, tableaux de bord
   ansible/                configuration et durcissement du poste Ops

@@ -441,7 +441,7 @@ Pricing Calculator avant décision.
 ```mermaid
 flowchart TB
     pr["PR vers main, ou fusion"] --> checks
-    checks["1. Sur chaque PR et chaque fusion :<br/>12 contrôles obligatoires en parallèle<br/>tests, qualité, sécurité,<br/>images, outillage (section 4.2)"]
+    checks["1. Sur chaque PR et chaque fusion :<br/>12 contrôles obligatoires en parallèle<br/>tests, qualité, sécurité,<br/>images (après test-back, qui fournit le jar),<br/>outillage (section 4.2)"]
     checks -->|"tout vert : PR fusionnable ;<br/>sur main, la chaîne continue"| rel
     subgraph liv["2. Après une fusion sur main : livraison"]
         direction LR
@@ -450,7 +450,7 @@ flowchart TB
     d2 --> zap
     subgraph pre["3. Contrôles avant la production"]
         direction LR
-        zap["zap<br/>test d'intrusion"] --> k6["load-test<br/>fumée k6"] --> gate{"Version<br/>publiée ?"}
+        zap["zap<br/>test d'intrusion"] --> k6["load-test<br/>fumée k6"] --> gate{"Nouvelle version ?<br/>(changement livré)"}
         gate -->|"oui"| appr["Approbation<br/>humaine"] --> prod["deploy-prod"]
         gate -->|"non"| fin["Pas de prod"]
     end
@@ -460,13 +460,15 @@ flowchart TB
 
 *Description du schéma* : à chaque PR et à chaque fusion, 12 contrôles
 tournent en parallèle (l'analyse SonarQube attend les tests, dont elle
-lit la couverture). Sur une PR, ils décident si la fusion est permise.
+lit la couverture ; les images attendent `test-back`, qui leur fournit
+le jar testé du back). Sur une PR, ils décident si la fusion est permise.
 Après une fusion sur `main`, la chaîne continue : version, publication
 des images, déploiement dans `dev` puis `staging`, test d'intrusion ZAP,
 test de fumée k6 ; chaque étape doit réussir pour passer à la suivante.
-La production n'est déployée que si une version a été publiée et
-qu'une personne l'approuve. En cas d'échec sur `main`, un ticket est
-ouvert et un e-mail envoyé.
+La production n'est déployée que si une version a été publiée, donc
+si un changement livré a été fusionné (back, front, chart, base ou
+dépendances livrées, section 7.3), et qu'une personne l'approuve. En
+cas d'échec sur `main`, un ticket est ouvert et un e-mail envoyé.
 
 ### 5.3 Environnements
 
@@ -493,7 +495,8 @@ infra/
     tests/            6 tests (tofu test, faux fournisseurs)
   helm/microcrm/    chart de l'application
     templates/        front, API (+ autoscaling), PostgreSQL
-                      (StatefulSet), pare-feu réseau (NetworkPolicy)
+                      (StatefulSet) et compte limité de l'appli (script
+                      SQL), pare-feu réseau (NetworkPolicy)
     values.yaml       réglages communs ; values-<env>.yaml par environnement
   ansible/          poste Ops : site.yml + 8 rôles (outils, Docker,
                     démarrage de Minikube, images, metrics-server,
