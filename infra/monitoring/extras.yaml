@@ -184,6 +184,25 @@ extraObjects:
               annotations:
                 summary: VictoriaLogs has received no log line for 15 minutes.
                 runbook: infra/monitoring/README.md#logingestionstopped
+            # Coffre-fort OpenBao scellé (ou absent) depuis 15 min : un
+            # OpenBao redémarré (poste rallumé le matin) attend que l'Ops
+            # le déverrouille ; sans lui, la CI n'obtient plus d'accès.
+            # « or vector(0) » : alerte aussi si la mesure disparaît (pod
+            # supprimé) ; 15 min : laisse le temps au poste de démarrer
+            - alert: OpenBaoSealed
+              expr: >-
+                (max(kube_statefulset_status_replicas_ready{
+                namespace="openbao", statefulset="openbao"}) or vector(0))
+                == 0
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: >-
+                  OpenBao is sealed or down for 15 minutes: unseal it
+                  (kubectl -n openbao exec -it openbao-0 --
+                  bao operator unseal, twice).
+                runbook: infra/openbao/README.md#3-déverrouiller-ops-chaque-matin-et-après-tout-redémarrage
 
   # --- 3. Pare-feu réseau ------------------------------------------------
   # monitoring : n'entre que ce qui vient du même namespace, le

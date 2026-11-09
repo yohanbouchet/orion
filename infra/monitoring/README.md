@@ -84,6 +84,7 @@ on ne peut plus la détecter.
 | <a id="backuptooold"></a>`BackupTooOld` | machine | dernière sauvegarde réussie de la prod il y a plus de 26 h, ou jamais | critique |
 | <a id="microcrmclienterrorspike"></a>`MicrocrmClientErrorSpike` | sécurité | plus de 50 réponses 4xx de l'API de la prod en 5 min (5 au plus vues depuis le 05/11) : balayage ou tentative d'intrusion probable | avertissement |
 | <a id="logingestionstopped"></a>`LogIngestionStopped` | sécurité | aucune ligne de journal reçue par VictoriaLogs depuis 15 min (10 min sans ligne, constaté pendant 5 min), ou mesure disparue : une intrusion ne laisserait plus de trace | critique |
+| <a id="openbaosealed"></a>`OpenBaoSealed` | sécurité | coffre-fort OpenBao scellé (ou absent) depuis 15 min : après chaque démarrage du poste, il attend le déverrouillage de l'Ops ; sans lui, la CI n'obtient plus d'accès | avertissement |
 | `Watchdog` | contrôle | toujours active : prouve que la chaîne d'alerte fonctionne ; jamais envoyée | — |
 
 **Compter des événements : trois fonctions, selon le besoin** (testé le
@@ -165,6 +166,10 @@ Choix de sécurité et d'exploitation :
   (`kubectl -n monitoring-collector logs ds/vlagent-vm --tail=50`) ;
   disque de VictoriaLogs (5 Gi) plein ? pare-feu réseau
   `vlsingle-from-collector` modifié ?
+- `OpenBaoSealed` : déverrouiller avec 2 des 3 clés (Bitwarden),
+  [procédure](../openbao/README.md#3-déverrouiller-ops-chaque-matin-et-après-tout-redémarrage) ;
+  si le pod n'existe plus : `kubectl -n openbao get pods,pvc` et
+  `tofu plan` (infra/terraform).
 
 ## Tableaux de bord
 
@@ -234,6 +239,9 @@ kill %1
   réponses en prod ou 100 sur les sondes (pas d'alerte) ; journaux
   arrêtés, puis VictoriaLogs arrêté (alerte après 15 min).
   Contre-épreuve : une règle cassée exprès fait échouer les tests ;
+- `OpenBaoSealed` (09/11) : `vmalert -dryRun` et 3 cas
+  `vmalert-tool` (scellé 15 min : alerte ; déverrouillé à 8 min : rien ;
+  mesure disparue : alerte), contre-épreuve en échec comme attendu ;
 - conditions rejouées sur l'historique depuis le 05/11 : aucune fausse
   alerte. Sans le délai `for: 5m`, `LogIngestionStopped` aurait sonné à
   tort 3 fois (30 s à l'installation et au démarrage du poste, 2 min
