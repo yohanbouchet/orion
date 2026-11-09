@@ -56,6 +56,7 @@ Au 08/11/2026 :
 | Socle du cluster en code : fichiers Terraform, exécutés par OpenTofu depuis le 09/11 (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) | ✅ [`infra/ansible/`](infra/ansible/README.md) |
 | Supervision : métriques, journaux, alertes par e-mail, 3 tableaux de bord (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) |
+| Coffre-fort de secrets OpenBao (TLS, déverrouillage manuel par l'Ops, clés hors du dépôt) | ✅ [`infra/openbao/`](infra/openbao/README.md) |
 | Tests de charge k6 (6 profils) ; test de fumée k6 avant chaque mise en prod ; autoscaling (HPA) du back en `staging` et en `prod` | ✅ [`load-test.sh`](scripts/README.md#load-testsh) |
 | Indicateurs DORA, calculés chaque lundi et à la demande | ✅ [`dora.py`](scripts/README.md#dorapy) |
 | Front mis à jour vers Angular 22, tests passés à Vitest : 0 faille connue, 0 problème SonarQube | ✅ v1.7.1 |
@@ -129,8 +130,9 @@ back/                     API Spring Boot (Gradle), Dockerfile
 infra/
   terraform/              socle du cluster, fichiers Terraform exécutés
                           par OpenTofu (namespaces, comptes deployer,
-                          installation de la supervision)
+                          installation de la supervision et d'OpenBao)
   monitoring/             supervision : réglages, alertes, tableaux de bord
+  openbao/                coffre-fort de secrets (réglages, exploitation)
   ansible/                configuration et durcissement du poste Ops
   zap/                    règles du test d'intrusion (bloquant ou non)
   k6/                     scénario des tests de charge
@@ -603,7 +605,8 @@ Règles complètes : [normalisation](docs/02-normalisation-plan-ci.md#2-normes-e
 | [Documentation CI/CD complète](docs/03-documentation-ci-cd.md) | Tests, architecture (actuelle et cible AWS), sécurité, releases, retour arrière, sauvegardes, supervision |
 | [Rapport de performance](docs/04-rapport-performance.md) | Mesures avant/après (DORA, tests, sécurité, charge), incidents, recommandations |
 | [Chart Helm](infra/helm/microcrm/README.md) | Déploiement Kubernetes, environnements, sécurité, limites |
-| [OpenTofu](infra/terraform/README.md) | Socle du cluster, comptes de déploiement, installation de la supervision |
+| [OpenTofu](infra/terraform/README.md) | Socle du cluster, comptes de déploiement, installation de la supervision et d'OpenBao |
+| [OpenBao](infra/openbao/README.md) | Coffre-fort : installation, initialisation, déverrouillage du matin, sauvegarde |
 | [Ansible](infra/ansible/README.md) | Configuration et durcissement du poste Ops |
 | [Supervision](infra/monitoring/README.md) | Métriques, journaux, alertes, tableaux de bord, premiers gestes |
 | [Démarrage de Minikube](infra/systemd/README.md) | Service systemd du cluster |
