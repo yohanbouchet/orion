@@ -63,7 +63,7 @@ apparition et dans le glossaire ([annexe A](#annexe-a-glossaire)).
 | Qualité | **SonarQube** Community Build 26.10 | analyse statique, couverture, Quality Gate bloquant |
 | Sécurité | **Trivy** 0.76.2, **gitleaks** 8.30.1, **hadolint** 2.15.1, **ShellCheck** 0.11.0, **OWASP ZAP** 2.17.0, **Dependabot** | failles des dépendances et des images, secrets, bonnes pratiques, test d'intrusion, mises à jour |
 | Tests | **Vitest** 5 (front), JUnit 5 + JaCoCo, bashunit, pytest, **k6** 2.3.0 | tests du front, du back, des scripts ; tests de charge |
-| Conteneurs | **Docker** (images multi-étapes durcies), **GHCR** (registre de GitHub) | images de l'application, versionnées et publiées |
+| Conteneurs | **Docker** (images durcies ; celle du back emballe le jar testé par la CI), **GHCR** (registre de GitHub) | images de l'application, versionnées et publiées |
 | Orchestration | **Kubernetes** 1.37 (Minikube 1.39.0), **Helm** 4 | trois environnements, déploiement progressif, autoscaling |
 | IaC | **Terraform** 1.17, **Ansible** 2.21 | socle du cluster et supervision ; configuration du poste Ops |
 | Supervision | **VictoriaMetrics** 1.155, **VictoriaLogs** 1.53, **Grafana** 13.2.5, **Alertmanager** 0.34.2 | métriques, journaux, tableaux de bord, alertes par e-mail |
@@ -216,7 +216,7 @@ vers `main`, chaque fusion sur `main`, et à la main (onglet Actions).
 
 | Étape | Jobs | Quand | Bloquant |
 | --- | --- | --- | --- |
-| Contrôles (en parallèle, machines jetables de GitHub) | `test-front`, `test-back`, `gitleaks`, `hadolint`, `shellcheck`, `script-tests`, `terraform`, `ansible`, `trivy`, `images (front)`, `images (back)` | chaque PR et chaque fusion | oui : contrôles obligatoires de `main` |
+| Contrôles (en parallèle, machines jetables de GitHub) | `test-front`, `test-back`, `gitleaks`, `hadolint`, `shellcheck`, `script-tests`, `terraform`, `ansible`, `trivy`, `images (front)`, `images (back)` ; les images attendent `test-back`, qui fournit le jar du back | chaque PR et chaque fusion | oui : contrôles obligatoires de `main` |
 | Analyse de qualité (runner local) | `sonarqube`, après les deux jobs de tests (il lit leurs rapports de couverture) | chaque PR et chaque fusion ; sautée pour les PR de Dependabot (aucun secret, versions seulement) | oui |
 | Version et publication | `release`, `publish` | fusion sur `main`, si tout est vert | — |
 | Déploiement et tests en fonctionnement | `deploy-dev`, `deploy-staging`, `zap`, `load-test` | fusion sur `main` | oui : un échec arrête la chaîne avant la prod |
@@ -525,7 +525,7 @@ le relit, puis `terraform apply` (limite et recommandation, section 5.8).
 
 | Étape | Description | Responsable | Livrables | Date |
 | --- | --- | --- | --- | --- |
-| 1. Images durcies | Dockerfiles en plusieurs étapes, sans root ; hadolint et Trivy dans la CI | Ops | `front/Dockerfile`, `back/Dockerfile`, image PostgreSQL | 31/10 |
+| 1. Images durcies | Dockerfiles sans root (front en plusieurs étapes ; back construit à partir du jar testé depuis le 09/11) ; hadolint et Trivy dans la CI | Ops | `front/Dockerfile`, `back/Dockerfile`, image PostgreSQL | 31/10 |
 | 2. Versions et registre | semantic-release ; images publiées sur GHCR avec version et commit | Ops | v1.0.0 ; images `orion-front`, `orion-back` | 31/10 |
 | 3. Orchestration | chart Helm ; socle Terraform ; script de déploiement avec test de fumée et retour arrière | Ops | `infra/helm/microcrm`, `infra/terraform`, `scripts/deploy.sh` | 02/11 |
 | 4. Déploiement continu | `dev` et `staging` à chaque fusion, `prod` sur approbation ; ZAP bloquant | Ops | `deploy.yml`, `zap.yml` | 02-03/11 |
