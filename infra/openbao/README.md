@@ -81,17 +81,24 @@ kubectl -n openbao exec openbao-0 -- bao status | grep Sealed  # false
 La clé est demandée **sans s'afficher** : elle n'entre pas dans
 l'historique du shell.
 
-### 4. Activer le journal d'audit (Ops, une fois, après le 2)
+### Journal d'audit
 
-Chaque demande faite à OpenBao est écrite sur la sortie du conteneur,
-donc collectée par vlagent (VictoriaLogs) ; les secrets y sont
-remplacés par leur empreinte (HMAC) :
+Chaque demande faite à OpenBao est écrite en JSON sur la sortie du
+conteneur, donc collectée par vlagent (VictoriaLogs) ; secrets et
+jetons y sont remplacés par leur empreinte (HMAC). Il est **déclaré
+dans la configuration** ([`values.yaml`](values.yaml), bloc `audit`) :
+depuis la 2.3.2, OpenBao refuse de l'activer par l'API (un opérateur
+pourrait écrire des fichiers n'importe où sur l'hôte : constaté le
+09/11, « cannot enable audit device via API ») ; il ne peut donc pas
+être coupé sans une PR. Contrôle :
 
 ```shell
-kubectl -n openbao exec -it openbao-0 -- sh -c \
-  'printf "Root token: "; read -rs BAO_TOKEN; echo; export BAO_TOKEN;
-   bao audit enable file file_path=stdout'
+kubectl -n openbao logs openbao-0 | grep '"type":"request"' | tail -1
 ```
+
+Un changement de la configuration (ConfigMap) n'est lu qu'au
+démarrage : après le `tofu apply`, redémarrer le pod
+(`kubectl -n openbao delete pod openbao-0`), puis le déverrouiller.
 
 ## Sauvegarde
 

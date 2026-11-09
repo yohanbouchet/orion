@@ -165,6 +165,13 @@ run "openbao_is_locked_down" {
     error_message = "OpenBao must keep TLS, no injector, a network policy and a read-only root filesystem."
   }
   assert {
+    condition = strcontains(
+      yamldecode(helm_release.openbao.values[0]).server.standalone.config,
+      "audit \"file\" \"stdout\""
+    )
+    error_message = "OpenBao must declare its audit device in the configuration."
+  }
+  assert {
     condition     = tls_private_key.openbao_ca.algorithm == "ECDSA"
     error_message = "The OpenBao CA key must be ECDSA."
   }
