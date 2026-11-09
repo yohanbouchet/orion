@@ -117,16 +117,24 @@ jobs:
       # Java 17 (version du projet, supportée jusqu'au 31/10/2027), avec
       # cache des dépendances Gradle
       - name: Set up Java 17
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
+      # Gradle lui-même (environ 140 Mo), gardé à part tant que sa version
+      # ne change pas : modifier build.gradle vide le cache de setup-java,
+      # pas celui-ci. Une panne de services.gradle.org ne bloque donc plus
+      # les tests (pannes des 08 et 09/11/2026)
+      - name: Cache the Gradle distribution
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: gradle-dist-${{ hashFiles('back/gradle/wrapper/gradle-wrapper.properties') }}
       # Dépendances résolues et comparées à gradle.lockfile : arrêt si une
       # version ne correspond pas (scripts/install-deps.sh)
       - name: Install dependencies
         run: ../scripts/install-deps.sh back
-      # Tests seulement : la compilation des livrables viendra à part
       - name: Run unit and integration tests
         run: ../scripts/run-tests.sh back
       # Bibliothèques du back, pour une analyse SonarQube plus précise
@@ -145,6 +153,17 @@ jobs:
             back/build/test-results/test
             back/build/sonar-libraries
           retention-days: 7
+          if-no-files-found: error
+      # Le jar livré, construit une seule fois, ici, après les tests : le
+      # job images l'emballe tel quel (back/Dockerfile)
+      - name: Build the application jar
+        run: ./gradlew bootJar --no-daemon
+      - name: Keep the jar for the image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: back-jar
+          path: back/build/libs/microcrm-*.jar
+          retention-days: 1
           if-no-files-found: error
 
   # Analyse SonarQube et Quality Gate, sur le runner local (Minikube) :
@@ -188,7 +207,7 @@ jobs:
       # Analyse (réglages dans sonar-project.properties) puis attente du
       # Quality Gate ; le jeton n'est donné qu'à cette étape
       - name: SonarQube analysis
-        uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8.4.0
+        uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
@@ -404,6 +423,8 @@ jobs:
   # Images Docker du front et du back : construites et analysées à chaque
   # PR et à chaque fusion ; sur main, gardées pour le job publish ; #27
   images:
+    # L'image du back emballe le jar produit par test-back
+    needs: test-back
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Le même job, lancé deux fois en parallèle : une fois par image
@@ -419,6 +440,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Back : le jar construit et testé par test-back ; l'image ne fait
+      # que l'emballer (aucune compilation, aucun téléchargement de Gradle)
+      - name: Download the tested jar
+        if: matrix.component == 'back'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: back-jar
+          path: back/build/libs
       # Étiquettes OCI : lien vers le dépôt (GHCR rattache l'image au dépôt)
       # et commit exact (traçabilité)
       - name: Build image
