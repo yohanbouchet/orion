@@ -117,6 +117,29 @@ motif insensible à la casse :
 190 → 236 lignes trouvées, dont 2 `ERROR` et les exceptions d'une
 erreur 500 du 05/11, jusque-là invisibles).
 
+**Journaux structurés (JSON, 09/11/2026)** : chaque ligne écrite par
+l'application est un objet JSON ; vlagent la découpe en champs, qu'une
+recherche peut viser directement, sans motif fragile sur le texte.
+
+| Composant | Format | Champs utiles | Exemple de recherche |
+| --- | --- | --- | --- |
+| back (Spring Boot) | **ECS** (Elastic Common Schema), intégré à Spring Boot, activé par le chart (`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`) | `log.level`, `log.logger`, `message`, `service.version`, `service.environment`, `error.stack_trace` (trace complète sur une seule ligne) | `log.level:ERROR` |
+| front (nginx) | `log_format front_json` de [`front/nginx.conf`](../../front/nginx.conf) | `status`, `method`, `path`, `request_time`, `upstream_time` (temps du back), `remote_addr`, `user_agent` | `kubernetes.container_name:front AND status:~"^4"` |
+
+Choix de sécurité et d'exploitation :
+
+- le chemin du front est écrit **sans ses paramètres** (tout ce qui suit
+  `?`) : une donnée passée dans l'adresse n'arrive jamais dans les
+  journaux (OWASP Logging Cheat Sheet) ;
+- `escape=json` : un client qui envoie des guillemets (en-tête
+  `User-Agent` piégé) ne peut pas fabriquer un faux champ (testé) ;
+- les **sondes de Kubernetes** ne sont plus écrites (plusieurs lignes
+  par minute, sans intérêt) ;
+- en local (`./gradlew bootRun`, tests), le back garde le texte
+  habituel, plus lisible ;
+- les lignes d'avant le 09/11, en texte, restent visibles pendant les
+  7 jours de conservation, mais seul le motif sur le texte les trouve.
+
 **Premiers gestes** (lien `runbook` de chaque alerte) :
 
 - `MicrocrmProdDown` : `kubectl -n prod get pods`, puis
