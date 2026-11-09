@@ -111,7 +111,7 @@ de performance (document 4) :
 | 2. Qualité contrôlée à chaque modification | Quality Gate sans condition, couverture non mesurée | Quality Gate bloquant ; nouveau code couvert à 80 % | **3 conditions bloquantes** ; couverture 82,9 % |
 | 3. Livrer plus vite et de façon traçable | déploiement manuel, non tracé | chaque déploiement lié à une version, une image et un commit | **4,4 mises en prod par semaine**, 2,5 h entre un commit et la prod (médiane), 0 % d'échec |
 | 4. Revenir en arrière sans coupure | aucun retour arrière ni sauvegarde | retour arrière automatique ; sauvegarde restaurable | **testés** : retour arrière sans coupure ; restauration vérifiée chaque semaine |
-| 5. Voir et être prévenu | aucune supervision | disponibilité, performance et sécurité suivies | **3 tableaux de bord, 8 alertes**, indicateurs DORA chaque semaine |
+| 5. Voir et être prévenu | aucune supervision | disponibilité, performance et sécurité suivies | **3 tableaux de bord, 9 alertes**, indicateurs DORA chaque semaine |
 
 ## 3. Workflow de branches
 
@@ -938,6 +938,7 @@ premiers gestes ; e-mail de fin d'alerte) :
 | Machine | `BackupTooOld` | dernière sauvegarde réussie de la prod il y a plus de 26 h |
 | Sécurité | `MicrocrmClientErrorSpike` | plus de 50 réponses 4xx de l'API de prod en 5 min |
 | Sécurité | `LogIngestionStopped` | aucune ligne de journal reçue depuis 15 min |
+| Sécurité | `OpenBaoSealed` | coffre-fort OpenBao scellé ou absent depuis 15 min (après un démarrage du poste) |
 
 Chaîne vérifiée de bout en bout le 07/11 : alerte de test, puis alerte
 de sécurité déclenchée par un test réel annoncé (e-mails reçus).

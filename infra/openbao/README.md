@@ -79,7 +79,15 @@ kubectl -n openbao exec openbao-0 -- bao status | grep Sealed  # false
 ```
 
 La clé est demandée **sans s'afficher** : elle n'entre pas dans
-l'historique du shell.
+l'historique du shell. Oubli : l'alerte `OpenBaoSealed` envoie un
+e-mail après 15 min ([supervision](../monitoring/README.md#openbaosealed)).
+
+En entreprise, pas de geste manuel : 3 serveurs (un redémarrage ne coupe
+pas le service) et **déverrouillage automatique** par un service de clés
+externe : KMS d'un cloud, boîtier matériel (HSM, protocole PKCS#11 ou
+KMIP) ou un second OpenBao (*Transit*) ; les parts de Shamir deviennent
+des clés de récupération réparties entre plusieurs personnes. Écarté
+ici : la clé « statique » sur le disque du poste, posée à côté du coffre.
 
 ### Journal d'audit
 
@@ -145,6 +153,6 @@ Certificat public de l'autorité (à donner aux clients) :
 | Limite | Évolution |
 | --- | --- |
 | Un seul serveur : s'il tombe, la CI ne peut plus se connecter (l'application, elle, continue) | 3 serveurs Raft (le chart le permet : `server.ha`) sur plusieurs nœuds |
-| Déverrouillage manuel après chaque redémarrage | déverrouillage automatique par un KMS (AWS KMS dans la cible cloud) |
+| Déverrouillage manuel après chaque redémarrage (rappel : alerte `OpenBaoSealed`) | déverrouillage automatique : AWS KMS dans la cible cloud ; sur site, HSM (PKCS#11, ex. Nitrokey NetHSM, testé par OpenBao) ou KMIP, ou second OpenBao (*Transit*) |
 | Sortie réseau ouverte (API de Kubernetes, clés publiques de GitHub) | la limiter à ces deux adresses |
 | Les 3 parts de clé sont chez une seule personne | en équipe : une part par personne |
