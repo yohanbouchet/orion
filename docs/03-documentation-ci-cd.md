@@ -198,7 +198,7 @@ manuelle ratée.
 | Type de test | Outil | Déclenchement | Couverture cible |
 | --- | --- | --- | --- |
 | Unitaires | Vitest, navigateur simulé jsdom (front, 16 tests, back simulé : chargement, création, suppression, liens entre personnes et organisations) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; au 08/11, 82,9 % de l'ensemble (lignes 87,6 %, branches 57,9 %) |
-| Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (6 tests) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle Terraform |
+| Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (7 tests) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle Terraform |
 | E2E | **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | chaque déploiement (dev, staging, prod) | le parcours complet ; un échec remet la version précédente |
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
@@ -491,8 +491,9 @@ infra/
     main.tf           namespaces dev, staging, prod (« restricted »)
     rbac.tf           un compte deployer par namespace, droits limités
     monitoring.tf     supervision : chart Helm, tableaux de bord
+    openbao.tf        coffre-fort OpenBao : certificat TLS, chart Helm
     variables.tf, outputs.tf, providers.tf, versions.tf (versions figées)
-    tests/            6 tests (tofu test, faux fournisseurs)
+    tests/            7 tests (tofu test, faux fournisseurs)
   helm/microcrm/    chart de l'application
     templates/        front, API (+ autoscaling), PostgreSQL
                       (StatefulSet) et compte limité de l'appli (script
@@ -502,6 +503,7 @@ infra/
                     démarrage de Minikube, images, metrics-server,
                     sauvegardes, node_exporter, durcissement)
   monitoring/       réglages, alertes et tableaux de bord de la supervision
+  openbao/          réglages et exploitation du coffre-fort OpenBao
   postgres/, zap/, arc/   images durcies (base, test d'intrusion, runner)
   sonarqube/, k6/, systemd/   SonarQube, scénarios de charge, démarrage
 ```
@@ -988,5 +990,6 @@ et 6).
 | OpenTofu (socle) | [`infra/terraform/README.md`](../infra/terraform/README.md) |
 | Ansible | [`infra/ansible/README.md`](../infra/ansible/README.md) |
 | Supervision, alertes, premiers gestes | [`infra/monitoring/README.md`](../infra/monitoring/README.md) |
+| Coffre-fort OpenBao (initialisation, déverrouillage) | [`infra/openbao/README.md`](../infra/openbao/README.md) |
 | Scripts | [`scripts/README.md`](../scripts/README.md) |
 | Exceptions de sécurité | [`.trivyignore`](../.trivyignore), [`infra/zap/rules.tsv`](../infra/zap/rules.tsv) |

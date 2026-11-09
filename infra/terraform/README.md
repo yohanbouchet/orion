@@ -23,13 +23,14 @@ Helm (scripts/deploy.sh, avec le jeton du deployer de l'environnement)
 
 | Fichier | Rôle |
 |---|---|
-| `versions.tf` | Versions exigées (OpenTofu 1.13, fournisseurs `hashicorp/kubernetes` 3.4.x et `hashicorp/helm` 3.3.x) ; état local, rangé hors du dépôt |
+| `versions.tf` | Versions exigées (OpenTofu 1.13, fournisseurs `hashicorp/kubernetes` 3.4.x, `hashicorp/helm` 3.3.x et `hashicorp/tls` 4.4.x) ; état local, rangé hors du dépôt |
 | `providers.tf` | Connexion au cluster : kubeconfig de l'opérateur, contexte `orion` |
 | `variables.tf` | Réglages : kubeconfig, contexte, environnements (`dev`, `staging`, `prod` seulement), adresse Gmail des alertes (`ops_email`, sensible, hors du dépôt) |
 | `main.tf` | Un namespace par environnement, niveau Pod Security « restricted » |
 | `rbac.tf` | Un compte `deployer` par namespace, ses droits et son jeton |
 | `monitoring.tf` | Supervision : namespaces `monitoring` (« restricted ») et `monitoring-collector` (« privileged », collecteur de journaux seul), pile VictoriaMetrics + VictoriaLogs + Grafana (chart Helm figé), tableaux de bord ([détails](../monitoring/README.md)) |
-| `outputs.tf` | Jetons et certificat du cluster (valeurs sensibles, jamais affichées) |
+| `openbao.tf` | Coffre-fort OpenBao : namespace `openbao` (« restricted »), autorité de certification et certificat TLS, chart Helm figé ([détails](../openbao/README.md)) |
+| `outputs.tf` | Jetons et certificat du cluster (valeurs sensibles, jamais affichées) ; certificat public de l'autorité d'OpenBao |
 | `tests/cluster.tftest.hcl` | Tests unitaires avec de faux fournisseurs (sans cluster) |
 | `.terraform.lock.hcl` | Versions et empreintes des fournisseurs (registre d'OpenTofu, signés), produit par `tofu init` |
 
@@ -77,7 +78,9 @@ tofu init \
 tofu plan -var-file="$HOME/.local/state/orion-terraform/monitoring.tfvars" \
   -out="$HOME/.local/state/orion-terraform/tfplan"
 tofu apply "$HOME/.local/state/orion-terraform/tfplan"
-chmod 600 ~/.local/state/orion-terraform/*
+# Fichiers seulement : un chmod 600 sur un dossier (la sauvegarde
+# d'avant OpenTofu) retire le droit d'y entrer
+find ~/.local/state/orion-terraform -maxdepth 1 -type f -exec chmod 600 {} +
 ```
 
 Contrôles des droits, par exemple pour `dev` :
@@ -134,7 +137,7 @@ BACKUP_METRICS_DIR=/var/lib/node_exporter/textfile scripts/backup.sh prod
 ## Tests
 
 ```shell
-tofu test     # 6 tests, faux fournisseurs : aucun cluster nécessaire
+tofu test     # 7 tests, faux fournisseurs : aucun cluster nécessaire
 ```
 
 | Test | Vérifie |

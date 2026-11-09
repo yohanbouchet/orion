@@ -1,24 +1,28 @@
 # Fichier  : infra/terraform/tests/cluster.tftest.hcl
-# Rôle     : tests unitaires du socle et de la supervision (tofu test),
-#            avec de faux fournisseurs Kubernetes et Helm : aucun cluster
-#            nécessaire
+# Rôle     : tests unitaires du socle, de la supervision et d'OpenBao
+#            (tofu test), avec de faux fournisseurs Kubernetes, Helm et
+#            TLS : aucun cluster nécessaire
 # Utilise  : les fichiers .tf du dossier parent
 # Utilisé par : job opentofu de la CI ; en local : tofu test
 
 # Faux fournisseurs : les ressources sont « planifiées » sans cluster
-mock_provider "kubernetes" {
-  # Secrets des jetons : OpenTofu remplit les attributs calculés d'une
-  # table vide ; jeton et certificat fictifs, lus par outputs.tf
-  mock_resource "kubernetes_secret_v1" {
-    defaults = {
-      data = {
-        token    = "test-token"
-        "ca.crt" = "test-ca"
-      }
+mock_provider "kubernetes" {}
+
+# Secrets des jetons deployer : OpenTofu remplit les attributs calculés
+# d'une table vide ; jeton et certificat fictifs, lus par outputs.tf
+# (ciblés : le Secret TLS d'OpenBao, lui, fixe ses propres données)
+override_resource {
+  target = kubernetes_secret_v1.deployer_token
+  values = {
+    data = {
+      token    = "test-token"
+      "ca.crt" = "test-ca"
     }
   }
 }
 mock_provider "helm" {}
+# Certificats fictifs (aucune clé réelle créée pendant les tests)
+mock_provider "tls" {}
 
 # Adresse fictive pour les tests (la vraie n'est jamais dans le dépôt)
 variables {
@@ -133,4 +137,35 @@ run "non_gmail_alert_address_is_refused" {
     ops_email = "ops@example.org"
   }
   expect_failures = [var.ops_email]
+}
+
+# OpenBao : namespace restricted, chart figé, et les réglages de
+# sécurité de values.yaml ne disparaissent pas par erreur
+run "openbao_is_locked_down" {
+  command = plan
+
+  assert {
+    condition = (
+      kubernetes_namespace_v1.openbao.metadata[0].labels["pod-security.kubernetes.io/enforce"]
+      == "restricted"
+    )
+    error_message = "The openbao namespace must enforce restricted."
+  }
+  assert {
+    condition     = helm_release.openbao.version == "0.30.7"
+    error_message = "The OpenBao chart version must be pinned."
+  }
+  assert {
+    condition = (
+      yamldecode(helm_release.openbao.values[0]).global.tlsDisable == false
+      && yamldecode(helm_release.openbao.values[0]).injector.enabled == false
+      && yamldecode(helm_release.openbao.values[0]).server.networkPolicy.enabled == true
+      && yamldecode(helm_release.openbao.values[0]).server.statefulSet.securityContext.container.readOnlyRootFilesystem == true
+    )
+    error_message = "OpenBao must keep TLS, no injector, a network policy and a read-only root filesystem."
+  }
+  assert {
+    condition     = tls_private_key.openbao_ca.algorithm == "ECDSA"
+    error_message = "The OpenBao CA key must be ECDSA."
+  }
 }
