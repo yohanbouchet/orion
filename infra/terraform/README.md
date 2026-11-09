@@ -1,12 +1,15 @@
-# Socle Terraform du cluster
+# Socle du cluster (fichiers Terraform, exécutés par OpenTofu)
 
-Terraform décrit le **socle** du cluster Minikube : ce qui demande des
-droits sur tout le cluster et ne change presque jamais. Helm
+Ces fichiers, écrits dans le langage de Terraform (HCL), décrivent le
+**socle** du cluster Minikube : ce qui demande des droits sur tout le
+cluster et ne change presque jamais. Ils sont exécutés par **OpenTofu**
+(commande `tofu`), le successeur open source de Terraform (voir
+[Passage à OpenTofu](#passage-à-opentofu-0911)). Helm
 (`scripts/deploy.sh`) installe ensuite l'application **dans** ce socle
 (ticket #64).
 
 ```text
-Terraform (opérateur, droits d'administration)
+OpenTofu (opérateur, droits d'administration)
   ├── namespace dev      ── compte deployer, ses droits, son jeton
   ├── namespace staging  ── compte deployer, ses droits, son jeton
   └── namespace prod     ── compte deployer, ses droits, son jeton
@@ -20,15 +23,15 @@ Helm (scripts/deploy.sh, avec le jeton du deployer de l'environnement)
 
 | Fichier | Rôle |
 |---|---|
-| `versions.tf` | Versions exigées (Terraform 1.17, fournisseurs `hashicorp/kubernetes` 3.4.x et `hashicorp/helm` 3.3.x) ; état local, rangé hors du dépôt |
+| `versions.tf` | Versions exigées (OpenTofu 1.13, fournisseurs `hashicorp/kubernetes` 3.4.x et `hashicorp/helm` 3.3.x) ; état local, rangé hors du dépôt |
 | `providers.tf` | Connexion au cluster : kubeconfig de l'opérateur, contexte `orion` |
 | `variables.tf` | Réglages : kubeconfig, contexte, environnements (`dev`, `staging`, `prod` seulement), adresse Gmail des alertes (`ops_email`, sensible, hors du dépôt) |
 | `main.tf` | Un namespace par environnement, niveau Pod Security « restricted » |
 | `rbac.tf` | Un compte `deployer` par namespace, ses droits et son jeton |
 | `monitoring.tf` | Supervision : namespaces `monitoring` (« restricted ») et `monitoring-collector` (« privileged », collecteur de journaux seul), pile VictoriaMetrics + VictoriaLogs + Grafana (chart Helm figé), tableaux de bord ([détails](../monitoring/README.md)) |
 | `outputs.tf` | Jetons et certificat du cluster (valeurs sensibles, jamais affichées) |
-| `tests/cluster.tftest.hcl` | Tests unitaires avec un faux fournisseur (sans cluster) |
-| `.terraform.lock.hcl` | Version et empreintes du fournisseur, produit par `terraform init` |
+| `tests/cluster.tftest.hcl` | Tests unitaires avec de faux fournisseurs (sans cluster) |
+| `.terraform.lock.hcl` | Versions et empreintes des fournisseurs (registre d'OpenTofu, signés), produit par `tofu init` |
 
 ## Droits d'un compte `deployer`
 
@@ -51,8 +54,9 @@ réservé au deployer de `staging` (vérifiés par les tests). Son jeton n'est m
 
 ## Utilisation
 
-Prérequis : Terraform 1.17 ; le contexte `orion` dans le kubeconfig, avec
-les droits d'administration du cluster.
+Prérequis : OpenTofu 1.13 (installé par Ansible, rôle `ops_tools`) ; le
+contexte `orion` dans le kubeconfig, avec les droits d'administration du
+cluster.
 
 ```shell
 cd infra/terraform
@@ -60,19 +64,19 @@ cd infra/terraform
 # 1. Une seule fois : l'état est rangé HORS du dépôt, car il contient
 #    en clair les jetons des comptes deployer et l'adresse des alertes
 mkdir -p -m 700 ~/.local/state/orion-terraform
-terraform init \
+tofu init \
   -backend-config="path=$HOME/.local/state/orion-terraform/terraform.tfstate"
 
 # Si un namespace existe déjà (créé à la main), le rattacher à l'état
 # au lieu de le recréer :
-#   terraform import 'kubernetes_namespace_v1.env["dev"]' dev
+#   tofu import 'kubernetes_namespace_v1.env["dev"]' dev
 
 # 2. Lire le plan, puis appliquer exactement ce plan ; le fichier
 #    .tfvars doit exister AVANT (étape 1 de « Supervision », plus bas),
-#    sinon Terraform demande l'adresse des alertes
-terraform plan -var-file="$HOME/.local/state/orion-terraform/monitoring.tfvars" \
+#    sinon OpenTofu demande l'adresse des alertes
+tofu plan -var-file="$HOME/.local/state/orion-terraform/monitoring.tfvars" \
   -out="$HOME/.local/state/orion-terraform/tfplan"
-terraform apply "$HOME/.local/state/orion-terraform/tfplan"
+tofu apply "$HOME/.local/state/orion-terraform/tfplan"
 chmod 600 ~/.local/state/orion-terraform/*
 ```
 
@@ -91,8 +95,8 @@ le job de déploiement les lit
 ([déploiement continu](../../README.md#déploiement-continu-ci)) :
 
 ```shell
-terraform output -json deployer_tokens | jq -r .dev   # puis clear
-terraform output -raw cluster_ca
+tofu output -json deployer_tokens | jq -r .dev   # puis clear
+tofu output -raw cluster_ca
 ```
 
 ## Supervision
@@ -114,7 +118,7 @@ chmod 600 ~/.local/state/orion-terraform/monitoring.tfvars
 
 # 3. Mot de passe d'application Gmail (compte Google → Sécurité → Mots de
 #    passe des applications), saisi sans écho, jamais dans le dépôt ni
-#    dans l'état Terraform ; Alertmanager démarre dès qu'il existe
+#    dans l'état OpenTofu ; Alertmanager démarre dès qu'il existe
 #    (passé par l'entrée standard : jamais visible dans la liste des
 #    processus)
 read -rs -p "Gmail app password: " P; echo
@@ -130,7 +134,7 @@ BACKUP_METRICS_DIR=/var/lib/node_exporter/textfile scripts/backup.sh prod
 ## Tests
 
 ```shell
-terraform test     # 6 tests, faux fournisseurs : aucun cluster nécessaire
+tofu test     # 6 tests, faux fournisseurs : aucun cluster nécessaire
 ```
 
 | Test | Vérifie |
@@ -142,26 +146,57 @@ terraform test     # 6 tests, faux fournisseurs : aucun cluster nécessaire
 | `monitoring_stack_is_pinned` | chart de supervision à version figée ; un ConfigMap par tableau de bord (3) |
 | `non_gmail_alert_address_is_refused` | une adresse d'alerte non Gmail est refusée |
 
-Le job `terraform` de la CI lance `fmt -check`, `validate` et ces tests à
-chaque PR.
+Le job `opentofu` de la CI lance `tofu fmt -check`, `tofu validate` et
+ces tests à chaque PR.
 
-**Vérifié le 02/11/2026** : `apply` (19 objets créés, `dev` et `staging`
-importés sans interruption de l'application) ; second `plan` sans
-changement ; `deploy.sh dev` réussi avec le seul jeton du `deployer` de
-`dev`, `staging` refusé avec ce même jeton ; 4 erreurs volontaires
-(niveau `baseline`, jeton monté, lecture de tous les namespaces, joker)
-détectées par les tests.
+**Vérifié le 02/11/2026** (avec Terraform) : `apply` (19 objets créés,
+`dev` et `staging` importés sans interruption de l'application) ;
+second `plan` sans changement ; `deploy.sh dev` réussi avec le seul
+jeton du `deployer` de `dev`, `staging` refusé avec ce même jeton ;
+4 erreurs volontaires (niveau `baseline`, jeton monté, lecture de tous
+les namespaces, joker) détectées par les tests.
+
+## Passage à OpenTofu (09/11)
+
+Terraform est passé en 2023 sous licence BUSL (code source visible, mais
+pas open source). **OpenTofu** est son successeur open source (licence
+MPL-2.0, projet de la Linux Foundation), compatible avec les mêmes
+fichiers et le même état. Passage fait le 09/11/2026 :
+
+1. OpenTofu 1.13.9 installé (signature GPG d'OpenTofu vérifiée, clé
+   recoupée sur keys.openpgp.org, empreinte SHA-256 contrôlée).
+2. Sur une **copie** de l'état : `tofu init`, `tofu validate`,
+   `tofu plan` → **« No changes »** : OpenTofu lit l'état écrit par
+   Terraform et ne recrée rien.
+3. Avertissement d'OpenTofu corrigé (plus strict que Terraform) : les
+   boucles de `rbac.tf` parcouraient l'objet complet des comptes, dont
+   un attribut déprécié (`default_secret_name`) ; elles parcourent
+   désormais leurs seules métadonnées (mêmes clés : rien n'est recréé).
+4. Tests : les faux fournisseurs d'OpenTofu remplissent les attributs
+   calculés d'une table vide ; jeton et certificat fictifs ajoutés au
+   test (6 tests verts).
+5. Fichier de verrouillage refait par `tofu init` : fournisseurs du
+   registre d'OpenTofu (`registry.opentofu.org`), signés.
+6. Après la fusion, sur le vrai état : sauvegarde de l'état,
+   `tofu init -reconfigure`, `tofu plan` (aucun changement attendu).
+
+Le dossier garde son nom (`infra/terraform`, état dans
+`~/.local/state/orion-terraform`) : le langage reste celui de Terraform.
 
 ## Sécurité
 
 - État hors du dépôt (dossier 700, fichiers 600) : il contient les
   jetons ; plan enregistré au même endroit.
 - Jetons et certificat marqués `sensitive` : jamais affichés par
-  Terraform.
+  OpenTofu.
 - Moindre privilège : un compte par environnement, enfermé dans son
   namespace.
-- Version du fournisseur figée et vérifiée (`.terraform.lock.hcl`) ;
-  mises à jour proposées par Dependabot.
+- Versions des fournisseurs figées et vérifiées (`.terraform.lock.hcl`,
+  signatures du registre d'OpenTofu) ; mises à jour proposées par
+  Dependabot (écosystème `opentofu`).
+- OpenTofu lui-même : archive officielle, empreinte vérifiée à
+  l'installation (Ansible, empreinte tirée du fichier signé) ; dans la
+  CI, version figée et empreinte contrôlée par `opentofu/setup-opentofu`.
 
 ## Limites connues et évolutions
 
@@ -170,4 +205,3 @@ détectées par les tests.
 | Jetons de longue durée, rotation manuelle | Fédération d'identité OIDC entre GitHub et le cluster : jetons de quelques minutes, aucun secret stocké |
 | Un `deployer` peut lire les Secrets de son namespace, dont le mot de passe de la base (Helm range ses versions dans des Secrets) | Inhérent à Helm ; à compenser par un mot de passe propre à chaque environnement (déjà le cas) et la rotation |
 | État local sur une seule machine, sans verrou contre deux `apply` simultanés | État distant chiffré et verrouillé (par exemple S3 avec verrou, dans la cible cloud) |
-| Terraform est sous licence BUSL (source disponible, pas open source) | OpenTofu, fork open source compatible, si la licence pose problème |

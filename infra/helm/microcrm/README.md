@@ -85,7 +85,7 @@ Le HPA a besoin de l'addon **metrics-server** de Minikube
 
 Les namespaces `dev`, `staging` et `prod` (niveau de sécurité
 « restricted ») et les comptes qui ont le droit d'y déployer sont créés
-une seule fois par Terraform : voir [`infra/terraform`](../../terraform/README.md).
+une seule fois par OpenTofu : voir [`infra/terraform`](../../terraform/README.md).
 
 ```shell
 # 1. Déploiement : Secrets des 2 comptes de la base (créés une seule

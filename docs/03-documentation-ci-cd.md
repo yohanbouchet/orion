@@ -65,16 +65,17 @@ apparition et dans le glossaire ([annexe A](#annexe-a-glossaire)).
 | Tests | **Vitest** 5 (front), JUnit 5 + JaCoCo, bashunit, pytest, **k6** 2.3.0 | tests du front, du back, des scripts ; tests de charge |
 | Conteneurs | **Docker** (images durcies ; celle du back emballe le jar testé par la CI), **GHCR** (registre de GitHub) | images de l'application, versionnées et publiées |
 | Orchestration | **Kubernetes** 1.37 (Minikube 1.39.0), **Helm** 4 | trois environnements, déploiement progressif, autoscaling |
-| IaC | **Terraform** 1.17, **Ansible** 2.21 | socle du cluster et supervision ; configuration du poste Ops |
+| IaC | **OpenTofu** 1.13 (fichiers Terraform), **Ansible** 2.21 | socle du cluster et supervision ; configuration du poste Ops |
 | Supervision | **VictoriaMetrics** 1.155, **VictoriaLogs** 1.53, **Grafana** 13.2.5, **Alertmanager** 0.34.2 | métriques, journaux, tableaux de bord, alertes par e-mail |
 | Cloud | **AWS** (cible proposée, [section 5.2.1](#521-schéma-dinfrastructure-cloud)) | aujourd'hui, tout tourne en local sur le poste Ops : l'offre gratuite d'AWS ne suffit pas à faire tourner la chaîne en continu (section 5.1) ; choix validé avec le mentor |
 | Application | Angular 22.2, Spring Boot 4.1.2 (Java 17), PostgreSQL 18.6 | code de l'équipe Dev |
 
 Ces outils sont **open source**, sauf les services de GitHub (Actions,
-GHCR, Dependabot), AWS, et Terraform, passé en 2023 sous une licence à
-source disponible (BUSL) : son équivalent open source, **OpenTofu**, est
-une évolution possible. Les versions sont figées et vérifiées (dernière
-version, fin de support) : liste à jour dans le
+GHCR, Dependabot) et AWS. Terraform, passé en 2023 sous une licence à
+source disponible (BUSL), a été remplacé le 09/11 par son successeur
+open source, **OpenTofu** (MPL-2.0), qui exécute les mêmes fichiers et
+a repris l'état sans rien recréer. Les versions sont figées et
+vérifiées (dernière version, fin de support) : liste à jour dans le
 [README](../README.md#versions-des-outils).
 
 ## 2. Contexte et objectifs du projet
@@ -197,12 +198,12 @@ manuelle ratée.
 | Type de test | Outil | Déclenchement | Couverture cible |
 | --- | --- | --- | --- |
 | Unitaires | Vitest, navigateur simulé jsdom (front, 16 tests, back simulé : chargement, création, suppression, liens entre personnes et organisations) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; au 08/11, 82,9 % de l'ensemble (lignes 87,6 %, branches 57,9 %) |
-| Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `terraform test` (6 tests) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle Terraform |
+| Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (6 tests) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle Terraform |
 | E2E | **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | chaque déploiement (dev, staging, prod) | le parcours complet ; un échec remet la version précédente |
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
 | Scripts d'exploitation | bashunit (71 tests), pytest (28 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
-| Infrastructure | `terraform fmt` et `validate`, `ansible-playbook --syntax-check`, ansible-lint (profil production) | chaque PR | 100 % des fichiers Terraform et Ansible |
+| Infrastructure | `tofu fmt` et `validate`, `ansible-playbook --syntax-check`, ansible-lint (profil production) | chaque PR | 100 % des fichiers Terraform et Ansible |
 
 **Limite** : pas de test de bout en bout dans un navigateur (Cypress,
 Playwright) ; le test de fumée couvre le chemin technique, pas les
@@ -216,7 +217,7 @@ vers `main`, chaque fusion sur `main`, et à la main (onglet Actions).
 
 | Étape | Jobs | Quand | Bloquant |
 | --- | --- | --- | --- |
-| Contrôles (en parallèle, machines jetables de GitHub) | `test-front`, `test-back`, `gitleaks`, `hadolint`, `shellcheck`, `script-tests`, `terraform`, `ansible`, `trivy`, `images (front)`, `images (back)` ; les images attendent `test-back`, qui fournit le jar du back | chaque PR et chaque fusion | oui : contrôles obligatoires de `main` |
+| Contrôles (en parallèle, machines jetables de GitHub) | `test-front`, `test-back`, `gitleaks`, `hadolint`, `shellcheck`, `script-tests`, `opentofu`, `ansible`, `trivy`, `images (front)`, `images (back)` ; les images attendent `test-back`, qui fournit le jar du back | chaque PR et chaque fusion | oui : contrôles obligatoires de `main` |
 | Analyse de qualité (runner local) | `sonarqube`, après les deux jobs de tests (il lit leurs rapports de couverture) | chaque PR et chaque fusion ; sautée pour les PR de Dependabot (aucun secret, versions seulement) | oui |
 | Version et publication | `release`, `publish` | fusion sur `main`, si tout est vert | — |
 | Déploiement et tests en fonctionnement | `deploy-dev`, `deploy-staging`, `zap`, `load-test` | fusion sur `main` | oui : un échec arrête la chaîne avant la prod |
@@ -314,12 +315,13 @@ Aucune donnée réelle n'est copiée dans un environnement de test.
   ce choix : les ressources de l'offre gratuite d'AWS ne suffiraient pas
   à faire tourner en continu un cluster Kubernetes, SonarQube et la
   supervision, qui demandent ici 4 cœurs et 10 Gio de mémoire.
-- **IaC** : **Terraform** décrit le socle du cluster (namespaces, comptes
-  de déploiement aux droits limités, supervision) ; **Helm** décrit
+- **IaC** : des fichiers **Terraform**, exécutés par **OpenTofu**,
+  décrivent le socle du cluster (namespaces, comptes de déploiement aux
+  droits limités, supervision) ; **Helm** décrit
   l'application ; **Ansible** configure et durcit le poste Ops.
 - **Cible cloud proposée** : **AWS**, avec un cluster managé (**EKS**),
   une base managée (**RDS** PostgreSQL), le stockage objet (**S3**) pour
-  les sauvegardes et l'état Terraform, sur deux zones de disponibilité
+  les sauvegardes et l'état OpenTofu, sur deux zones de disponibilité
   (section 5.2.1). AWS plutôt qu'Azure : services équivalents, offre
   gratuite de découverte, et un cours OpenClassrooms sur AWS parmi les
   ressources de l'énoncé.
@@ -392,7 +394,7 @@ flowchart TB
         subgraph svc["Services régionaux"]
             direction LR
             sm["Secrets Manager<br/>mots de passe, jetons"]
-            s3[("S3<br/>sauvegardes chiffrées,<br/>état Terraform")]
+            s3[("S3<br/>sauvegardes chiffrées,<br/>état OpenTofu")]
         end
     end
     users --> r53 --> waf --> alb --> eks
@@ -411,7 +413,7 @@ pods de l'application tournent sur des nœuds EKS dans des sous-réseaux
 privés, répartis sur deux zones ; la CI a ses propres nœuds, séparés de
 ceux de l'application. La base RDS est répliquée dans une seconde zone
 (Multi-AZ), dans des sous-réseaux privés réservés aux données. Les
-sauvegardes et l'état Terraform sont dans S3, chiffrés ; les secrets dans
+sauvegardes et l'état OpenTofu sont dans S3, chiffrés ; les secrets dans
 Secrets Manager.
 
 | Aujourd'hui (local) | Cible AWS | Ce que la cible apporte |
@@ -424,11 +426,11 @@ Secrets Manager.
 | Secrets Kubernetes créés par script | Secrets Manager + External Secrets Operator, rotation | rotation, audit des accès |
 | Sauvegardes sur le poste + copie hors site | S3 chiffré, versionné, copie dans une autre région | durabilité, rétention par règles |
 | Jeton de déploiement de longue durée dans GitHub | fédération OIDC GitHub → AWS (jetons de quelques minutes) | aucun secret de longue durée dans la CI |
-| État Terraform local | S3 chiffré par KMS, verrouillage natif | travail en équipe sans conflit |
+| État OpenTofu local | S3 chiffré par KMS, verrouillage natif | travail en équipe sans conflit |
 
 **Plan de passage** (aucune modification de l'application ni du
 pipeline : les mêmes images, le même chart Helm, les mêmes scripts) :
-réseau et EKS par Terraform (modules officiels de la communauté
+réseau et EKS par OpenTofu (modules officiels de la communauté
 `terraform-aws-modules`) ; RDS et S3 ; secrets et accès OIDC ;
 supervision ; bascule de `staging`, puis de `prod` après un test de
 charge sur la nouvelle infrastructure. Le coût est à chiffrer avec l'AWS
@@ -483,12 +485,12 @@ même nom (section 6.3).
 
 ```text
 infra/
-  terraform/        socle du cluster (Terraform 1.17)
+  terraform/        socle du cluster (fichiers Terraform, OpenTofu 1.13)
     main.tf           namespaces dev, staging, prod (« restricted »)
     rbac.tf           un compte deployer par namespace, droits limités
     monitoring.tf     supervision : chart Helm, tableaux de bord
     variables.tf, outputs.tf, providers.tf, versions.tf (versions figées)
-    tests/            6 tests (terraform test, faux fournisseur)
+    tests/            6 tests (tofu test, faux fournisseurs)
   helm/microcrm/    chart de l'application
     templates/        front, API (+ autoscaling), PostgreSQL
                       (StatefulSet), pare-feu réseau (NetworkPolicy)
@@ -503,10 +505,10 @@ infra/
 
 Règles communes : versions des outils, fournisseurs et charts figées ;
 en-tête de rôle dans chaque fichier ; aucun secret (valeurs sensibles
-passées hors du dépôt, sorties Terraform marquées sensibles) ; tout
-changement passe par une PR et les contrôles `terraform` et `ansible`.
-Terraform n'est **pas appliqué par la CI** : l'Ops lance `terraform plan`,
-le relit, puis `terraform apply` (limite et recommandation, section 5.8).
+passées hors du dépôt, sorties OpenTofu marquées sensibles) ; tout
+changement passe par une PR et les contrôles `opentofu` et `ansible`.
+OpenTofu n'est **pas appliqué par la CI** : l'Ops lance `tofu plan`,
+le relit, puis `tofu apply` (limite et recommandation, section 5.8).
 
 ### 5.5 Plan de conteneurs
 
@@ -607,8 +609,8 @@ validé par la direction.
   (`values-<env>.yaml`, quelques lignes) ; socle par Terraform ; poste par
   Ansible. Un écart fait à la main dans le cluster n'est pas détecté
   aujourd'hui : **GitOps** (Argo CD) en évolution.
-- **Gestion de l'infrastructure** : `terraform plan` relu avant chaque
-  `terraform apply` ; recommandation : plan affiché sur chaque PR et
+- **Gestion de l'infrastructure** : `tofu plan` relu avant chaque
+  `tofu apply` ; recommandation : plan affiché sur chaque PR et
   application par la CI après approbation.
 - **Surveillance et performance de l'infrastructure** : section 7.7 ; les
   tests de charge k6 (6 profils) et leurs résultats avant et après
@@ -631,7 +633,7 @@ Top 10 2025 (application) et OWASP Top 10 CI/CD Security Risks (chaîne).
 | Outil | Type d'analyse | Rôle / vérifications |
 | --- | --- | --- |
 | **SonarQube** 26.10 | SAST (analyse statique du code) | failles, bugs et mauvaises pratiques du front et du back ; Quality Gate bloquant |
-| **hadolint** 2.15.1, **ShellCheck** 0.11.0, ansible-lint, `terraform validate` | Linting | bonnes pratiques des Dockerfiles, erreurs des scripts Bash, du code Ansible et Terraform |
+| **hadolint** 2.15.1, **ShellCheck** 0.11.0, ansible-lint, `tofu validate` | Linting | bonnes pratiques des Dockerfiles, erreurs des scripts Bash, du code Ansible et Terraform |
 | **Trivy** 0.76.2 (`fs`) + **Dependabot** | SCA (dépendances) | failles connues des dépendances npm et Gradle, y compris l'outillage de développement ; mises à jour proposées chaque semaine, tout de suite pour une faille |
 | **Trivy** 0.76.2 (`image`) | Container scanning | failles du système et des bibliothèques de chaque image, avant sa publication |
 | **gitleaks** 8.30.1 + protection de GitHub | Secrets detection | mots de passe, jetons ou clés dans tout l'historique ; poussée bloquée par GitHub si un secret connu est détecté |
@@ -652,7 +654,7 @@ GitHub) ; chaque secret est rangé au plus près de son seul utilisateur.
 | Mot de passe du compte de l'application (`microcrm_app`) | Secret Kubernetes `microcrm-db-app`, créé de la même façon | pod de l'API (connexions de l'application) |
 | Mot de passe d'application Gmail (alertes) | Secret Kubernetes, saisi sans écho par l'Ops | Alertmanager |
 | Clé de l'application GitHub du runner local, mots de passe de SonarQube | Secrets Kubernetes ; copies sur le poste Ops en droits 600 | ARC ; Ops |
-| État Terraform (contient les jetons) | hors du dépôt, sur le poste Ops, droits 600 | Ops |
+| État OpenTofu (contient les jetons) | hors du dépôt, sur le poste Ops, droits 600 | Ops |
 
 **Rotation** : un secret exposé est **révoqué et remplacé tout de
 suite** (appliqué le 28/10 : mot de passe de la base de SonarQube changé
@@ -708,7 +710,7 @@ signalé l'absence d'en-tête CSP : corrigé avant la prod, puis la règle a
   sans contournement possible ; liste d'actions autorisées ; approbation
   obligatoire avant la prod.
 - Cluster : un compte de déploiement par environnement, limité à son
-  namespace (Terraform, testé par `terraform test`) ; dans le cluster,
+  namespace (OpenTofu, testé par `tofu test`) ; dans le cluster,
   seul le runner local peut joindre SonarQube (pare-feu réseau) ; l'Ops
   ouvre SonarQube et Grafana par tunnel depuis son poste ; Grafana n'a
   pas de compte anonyme.
@@ -910,7 +912,7 @@ de transactions (WAL), CloudNativePG ou RDS (cible AWS).
 
 **Outils** : VictoriaMetrics (métriques), VictoriaLogs (journaux),
 Grafana (3 tableaux de bord : *Availability*, *Performance*,
-*Security*), Alertmanager (e-mails), installés par Terraform. Ils lisent
+*Security*), Alertmanager (e-mails), installés par OpenTofu. Ils lisent
 l'API (Spring Boot Actuator, sur un port de gestion jamais exposé),
 Kubernetes, la machine et les journaux des conteneurs.
 
@@ -980,7 +982,7 @@ et 6).
 | Pipeline | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), [`deploy.yml`](../.github/workflows/deploy.yml) |
 | Installation et déploiement | [README du dépôt](../README.md) |
 | Chart Helm | [`infra/helm/microcrm/README.md`](../infra/helm/microcrm/README.md) |
-| Terraform | [`infra/terraform/README.md`](../infra/terraform/README.md) |
+| OpenTofu (socle) | [`infra/terraform/README.md`](../infra/terraform/README.md) |
 | Ansible | [`infra/ansible/README.md`](../infra/ansible/README.md) |
 | Supervision, alertes, premiers gestes | [`infra/monitoring/README.md`](../infra/monitoring/README.md) |
 | Scripts | [`scripts/README.md`](../scripts/README.md) |
