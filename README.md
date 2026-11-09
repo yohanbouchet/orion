@@ -233,11 +233,18 @@ scripts/run-tests.sh back
 
 ## Images Docker
 
-Un Dockerfile par composant, en deux étapes (construction, puis image
-d'exécution minimale), sans root, versions figées par empreinte.
+Un Dockerfile par composant, sans root, versions figées par empreinte.
+Le front est construit en deux étapes (construction, puis image
+d'exécution minimale). Le back n'est pas compilé dans Docker : son image
+emballe le jar déjà compilé et testé (dans la CI, celui du job
+`test-back`). Le jar livré est donc celui que les tests ont validé, et
+la construction de l'image ne télécharge rien (ni Gradle ni
+bibliothèque).
 
 ```shell
 docker build -t orion-front:local front/
+# Back : le jar d'abord (build/libs/), puis l'image qui l'emballe
+(cd back && ./gradlew bootJar)
 docker build -t orion-back:local back/
 
 # Back seul, avec sa base HSQLDB en mémoire : http://localhost:8080
