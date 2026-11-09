@@ -83,8 +83,8 @@ server:
   dataStorage:
     enabled: true
     size: 1Gi
-  # Journal d'audit écrit sur la sortie du conteneur (activé après
-  # l'initialisation), donc lu par vlagent : pas de disque dédié
+  # Journal d'audit écrit sur la sortie du conteneur (bloc audit de la
+  # configuration, plus bas), donc lu par vlagent : pas de disque dédié
   auditStorage:
     enabled: false
 
@@ -125,6 +125,19 @@ server:
       storage "raft" {
         path    = "/openbao/data"
         node_id = "openbao-0"
+      }
+
+      # Journal d'audit : chaque demande, sur la sortie du conteneur (lue
+      # par vlagent) ; secrets et jetons remplacés par une empreinte
+      # (HMAC). Déclaré ICI : OpenBao refuse de l'activer par l'API
+      # (risque d'écriture de fichiers sur l'hôte) et personne ne peut le
+      # couper sans une PR ; sans audit qui écrit, OpenBao refuse de
+      # répondre
+      audit "file" "stdout" {
+        description = "Audit log on the container output (collected by vlagent)"
+        options {
+          file_path = "stdout"
+        }
       }
 
       # Adresses annoncées (un seul nœud : celle du pod)
