@@ -148,6 +148,18 @@ spec:
                   key: {{ $pg.secretKey }}
             - name: JAVA_TOOL_OPTIONS
               value: {{ .javaToolOptions | quote }}
+            # Journaux au format JSON (ECS, Elastic Common Schema, intégré
+            # à Spring Boot) : une ligne = un objet (niveau, message, trace
+            # d'erreur complète), lu champ par champ par VictoriaLogs ; en
+            # local (bootRun, tests), le texte habituel reste plus lisible
+            - name: LOGGING_STRUCTURED_FORMAT_CONSOLE
+              value: ecs
+            # Chaque ligne dit quelle version et quel environnement l'ont
+            # écrite (version donnée par deploy.sh au paquet du chart)
+            - name: LOGGING_STRUCTURED_ECS_SERVICE_VERSION
+              value: {{ $.Chart.AppVersion | quote }}
+            - name: LOGGING_STRUCTURED_ECS_SERVICE_ENVIRONMENT
+              value: {{ $.Release.Namespace | quote }}
           securityContext:
             {{- include "microcrm.containerSecurityContext" . | nindent 12 }}
           # Sondes sur Actuator (port de gestion, ticket #84) :
