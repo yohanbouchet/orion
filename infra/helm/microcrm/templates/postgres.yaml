@@ -7,7 +7,9 @@ Utilise  : values.yaml (postgres.*) ; Secret postgres.existingSecret créé
            hors du chart ; _helpers.tpl
 Utilisé par : le back (templates/back.yaml, adresse JDBC) ; ticket #64
 */}}
-{{- $ctx := dict "root" $ "component" "postgres" }}
+{{- /* Version de la base (image), indépendante de celle de l'appli */}}
+{{- $ctx := dict "root" $ "component" "postgres"
+      "version" .Values.postgres.image.tag }}
 {{- $name := include "microcrm.name" $ctx }}
 {{- with .Values.postgres }}
 apiVersion: v1

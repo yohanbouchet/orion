@@ -238,10 +238,12 @@ scripts/deploy.sh rollback prod 3         # révision choisie (helm history)
 4. `helm lint` avec les réglages de l'environnement ;
 5. `helm upgrade --install --wait --rollback-on-failure` : si les pods ne
    sont pas prêts en 6 minutes, Helm remet lui-même la version précédente ;
-   les anciens pods servent jusqu'au bout (`maxUnavailable: 0`). L'image
-   déployée est notée dans la colonne DESCRIPTION de `helm history`
-   (`--description "image v1.1.1"`) : la colonne APP VERSION vient de
-   `Chart.yaml` et ne suit pas les versions publiées ;
+   les anciens pods servent jusqu'au bout (`maxUnavailable: 0`). Avec
+   une étiquette, le chart est d'abord emballé avec ce numéro
+   (`helm package --app-version`, archive temporaire effacée à la
+   sortie) : `helm history` l'affiche dans la colonne APP VERSION
+   (`1.8.2`, ou `sha-abc1234`), en plus de la DESCRIPTION
+   (`image v1.8.2`) ;
 6. **test de fumée** : depuis le pod du front, appel de `/api/persons`
    (chemin complet front → back → base), 3 essais ; en cas d'échec,
    `helm rollback`, puis arrêt en erreur.
@@ -601,7 +603,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/install_deps_test.sh` | bashunit | usage, `package-lock.json` absent, commandes npm et Gradle, « FAILED » détecté |
 | `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Vitest lancé une fois sans navigateur, tests rouges, Gradle lancé, rapport absent |
 | `tests/backup_test.sh` | bashunit | usage, fichier privé (600/700) et empreinte, rotation, `pg_dump` en échec sans fichier partiel, `verify` (base temporaire), fichier abîmé refusé, sauvegarde de sécurité avant restauration, table : lignes absentes seulement, table sans clé refusée, nom de table piégé ; métrique de supervision écrite après une sauvegarde réussie (fichier en 640), aucune après un échec |
-| `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, échec de Helm, test de fumée raté → retour arrière, `rollback` |
+| `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, chart emballé avec la version déployée (archive effacée ensuite) ou installé tel quel sans étiquette, échec de l'emballage ou de Helm, test de fumée raté → retour arrière, `rollback` |
 | `tests/load_test_test.sh` | bashunit | usage, profil inconnu, prod refusée, `PUSH_METRICS` invalide, scénario absent, fumée dans `staging` contre le front (durée limitée), envoi des mesures activable, pod sans privilège sur image figée, résumé gardé, seuil dépassé (code 1), point de rupture atteint (succès) |
 | `tests/zap_scan_test.sh` | bashunit | usage, mode inconnu, règles absentes, commandes passive et active (durée limitée), pod sans privilège ni jeton, rapport extrait du journal, échec (règle FAIL) avec rapport conservé |
 | `tests/test_notify.py` | pytest | jobs en échec, exercice, ouverture / commentaire / fermeture, résumé, paramètres |
