@@ -15,7 +15,7 @@ resource "kubernetes_namespace_v1" "env" {
       "pod-security.kubernetes.io/enforce"         = "restricted"
       "pod-security.kubernetes.io/enforce-version" = "latest"
       "app.kubernetes.io/part-of"                  = "microcrm"
-      "app.kubernetes.io/managed-by"               = "terraform"
+      "app.kubernetes.io/managed-by"               = "opentofu"
     }
   }
 }

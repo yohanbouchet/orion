@@ -177,8 +177,13 @@ fichiers et le même état. Passage fait le 09/11/2026 :
    test (6 tests verts).
 5. Fichier de verrouillage refait par `tofu init` : fournisseurs du
    registre d'OpenTofu (`registry.opentofu.org`), signés.
-6. Après la fusion, sur le vrai état : sauvegarde de l'état,
-   `tofu init -reconfigure`, `tofu plan` (aucun changement attendu).
+6. Étiquette `app.kubernetes.io/managed-by` des namespaces et des
+   tableaux de bord : `terraform` → `opentofu` (elle nomme l'outil qui
+   gère l'objet) ; plan sur la copie : 8 mises à jour sur place, rien
+   de créé ni de supprimé.
+7. Après la fusion, sur le vrai état : sauvegarde de l'état,
+   `tofu init -reconfigure`, `tofu plan` (ces 8 étiquettes seulement),
+   puis `tofu apply`.
 
 Le dossier garde son nom (`infra/terraform`, état dans
 `~/.local/state/orion-terraform`) : le langage reste celui de Terraform.

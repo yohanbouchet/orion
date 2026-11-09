@@ -4,7 +4,7 @@
 #            tableaux de bord
 # Utilise  : variables.tf (ops_email) ; infra/monitoring/ (réglages,
 #            alertes, pare-feu, tableaux de bord)
-# Utilisé par : terraform apply (l'Ops) ; ticket #83
+# Utilisé par : tofu apply (l'Ops) ; ticket #83
 
 locals {
   monitoring_dir = "${path.module}/../monitoring"
@@ -19,7 +19,7 @@ resource "kubernetes_namespace_v1" "monitoring" {
       "pod-security.kubernetes.io/enforce"         = "restricted"
       "pod-security.kubernetes.io/enforce-version" = "latest"
       "app.kubernetes.io/part-of"                  = "monitoring"
-      "app.kubernetes.io/managed-by"               = "terraform"
+      "app.kubernetes.io/managed-by"               = "opentofu"
     }
   }
 }
@@ -36,7 +36,7 @@ resource "kubernetes_namespace_v1" "monitoring_collector" {
       "pod-security.kubernetes.io/warn"         = "restricted"
       "pod-security.kubernetes.io/warn-version" = "latest"
       "app.kubernetes.io/part-of"               = "monitoring"
-      "app.kubernetes.io/managed-by"            = "terraform"
+      "app.kubernetes.io/managed-by"            = "opentofu"
     }
   }
 }
@@ -79,7 +79,7 @@ resource "kubernetes_config_map_v1" "dashboard" {
     labels = {
       grafana_dashboard              = "1"
       "app.kubernetes.io/part-of"    = "monitoring"
-      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/managed-by" = "opentofu"
     }
   }
   data = {

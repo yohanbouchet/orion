@@ -608,7 +608,7 @@ Vérifiées le 07/11/2026 (dernière version publiée et fin de support sur
 
 | Outil | Version |
 |---|---|
-| Spring Boot / Java | 4.1.2 / 17 (image 17.0.20.1 ; 17.0.21, correctif trimestriel, disponible depuis le 05/11) |
+| Spring Boot / Java | 4.1.2 / 17 (image 17.0.21, correctif trimestriel d'octobre, en prod depuis v1.8.2) |
 | Angular / Node.js | 22.2 (TypeScript 6.0, Vitest 5) / 24 |
 | PostgreSQL | 18.6 |
 | Kubernetes (Minikube 1.39.0) | 1.37.0 (correctif 1.37.2 disponible) |

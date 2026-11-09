@@ -1,10 +1,10 @@
 # Fichier  : infra/terraform/outputs.tf
-# Rôle     : valeurs utiles après terraform apply : jetons des comptes
+# Rôle     : valeurs utiles après tofu apply : jetons des comptes
 #            deployer (secrets, jamais affichés) et certificat de l'API du
 #            cluster (public, mais masqué par le fournisseur avec les
 #            données du Secret) ; à ranger dans les environnements GitHub
 # Utilise  : rbac.tf
-# Utilisé par : l'opérateur (terraform output, voir README)
+# Utilisé par : l'opérateur (tofu output, voir README)
 
 output "deployer_tokens" {
   description = "Token of each deployer service account, by environment"

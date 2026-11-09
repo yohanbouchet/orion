@@ -6,6 +6,7 @@
 #            demande ; la même commande en local et dans la CI
 # Utilise  : scripts/lib/common.sh ; helm, kubectl, openssl ;
 #            infra/helm/microcrm ; namespace créé par infra/terraform
+#            (OpenTofu)
 # Utilisé par : l'opérateur ; job de déploiement de la CI ; ticket #56
 # Usage    : scripts/deploy.sh dev|staging|prod [TAG]
 #            scripts/deploy.sh rollback dev|staging|prod [REVISION]
@@ -52,7 +53,7 @@ check_env() {
   esac
 }
 
-# Le namespace est créé par Terraform (droits sur tout le cluster) ; ici
+# Le namespace est créé par OpenTofu (droits sur tout le cluster) ; ici
 # on vérifie qu'il existe, qu'on a le droit de le lire, et qu'il impose
 # le niveau de sécurité « restricted »
 check_namespace() {
@@ -61,11 +62,11 @@ check_namespace() {
     jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce}' \
     2>/dev/null)" ||
     die "namespace $ns not found or not allowed;" \
-      "fix: create it with Terraform (infra/terraform/README.md)" \
+      "fix: create it with OpenTofu (infra/terraform/README.md)" \
       "or check the credentials (kubectl config current-context)"
   [[ "$level" == "restricted" ]] ||
     die "namespace $ns does not enforce Pod Security \"restricted\";" \
-      "fix: run terraform apply in infra/terraform (it sets" \
+      "fix: run tofu apply in infra/terraform (it sets" \
       "pod-security.kubernetes.io/enforce=restricted)"
 }
 
