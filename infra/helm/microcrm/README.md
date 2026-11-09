@@ -113,6 +113,13 @@ arrière : `scripts/deploy.sh rollback dev`. Détails :
   (`flyway_schema_history`), comme dans toute table du schéma.
   Évolution : migrations lancées par un Job séparé avant le déploiement
   (hook Helm), API sans ce mot de passe, droits retirés sur cette table.
+- Relais `/api` du front : après une création, l'API renvoie l'adresse
+  du nouvel élément (en-tête `Location`) sans le préfixe `/api` ni le
+  port, car le relais ne lui transmet ni le préfixe retiré ni l'hôte
+  d'origine (vu le 08/11 : `http://127.0.0.1/persons/52`). Le front ne
+  se sert pas de cet en-tête. Évolution : en-têtes `X-Forwarded-Prefix`
+  et `X-Forwarded-Host` dans `templates/front-nginx-config.yaml`, lus
+  par Spring Boot (`server.forward-headers-strategy=framework`).
 - Sauvegardes : par `scripts/backup.sh`, avec leurs propres limites
   ([détails](../../../scripts/README.md#backupsh)).
 - Ressources (`requests`, `limits`) : valeurs de départ, à ajuster après

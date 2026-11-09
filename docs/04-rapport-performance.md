@@ -5,36 +5,45 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataires : Maria, CTO, et les équipes Dev et Ops) |
 | Auteur  | Yohan Bouchet |
-| Version | 1.0 |
-| Date    | 07/11/2026 (mesures du 06/11, exercice de panne du 07/11) |
+| Version | 1.1 (la version 1.0 datait du 07/11) |
+| Date    | 09/11/2026 : état de la production au 08/11 au soir (v1.8.1) ; mesures du 06/11 au 08/11 |
 
 ## 1. Synthèse
 
-**En une phrase** : en dix jours, MicroCRM est passé d'une chaîne qui
-testait sans rien bloquer et se déployait à la main, à une chaîne qui
-contrôle chaque modification, livre en production en quelques minutes
-après une approbation humaine, et se surveille elle-même.
+**En une phrase** : en moins de deux semaines, MicroCRM est passé d'une
+chaîne qui testait sans rien bloquer et se déployait à la main, à une
+chaîne qui contrôle chaque modification, livre en production en
+quelques minutes après une approbation humaine, et se surveille
+elle-même.
 
-| Ce qui compte pour Orion | Avant (27-28/10) | Après (06-07/11) |
+| Ce qui compte pour Orion | Avant (27-28/10) | Après (06-08/11) |
 | --- | --- | --- |
-| Failles connues dans les images livrées | 95 dans l'image back, dont 8 critiques | **0** (v1.5.2) |
+| Failles connues dans les images livrées | 95 dans l'image back, dont 8 critiques | **0**, toutes gravités confondues (v1.8.0) |
 | Contrôles automatiques sur chaque modification | 4 tâches (tests et construction), rien de bloquant sur la qualité ou la sécurité | **12** (tests, qualité, failles, secrets, infrastructure) |
+| Couverture du code par les tests | non mesurée | **82,9 %**, mesurée à chaque modification |
+| Compte utilisé par l'API dans la base | superutilisateur | **compte limité** à la lecture et à l'écriture des lignes |
 | Déploiement en production | manuel | **automatique après approbation**, retour arrière automatique |
-| Fréquence de livraison en production | non mesurable | **2,8 par semaine**, 0 % d'échec |
-| Délai entre une fusion et la production | non mesurable | **0,3 h** (médiane) |
+| Fréquence de livraison en production | non mesurable | **4,4 par semaine**, 0 % d'échec (19 mises en prod, dont 7 changements de l'application : voir 3.1) |
+| Délai entre un commit et la production | non mesurable | **2,5 h** (médiane ; explication en 3.1) |
 | Temps de réponse au test de rupture (p95) | 1,07 s (mesuré avant correction) | **6,5 ms**, 0 erreur |
+| Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (mesurés le 08/11, avant correction) | **0** en 8 redémarrages |
 | Supervision | aucune | **3 tableaux de bord, 8 alertes** (dont 2 de sécurité) envoyées par e-mail |
 | Perte d'un serveur d'API en production (exercice du 07/11) | non testée | **0 erreur** pour l'utilisateur, remplacement prêt en 11 s |
 
-**Trois recommandations prioritaires** (détail en section 8) :
+**Trois recommandations prioritaires** (détail en section 8.3) :
 
-1. Mettre à jour le front vers Angular 22 : supprime les 4 failles hautes
-   qui restent dans le code livré au navigateur.
-2. Augmenter la couverture des tests (17 % des branches du code) avant
-   d'ajouter des fonctionnalités.
+1. Tester les cas d'erreur et ajouter des tests de bout en bout : 42 %
+   des conditions du code ne sont pas testées (recommandation 2).
+2. Garder une copie des outils et des bibliothèques téléchargés par la
+   chaîne : une panne extérieure a retardé une livraison de plus de 6 h
+   le 08/11 (recommandation 16, section 7.6).
 3. En production cloud, séparer les machines de la CI de celles de
    l'application et ajouter la mise à l'échelle des machines : c'est la
-   leçon de l'incident du 05/11 (section 7.1).
+   leçon de l'incident du 05/11 (recommandation 3, section 7.1).
+
+La première recommandation prioritaire du 07/11, la mise à jour du front
+vers Angular 22, a été appliquée le 08/11 (v1.7.1) : elle a supprimé
+les dernières failles connues du code livré au navigateur.
 
 ## 2. Contexte et objectifs
 
@@ -49,9 +58,9 @@ la sécurité. Le plan de mise en œuvre
 | --- | --- | --- | --- |
 | Aucune faille connue livrée sans décision | 95 failles dans l'image back (8 critiques) | 0 critique ou haute corrigeable dans une image publiée | **oui** : 0 (section 5) |
 | Qualité contrôlée à chaque modification | Quality Gate sans condition | Quality Gate bloquant sur chaque PR | **oui** : 3 conditions (section 4.2) |
-| Tests mesurés | couverture non mesurée | mesurée et publiée à chaque PR | **oui** : 39,7 % (section 4.2) |
+| Tests mesurés | couverture non mesurée | mesurée et publiée à chaque PR | **oui** : 82,9 % (section 4.2) |
 | Pipeline plus rapide malgré plus de contrôles | 4,67 min, 4 tâches | durée suivie, gain mesuré | **oui** : 1,9 min, 12 contrôles (section 3.2) |
-| Livraison traçable | aucune image, version `0.0.1-SNAPSHOT` | chaque image liée à une version et à un commit | **oui** : 17 versions, v1.0.0 à v1.5.2 |
+| Livraison traçable | aucune image, version `0.0.1-SNAPSHOT` | chaque image liée à une version et à un commit | **oui** : 22 versions, v1.0.0 à v1.8.1 |
 | Déploiement sans action manuelle | déploiement manuel | déploiement et retour arrière automatisés | **oui**, avec approbation humaine avant la prod |
 
 ## 3. Livraison : indicateurs DORA et pipeline
@@ -66,23 +75,44 @@ production (workflow *DORA metrics*).
 
 | Indicateur | Ce qu'il mesure | Valeur (30 derniers jours) |
 | --- | --- | --- |
-| Fréquence de déploiement | combien de fois la production reçoit une nouvelle version | **2,8 par semaine** (12 déploiements depuis le 03/11) |
-| Délai de mise en production (médiane) | temps entre un commit et sa mise en production | **0,3 h** |
+| Fréquence de déploiement | combien de fois la production reçoit une nouvelle version | **4,4 par semaine** (19 déploiements du 03/11 au 08/11) |
+| Délai de mise en production (médiane) | temps entre un commit et sa mise en production | **2,5 h** (0,3 h le 06/11) |
 | Taux d'échec des changements | part des déploiements qui provoquent un incident | **0 %** |
 | Temps de rétablissement (médiane) | temps pour revenir à la normale après un incident | **non mesurable** : aucun incident de production |
-| Taux de reprise | part des déploiements qui corrigent un déploiement récent | **42 %** |
+| Taux de reprise | part des déploiements qui ne livrent que des correctifs | **37 %** (42 % le 06/11) |
 
 **Lecture** :
 
 - Avant le projet, ces indicateurs n'étaient **pas mesurables** :
   aucune trace des déploiements, faits à la main.
-- Orion livre désormais plusieurs fois par semaine, et une modification
-  atteint la production en moins d'une demi-heure (médiane).
-- **Limite** : la période est courte (4 jours, 12 déploiements). Les
-  valeurs deviendront fiables après quelques semaines.
-- Le taux de reprise de 42 % est élevé : des corrections de la chaîne
-  elle-même (tests de charge, supervision) ont suivi de près leur
-  première version. Il doit baisser quand l'outillage se stabilise.
+- Orion livre désormais plusieurs fois par semaine.
+- **Seules 7 des 19 mises en prod ont changé l'application** : le code
+  (v1.1.1, v1.2.0, v1.7.1) ou son chart Helm (v1.4.3, v1.7.0, v1.8.0,
+  v1.8.1). Les 12 autres ont redéployé à l'identique : leur version
+  avait été créée par un changement d'outillage, qui n'est pas livré
+  avec l'application (supervision : 6 ; tests de charge : 2 ; Ansible,
+  script DORA, script de déploiement, réglage du staging : 1 chacun).
+  La fréquence et le taux de reprise en sont gonflés (recommandation 21).
+- **Le délai est passé de 0,3 h à 2,5 h**, sans que la chaîne soit
+  devenue plus lente. Il est mesuré pour chaque commit, de son écriture
+  à sa mise en production : un commit écrit le matin dans une PR
+  fusionnée le soir compte toute sa journée d'attente. Jusqu'au 07/11
+  au matin, chaque version ne livrait qu'un commit (0,3 h à 1,4 h, de
+  v1.4.2 à v1.5.2). Ensuite, des PR ont regroupé plusieurs changements :
+  4,6 h pour v1.6.0 (6 commits), 5,5 h pour v1.7.0 (6 commits), 7,4 h
+  pour v1.7.1 (13 commits, dont plus de 6 h perdues à cause d'une panne
+  extérieure, section 7.6). Les deux versions suivantes, petites, ont mis
+  0,2 h. D'où la recommandation 18 : des PR petites, fusionnées dès
+  qu'elles sont prêtes.
+- Le taux de reprise baisse (42 % le 06/11, 37 % le 08/11) : les
+  corrections de la chaîne elle-même (tests de charge, supervision),
+  nombreuses au début, se font plus rares quand l'outillage se
+  stabilise.
+- **Limites** : la période est courte (19 déploiements en 6 jours,
+  depuis la première mise en production du 03/11). La fréquence est
+  calculée sur une fenêtre fixe de 30 jours (réglage `DORA_DAYS`) : tant
+  que la production a moins de 30 jours, elle sous-estime le rythme
+  réel. Les valeurs deviendront fiables après quelques semaines.
 
 ![Résumé du workflow DORA metrics sur GitHub : tableau des 5 indicateurs de la production](rapport-performance/dora.png)
 
@@ -107,7 +137,7 @@ chaîne contrôle **3 fois plus de choses en 2,5 fois moins de temps**.
 
 ### 3.3 Releases
 
-- **17 versions** publiées du 31/10 au 07/11 (v1.0.0 à v1.5.2). Le
+- **22 versions** publiées du 31/10 au 08/11 (v1.0.0 à v1.8.1). Le
   numéro est calculé automatiquement à partir des messages de commit
   (*Semantic Versioning*) ; chaque image porte sa version et son commit.
 - **Retour arrière automatique** testé : un déploiement dont le test de
@@ -129,84 +159,82 @@ chaîne contrôle **3 fois plus de choses en 2,5 fois moins de temps**.
 | Famille | Avant | Après | Quand ils tournent |
 | --- | --- | --- | --- |
 | Tests du back (JUnit) | 2 | 6 (dont l'intégration avec la base) | chaque PR |
-| Tests du front | 8 | 8 | chaque PR |
+| Tests du front | 8 (Karma) | 16 (Vitest, depuis le 08/11) | chaque PR |
 | Tests des scripts d'exploitation (bashunit, pytest) | 0 | 71 + 28 | chaque PR |
 | Tests de l'infrastructure (Terraform) | 0 | 6 | chaque PR |
-| Test d'intrusion (OWASP ZAP) | 0 | 0 alerte bloquante sur 64 règles | chaque déploiement de staging |
+| Test d'intrusion (OWASP ZAP) | 0 | 0 échec ; 19 règles bloquantes | chaque déploiement de staging |
 | Test de fumée de charge (k6) | 0 | seuils respectés | chaque déploiement de staging, bloque la prod |
 | Tests de charge complets (k6) | 0 | 3 profils mesurés (section 6) | à la demande |
 
 ### 4.2 Qualité et couverture (SonarQube)
 
-| Indicateur | Avant (27/10) | Après (06/11) |
-| --- | --- | --- |
-| Couverture des tests | non mesurée (0 % affiché) | **39,7 %** (lignes 43,2 %, branches 17,2 %) |
-| Quality Gate | « Passed » sans aucune condition | **3 conditions bloquantes** : nouveau code couvert à 80 %, 3 % de duplication au plus, 0 nouveau problème |
-| Problèmes | 37 | 30 |
-| Note de sécurité | C | **B** |
-| Note de fiabilité | D | D (1 problème grave, hérité) |
-| Note de maintenabilité | A | A |
-| Duplication | 2,5 % | 0,0 % |
+| Indicateur | Avant (27/10) | 06/11 | Après (08/11) |
+| --- | --- | --- | --- |
+| Couverture des tests | non mesurée (0 % affiché) | 39,7 % | **82,9 %** (lignes 87,6 %, branches 57,9 %) |
+| Quality Gate | « Passed » sans aucune condition | **3 conditions bloquantes** : nouveau code couvert à 80 %, 3 % de duplication au plus, 0 nouveau problème | idem (nouveau code couvert à 90,9 %) |
+| Problèmes ouverts | 37 | 30 | **0** |
+| Note de sécurité | C | B | **A** |
+| Note de fiabilité | D | D | **A** |
+| Note de maintenabilité | A | A | A |
+| Duplication | 2,5 % | 0,0 % | 0,0 % |
 
 Notes lues dans l'interface de SonarQube (mode MQR, comme la photo
-avant). L'API donne aussi l'ancienne échelle, où la fiabilité vaut C :
-les deux échelles ne se comparent pas (vérifié le 07/11).
+avant) ; le 08/11, l'ancienne échelle, donnée par l'API, vaut aussi A
+partout.
 
-**Lecture** : le code ajouté depuis le projet respecte les règles (le
-Quality Gate bloque sinon) ; les problèmes restants sont dans le code
-d'origine. La couverture des **branches** (17 %) est le point faible :
-beaucoup de cas (erreurs, données absentes) ne sont jamais testés.
+**Lecture** : le 07/11, les 30 problèmes restants étaient tous dans le
+code d'origine du front. Ils ont été corrigés le 08/11 avec la mise à
+jour vers Angular 22 (recommandation 1, PR #114) : composants réécrits,
+formulaires accessibles (libellés reliés aux champs, en-têtes de
+tableau), erreurs des appels à l'API traitées, feuille de style Bulma
+servie par le site au lieu d'un site externe. Au total, SonarQube compte
+**41 problèmes corrigés** depuis la première analyse, et **aucun n'a été
+masqué** (0 problème « accepté » ou « faux positif »). Les tests du front
+passent de 8 à 16 et couvrent les écrans principaux : la couverture
+double.
 
-**Où est la dette restante** (vue par qualité de SonarQube, 07/11) :
+**Point faible restant** : les **branches** (57,9 %). 16 des 38
+conditions du code ne sont jamais testées (cas d'erreur, données
+absentes) : c'est la recommandation 2.
 
-- **Fiabilité** : 29 problèmes, tous dans le front.
-  - 1 seul de gravité haute, qui maintient la note D : un chargement de
-    données lancé dans un constructeur (`person-details`, règle S7059) ;
-  - **14 nuisent à l'accessibilité**, dont 8 rattachés au niveau A des
-    règles WCAG 2 (le minimum) : champs et libellés de formulaire mal
-    reliés (7 et 6) et un tableau sans en-têtes ; un lecteur d'écran ne
-    sait pas annoncer ces champs ;
-  - 12 promesses JavaScript dont l'erreur n'est pas traitée et 2
-    conversions de nombre à moderniser (`Number.parseInt`).
+La limite relevée le 07/11 (bibliothèques du back non fournies à
+SonarQube, analyse du Java moins précise) est levée depuis le 08/11
+(PR #112).
 
-  À traiter avec la mise à jour d'Angular (recommandation 1).
-- **Sécurité** : 1 problème, de gravité faible : la feuille de style
-  Bulma est chargée depuis un site externe (CDN) sans contrôle
-  d'intégrité (règle Web:S5725). Déjà relevé par le test d'intrusion ZAP
-  du 03/11, il reste à corriger par l'équipe Dev (recommandation 6).
-  Aucun point sensible (*security hotspot*) à revoir : SonarQube 26.10
-  abandonne cette notion, et l'ancien point sensible est justement ce
-  problème Bulma (vérifié dans l'interface le 07/11).
-- **Maintenabilité** : 3 problèmes.
-- **Limite de l'analyse** : SonarQube signale qu'il ne reçoit pas les
-  bibliothèques du back (réglage `sonar.java.libraries` absent) ;
-  l'analyse du code Java est donc moins précise. Correction prévue dans
-  la CI.
-- Sur les 30 derniers jours, 13 problèmes ont été corrigés (3 de
-  sécurité, 8 de fiabilité, 2 de maintenabilité). Une même règle peut
-  compter dans deux qualités : ces totaux ne s'additionnent pas.
+![Tableau de bord SonarQube du projet orion (dernière analyse le 08/11) : Quality Gate réussi, 0 problème ouvert, 82,9 % de couverture, 0 % de duplication](rapport-performance/sonarqube-08-11.png)
 
-![Tableau de bord SonarQube du projet orion : Quality Gate réussi, 30 problèmes ouverts, 0 % de duplication, 39,7 % de couverture, 1 problème de sécurité de gravité faible](rapport-performance/sonarqube.png)
+![Le même tableau de bord le 07/11, avant la mise à jour Angular 22 : 30 problèmes ouverts, 39,7 % de couverture, 1 problème de sécurité de gravité faible](rapport-performance/sonarqube.png)
 
-![Vue fiabilité de SonarQube : 29 problèmes, règles les plus fréquentes (promesses non traitées, champs de formulaire sans libellé)](rapport-performance/sonarqube-fiabilite.png)
+![Vue fiabilité de SonarQube le 07/11, avant la mise à jour : 29 problèmes, règles les plus fréquentes (promesses non traitées, champs de formulaire sans libellé), tous corrigés le 08/11](rapport-performance/sonarqube-fiabilite.png)
 
 ## 5. Sécurité
 
 ### 5.1 Gains
 
-| Source | Avant (27-28/10) | Après (06-07/11) |
+| Source | Avant (27-28/10) | Après (08/11) |
 | --- | --- | --- |
-| Trivy, image back | 95 failles : 8 critiques, 33 hautes | **0**, ni critique, ni haute, ni moyenne (v1.5.2, 07/11) |
-| Trivy, image front | 10 failles : 2 hautes | **0**, ni critique, ni haute, ni moyenne (v1.5.2, 07/11) |
-| npm audit, toutes les dépendances du front | 91 : 5 critiques, 52 hautes | 56 : 2 critiques, 17 hautes |
-| npm audit, dépendances livrées au navigateur | non distingué | 8 : **4 hautes**, corrigées par Angular 22.2.4 |
-| Test d'intrusion ZAP (en-têtes de sécurité) | 3 règles en échec | **0 échec**, 64 règles réussies |
+| Trivy, image back | 95 failles : 8 critiques, 33 hautes | **0**, toutes gravités confondues (v1.8.0) |
+| Trivy, image front | 10 failles : 2 hautes | **0**, toutes gravités confondues (v1.8.0) |
+| npm audit, toutes les dépendances du front | 91 : 5 critiques, 52 hautes | **0** (56 le 07/11) |
+| npm audit, dépendances livrées au navigateur | non distingué | **0** (8 le 07/11, dont 4 hautes) |
+| Failles acceptées par exception (`.trivyignore`) | aucun contrôle | **0** (42 le 07/11 : Angular 17 et l'outil de publication des versions) |
+| Test d'intrusion ZAP | 3 règles en échec | **0 échec** ; 19 règles bloquantes, dont la bibliothèque JavaScript vulnérable (10003) et le contrôle d'intégrité (90003), bloquantes depuis le 08/11 |
 | Secrets dans le dépôt (gitleaks) | non contrôlé | contrôlé à chaque PR, aucun trouvé |
+| Compte de l'application dans la base | superutilisateur (réglage par défaut de l'image) | **compte limité** : lire et écrire des lignes, rien d'autre (v1.8.0) |
 
-Les 56 failles restantes de `npm audit` sont surtout dans les **outils de
-construction** du front (compilateur, serveur de test) : ils ne sont pas
-dans l'image livrée, qui ne contient que des fichiers statiques servis
-par nginx. C'est pourquoi l'image front affiche 0 faille.
+**Plus aucune faille connue ni acceptée** : la mise à jour vers
+Angular 22 (08/11, PR #114) a supprimé toutes les failles de
+`npm audit`, y compris dans les outils de construction, et une version
+corrigée de l'outil de publication a permis de retirer les 42 exceptions
+de `.trivyignore`.
+
+**Moindre privilège dans la base** (08/11, PR #115) : l'API ne se
+connecte plus avec le superutilisateur créé par l'image officielle, mais
+avec un compte qui ne peut que lire et écrire des lignes. Une injection
+SQL ne pourrait ni supprimer une table, ni créer un compte, ni lancer
+une commande système (refus vérifiés). En prod : 20 connexions, toutes
+avec ce compte. **Limite** : le mot de passe du superutilisateur reste
+dans le pod de l'API, pour les migrations de schéma (recommandation 19).
 
 **Comment une faille est traitée** : Trivy bloque toute image qui
 contient une faille critique ou haute corrigeable ; une exception doit
@@ -529,33 +557,83 @@ données limité (v1.8.0) : il n'entre pas dans les indicateurs DORA.
   écritures. Une sonde côté utilisateur (recommandation 5) doit donc
   aussi écrire, et à un rythme suffisant.
 
+### 7.6 08/11 : panne extérieure, construction bloquée (incident de la CI)
+
+Incident de l'outillage, **pas de la production** : il n'entre pas dans
+les indicateurs DORA. Heures de Paris.
+
+- **Symptôme** : de 9:53 à 11:29, quatre essais de la CI de la PR #114
+  (mise à jour Angular 22) ont échoué au même endroit : la construction
+  de l'image du back, au téléchargement de l'outil de construction
+  Gradle sur `services.gradle.org`, qui répondait « HTTP 504 ».
+- **Cause** : 504 (« Gateway Timeout ») veut dire que le serveur frontal
+  du site (le réseau Cloudflare) n'obtenait pas de réponse du serveur
+  d'origine, vu depuis les machines de GitHub (région Azure
+  « centralus »). Depuis le poste de l'équipe Ops, à Paris, le même
+  téléchargement fonctionnait, et l'image se construisait : ni le code
+  ni la version de Gradle n'étaient en cause. La page d'état de Gradle
+  n'annonçait aucun incident.
+- **Pourquoi ce seul contrôle** : les tests du back gardent Gradle en
+  cache d'une exécution à l'autre ; la construction de l'image, elle, le
+  télécharge à chaque fois.
+- **Rétablissement** : le 5e essai, relancé à 16:03, a réussi ; la PR a
+  été fusionnée à 16:10, et la version v1.7.1 était en production à
+  16:18. Relancer tout de suite ne servait à rien : la panne a duré au
+  moins 1 h 36, bien plus que ce que couvrent des nouvelles tentatives
+  automatiques.
+- **Effet** : la livraison a attendu plus de 6 h ; les commits de cette
+  version ont mis 7,4 h à atteindre la production, ce qui pèse sur le
+  délai de mise en production (3.1).
+- **Enseignement** : chaque construction dépend de services extérieurs
+  (Gradle, registres npm et Maven, images de base). Un **dépôt
+  d'artefacts mandataire**, qui garde une copie de tout ce qui est
+  téléchargé, ou une construction qui réutilise le résultat des tests au
+  lieu de tout retélécharger, rendrait la chaîne indépendante de ces
+  pannes (recommandation 16).
+
 ## 8. Gains obtenus et recommandations d'amélioration continue
 
 ### 8.1 Gains obtenus
 
 | Domaine | Indicateur | Avant | Après | Détail |
 | --- | --- | --- | --- | --- |
-| Sécurité | Failles critiques et hautes dans les images livrées | 95 (back, dont 8 critiques) et 10 (front) | **0 et 0**, aucune faille moyenne non plus (v1.5.2) | 5.1 |
-| Sécurité | En-têtes de sécurité vérifiés par le test d'intrusion | 3 règles en échec, aucun test | **0 échec**, 64 règles réussies ; un échec bloque la prod | 5.1 |
+| Sécurité | Failles critiques et hautes dans les images livrées | 95 (back, dont 8 critiques) et 10 (front) | **0 et 0**, aucune faille d'aucune gravité (v1.8.0) | 5.1 |
+| Sécurité | En-têtes de sécurité vérifiés par le test d'intrusion | 3 règles en échec, aucun test | **0 échec** ; 19 règles bloquantes : un échec bloque la prod | 5.1 |
 | Sécurité | Secrets dans le dépôt | non contrôlés | contrôlés à chaque PR, aucun trouvé | 5.1 |
-| Qualité | Couverture des tests | non mesurée | **39,7 %**, mesurée à chaque PR | 4.2 |
+| Sécurité | Compte utilisé par l'API dans la base | superutilisateur | **compte limité** à la lecture et à l'écriture des lignes ; refus testés | 5.1 |
+| Qualité | Couverture des tests | non mesurée | **82,9 %** (branches : 57,9 %), mesurée à chaque PR | 4.2 |
 | Qualité | Quality Gate | sans condition | **3 conditions bloquantes** | 4.2 |
-| Qualité | Notes SonarQube (sécurité, fiabilité) | C et D | **B** et D (1 problème grave hérité) | 4.2 |
+| Qualité | Notes SonarQube (sécurité, fiabilité) | C et D | **A et A**, 0 problème ouvert | 4.2 |
 | Livraison | Contrôles automatiques sur chaque PR | 4 tâches, rien de bloquant | **12 tâches** | 3.2 |
 | Livraison | Durée de ces contrôles | 4,67 min | **1,9 min** (médiane) | 3.2 |
-| Livraison | Déploiement en production | manuel, non tracé | **automatique après approbation** : 2,8 par semaine, 0 % d'échec, 0,3 h après la fusion | 3.1 |
-| Livraison | Versions | `0.0.1-SNAPSHOT`, aucune image | **17 versions** ; chaque image liée à sa version et à son commit | 3.3 |
+| Livraison | Déploiement en production | manuel, non tracé | **automatique après approbation** : 4,4 par semaine, 0 % d'échec, 2,5 h entre un commit et la prod (médiane) | 3.1 |
+| Livraison | Versions | `0.0.1-SNAPSHOT`, aucune image | **22 versions** ; chaque image liée à sa version et à son commit | 3.3 |
 | Disponibilité | Perte d'un serveur d'API en prod | jamais testée | **0 erreur**, remplacement prêt en 11 s | 7.3 |
+| Disponibilité | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (08/11, avant correction) | **0** en 8 redémarrages | 7.5 |
 | Disponibilité | Sauvegarde de la base | aucune | quotidienne, restauration vérifiée chaque semaine | 3.3 |
 | Performance | p95 au point de rupture (1 réplique) | 1,07 s (06/11, avant correction) | **6,5 ms** | 6.3 |
 | Supervision | Tableaux de bord et alertes | aucun | **3 tableaux de bord, 8 alertes** (dont 2 de sécurité) par e-mail, chaîne vérifiée | 5.2, 6.1 |
 
 ### 8.2 Observations sur les déploiements et les releases
 
-- **11 des 17 versions sont des correctifs** (taux de reprise DORA de
-  42 %) : la chaîne elle-même (tests de charge, supervision) a souvent
-  été corrigée juste après sa première version. C'est attendu pendant
-  la mise en place ; ce taux doit baisser quand l'outillage se stabilise.
+- **13 des 22 versions sont des correctifs** (dernier chiffre du
+  numéro augmenté, comme v1.8.1) : la chaîne elle-même (tests de charge,
+  supervision) a souvent été corrigée juste après sa première version.
+  C'est attendu pendant la mise en place. Le taux de reprise DORA, plus
+  strict, ne compte que les déploiements qui ne livrent **que** des
+  correctifs : 37 % le 08/11, contre 42 % le 06/11 (3.1).
+- **Des versions ont été créées sans changer l'application** :
+  semantic-release crée une version pour tout commit `feat` ou `fix`,
+  quel que soit le dossier. 12 des 19 mises en prod ont ainsi reconstruit
+  des images identiques et redémarré la prod, chacune avec une
+  approbation (3.1). Par ailleurs, le chart garde le même numéro
+  (`helm history` affiche `1.1.0` pour toutes les versions ; la version
+  déployée n'apparaît que dans la description). Les versions publiées ne
+  sont pas renumérotées (une version publiée ne se modifie plus) : la
+  règle est corrigée pour la suite (recommandation 21).
+- **Les PR qui regroupent plusieurs changements retardent tout le
+  lot** : le délai médian entre un commit et la prod est passé de 0,3 h
+  à 2,5 h quand des PR ont réuni 6 à 13 commits (3.1).
 - **Une seule étape est manuelle : l'approbation de la prod.** Elle est
   voulue (contrôle humain avant les clients), mais elle allonge le délai
   réel : environ 5 min d'attente sur l'exécution de la section 3.2
@@ -579,38 +657,54 @@ données limité (v1.8.0) : il n'entre pas dans les indicateurs DORA.
 
 ### 8.3 Recommandations
 
-Classées par priorité pour Orion ; chaque recommandation répond à un
-constat de ce rapport.
+Chaque recommandation répond à un constat de ce rapport. Les
+recommandations 1 à 15 sont classées par priorité (version du 07/11) ;
+les recommandations 16 à 21, ajoutées les 08 et 09/11, viennent
+ensuite, pour que les numéros cités dans les sections précédentes
+restent valables. Les trois priorités du moment sont rappelées dans la
+synthèse (section 1). La colonne « État » montre où en est chacune le
+08/11 : 2 sont appliquées, 3 le sont en partie.
 
-| # | Recommandation | Constat | Effort | Équipe |
-| --- | --- | --- | --- | --- |
-| 1 | Mettre à jour le front vers Angular 22 (et passer les tests à Vitest) | 4 failles hautes dans le code livré au navigateur ; Angular 17 n'est plus maintenu | moyen | Dev |
-| 2 | Augmenter la couverture des tests, en priorité les cas d'erreur, et ajouter des tests de bout en bout | branches couvertes à 17 % | moyen | Dev |
-| 3 | En production cloud (ex. AWS EKS), séparer les machines de la CI de celles de l'application et activer la mise à l'échelle des machines (par Terraform) | incident du 05/11 ; autoscaling limité à 4 pods sur une seule machine | élevé | Ops |
-| 4 | Passer le front à 2 répliques en prod, avec un budget de perturbation (*PodDisruptionBudget*) pour le front et le back | le front est seul dans son composant : sa perte couperait l'application, alors que celle d'un pod du back passe inaperçue (7.3) | faible | Ops |
-| 5 | Ajouter une supervision synthétique : une sonde qui interroge l'application comme un utilisateur, toutes les quelques secondes (ex. Blackbox Exporter, open source), avec une alerte | la lenteur du relais nginx (6.3) et la coupure de 11 s de l'exercice (7.3) étaient invisibles côté back | faible | Ops |
-| 6 | Installer Bulma avec npm, ou le charger avec un contrôle d'intégrité (SRI) | seul problème de sécurité relevé par SonarQube et par ZAP (4.2) | faible | Dev |
-| 7 | Appliquer Terraform par la CI : plan affiché sur chaque PR, application après approbation | supervision appliquée à la main ; correction fusionnée restée hors service (8.2) | moyen | Ops |
-| 8 | Faire suivre les images d'outils de la CI par Dependabot (fichier dédié) ; passer Trivy à 0.76.2 | mise à jour de sécurité de Trivy non proposée (8.2) | faible | Ops |
-| 9 | Garder 2 répliques minimum en prod ; pour les pics prévisibles, ajouter des pods à l'avance ; étudier une mise à l'échelle sur le nombre de requêtes (KEDA) | renfort arrivé après la fin du pic (6.3) | faible à moyen | Ops |
-| 10 | Annoter automatiquement les déploiements dans Grafana | relier une dégradation à une version d'un coup d'œil | faible | Ops |
-| 11 | Fixer un objectif de disponibilité (ex. 99,5 %) et alerter sur son budget d'erreur ; envoyer les alertes aussi vers la messagerie d'équipe ; faire surveiller l'alerte de contrôle `Watchdog` par un service externe | alertes par e-mail seulement, pas d'objectif chiffré ; personne n'est prévenu si la supervision elle-même s'arrête | faible | Ops et direction |
-| 12 | Déclarer chaque incident de prod avec le formulaire prévu, pour mesurer le temps de rétablissement | indicateur DORA non mesurable | faible | Dev et Ops |
-| 13 | Rejouer les tests de charge sur une machine dédiée, à chaque version majeure, avec le rapport HTML de k6 | point de rupture réel non atteint sur le poste | moyen | Ops |
-| 14 | Exclure les pods de test (ZAP, k6) de la recherche des journaux d'erreurs | lignes inoffensives mêlées aux vraies erreurs (5.2) | faible | Ops |
-| 15 | Mettre la base en haute disponibilité (service managé comme RDS Multi-AZ, ou opérateur CloudNativePG), avec restauration à un instant donné | une seule instance PostgreSQL ; jusqu'à 24 h de données perdues en cas de sinistre | moyen à élevé | Ops |
+| # | Recommandation | Constat | Effort | Équipe | État au 08/11 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Mettre à jour le front vers Angular 22 (et passer les tests à Vitest) | 4 failles hautes dans le code livré au navigateur ; Angular 17 n'est plus maintenu | moyen | Dev | **Appliquée** (v1.7.1) : 0 faille, 0 problème SonarQube (4.2, 5.1) |
+| 2 | Augmenter la couverture des tests, en priorité les cas d'erreur, et ajouter des tests de bout en bout | branches couvertes à 17 % le 06/11, 57,9 % le 08/11 ; aucun test de bout en bout | moyen | Dev | À faire ; couverture passée de 39,7 % à 82,9 % avec Angular 22 |
+| 3 | En production cloud (ex. AWS EKS), séparer les machines de la CI de celles de l'application et activer la mise à l'échelle des machines (par Terraform) | incident du 05/11 ; autoscaling limité à 4 pods sur une seule machine | élevé | Ops | À faire (cible décrite dans la documentation CI/CD, 5.2.1) |
+| 4 | Passer le front à 2 répliques en prod, avec un budget de perturbation (*PodDisruptionBudget*) pour le front et le back | le front est seul dans son composant : sa perte couperait l'application, alors que celle d'un pod du back passe inaperçue (7.3) | faible | Ops | **Partielle** : front à 2 répliques en prod (v1.7.0) ; budget de perturbation prévu dans la cible cloud seulement |
+| 5 | Ajouter une supervision synthétique : une sonde qui interroge l'application comme un utilisateur, en lecture **et en écriture**, toutes les quelques secondes (ex. Blackbox Exporter, open source), avec une alerte | la lenteur du relais nginx (6.3), la coupure de 11 s de l'exercice (7.3) et les enregistrements perdus aux mises à jour (7.5) étaient invisibles côté back | faible | Ops | À faire |
+| 6 | Installer Bulma avec npm, ou le charger avec un contrôle d'intégrité (SRI) | seul problème de sécurité relevé par SonarQube et par ZAP (4.2) | faible | Dev | **Appliquée** (v1.7.1) : Bulma installé par npm et servi par le site |
+| 7 | Appliquer Terraform par la CI : plan affiché sur chaque PR, application après approbation | supervision appliquée à la main ; correction fusionnée restée hors service (8.2) | moyen | Ops | À faire |
+| 8 | Faire suivre les images d'outils de la CI par Dependabot (fichier dédié) ; passer Trivy à 0.76.2 | mise à jour de sécurité de Trivy non proposée (8.2) | faible | Ops | **Partielle** : Trivy 0.76.2 (v1.7.0) ; images d'outils encore mises à jour à la main |
+| 9 | Garder 2 répliques minimum en prod ; pour les pics prévisibles, ajouter des pods à l'avance ; étudier une mise à l'échelle sur le nombre de requêtes (KEDA) | renfort arrivé après la fin du pic (6.3) | faible à moyen | Ops | **Partielle** : 2 répliques minimum en place ; le reste à faire |
+| 10 | Annoter automatiquement les déploiements dans Grafana | relier une dégradation à une version d'un coup d'œil | faible | Ops | À faire |
+| 11 | Fixer un objectif de disponibilité (ex. 99,5 %) et alerter sur son budget d'erreur ; envoyer les alertes aussi vers la messagerie d'équipe ; faire surveiller l'alerte de contrôle `Watchdog` par un service externe | alertes par e-mail seulement, pas d'objectif chiffré ; personne n'est prévenu si la supervision elle-même s'arrête | faible | Ops et direction | À faire |
+| 12 | Déclarer chaque incident de prod avec le formulaire prévu, pour mesurer le temps de rétablissement | indicateur DORA non mesurable | faible | Dev et Ops | Formulaire « Incident » prêt ; aucun incident de prod à déclarer à ce jour |
+| 13 | Rejouer les tests de charge sur une machine dédiée, à chaque version majeure, avec le rapport HTML de k6 | point de rupture réel non atteint sur le poste | moyen | Ops | À faire |
+| 14 | Exclure les pods de test (ZAP, k6) de la recherche des journaux d'erreurs | lignes inoffensives mêlées aux vraies erreurs (5.2) | faible | Ops | À faire |
+| 15 | Mettre la base en haute disponibilité (service managé comme RDS Multi-AZ, ou opérateur CloudNativePG), avec restauration à un instant donné | une seule instance PostgreSQL ; jusqu'à 24 h de données perdues en cas de sinistre | moyen à élevé | Ops | À faire |
+| 16 | Mettre en place un dépôt d'artefacts mandataire, qui garde une copie de Gradle, des bibliothèques et des images de base (dans la cible AWS : CodeArtifact et le cache d'images d'ECR), ou construire l'image du back à partir du résultat des tests | panne extérieure du 08/11 : livraison retardée de plus de 6 h (7.6) | moyen | Ops | À faire |
+| 17 | Alerter quand un conteneur dépasse 90 % de sa limite de mémoire pendant 15 min | hausse de la mémoire de SonarQube restée invisible 37 h, jusqu'à son arrêt (7.4) | faible | Ops | À faire |
+| 18 | Garder des PR petites (un seul changement), fusionnées dès qu'elles sont prêtes | délai médian de mise en production passé de 0,3 h à 2,5 h ; 4,6 h à 7,4 h pour les versions qui ont regroupé 6 à 13 commits (3.1) | faible | Dev et Ops | À faire |
+| 19 | Lancer les migrations de schéma (Flyway) dans une tâche séparée, avant le déploiement, pour que l'API n'ait plus le mot de passe du superutilisateur de la base | limite du compte limité de l'application (5.1) | moyen | Dev et Ops | À faire |
+| 20 | Sauvegarder aussi la base de SonarQube | historique de la qualité perdu si son disque est perdu ; seules les bases de MicroCRM sont sauvegardées | faible | Ops | À faire |
+| 21 | Ne créer une version que pour un changement de ce qui est livré (back, front, chart), et donner au chart déployé le numéro de cette version | 12 des 19 mises en prod sans changement de l'application ; chart toujours affiché en `1.1.0` (3.1, 8.2) | faible | Dev et Ops | À faire (constat du 09/11) |
 
 ## 9. Conclusion
 
 Les six objectifs mesurables fixés au départ sont atteints : aucune
 faille connue dans les images livrées, qualité et couverture contrôlées à
 chaque modification, pipeline plus complet et plus rapide, livraisons
-versionnées, déploiement automatisé avec retour arrière, supervision avec
-alertes. Les tests de charge ont surtout montré la valeur de la mesure :
-le principal gain de performance (p95 divisé par 165) est venu d'un
-diagnostic, pas de ressources supplémentaires. Les priorités suivantes
-sont la mise à jour du front, la couverture des tests et, pour un
-passage dans le cloud, la séparation de la CI et de l'application.
+versionnées, déploiement automatisé avec retour arrière. S'y ajoutent
+une supervision avec alertes et un accès à la base réduit au strict
+nécessaire.
+
+Les mesures ont surtout montré leur valeur là où rien ne semblait
+anormal : le principal gain de performance (p95 divisé par 165) est venu
+d'un diagnostic, pas de ressources supplémentaires ; une sonde lancée
+pendant les mises à jour a révélé des requêtes perdues, corrigées le
+jour même. Les priorités suivantes sont les tests des cas d'erreur,
+l'indépendance de la chaîne vis-à-vis des services extérieurs et, pour
+un passage dans le cloud, la séparation de la CI et de l'application.
 
 ## Annexe A. Glossaire
 
@@ -623,17 +717,20 @@ passage dans le cloud, la séparation de la CI et de l'application.
 | Couverture | part du code exécutée par les tests |
 | Staging | environnement de recette, copie de la production en plus petit |
 | Test de fumée | test court qui vérifie que l'essentiel fonctionne après un déploiement |
+| Moindre privilège | chaque compte ne reçoit que les droits dont il a besoin : l'API peut lire et écrire des lignes, pas modifier les tables |
+| Correctif (version « patch ») | version qui ne fait que corriger, sans nouvelle fonctionnalité : seul le dernier chiffre augmente (v1.8.0 → v1.8.1) |
+| Dépôt d'artefacts mandataire | serveur qui garde une copie de tout ce que la chaîne télécharge (outils, bibliothèques, images) et la resert si la source est en panne |
 
 ## Annexe B. Sources des mesures
 
 | Mesure | Source | Date |
 | --- | --- | --- |
 | Mesures de départ | [docs/mesures-avant/](mesures-avant/README.md) | 27-28/10/2026 |
-| DORA | `scripts/dora.py` sur l'API GitHub (déploiements de l'environnement production) | 06/11/2026 |
+| DORA | `scripts/dora.py` sur l'API GitHub (déploiements de l'environnement production) ; délais par version recalculés avec git et l'historique Helm de la prod | 06/11/2026, 09/11/2026 |
 | Pipeline | API GitHub Actions : 100 dernières exécutions réussies du workflow CI | 06/11/2026 |
-| Qualité, couverture | API SonarQube, projet `orion` | 06/11/2026 |
-| Failles des images | Trivy 0.76.1 (version de la CI) sur les images publiées v1.5.2 | 07/11/2026 |
-| Dépendances du front | `npm audit`, avec et sans les outils de développement | 06/11/2026 |
+| Qualité, couverture | API SonarQube, projet `orion` | 06/11/2026, 08/11/2026 |
+| Failles des images | Trivy (version de la CI) sur les images publiées : 0.76.1 sur v1.5.2, 0.76.2 sur v1.8.0 | 07/11/2026, 08/11/2026 |
+| Dépendances du front | `npm audit`, avec et sans les outils de développement | 06/11/2026, 08/11/2026 |
 | Charge | k6 2.3.0 dans staging ; métriques VictoriaMetrics ; compteurs TCP des pods | 06/11/2026 |
 | Tableaux de bord, recherche des journaux | requêtes rejouées sur VictoriaMetrics et VictoriaLogs | 07/11/2026 |
 | Chaîne d'alerte | alerte de test envoyée à Alertmanager, e-mails reçus | 07/11/2026 |
@@ -641,3 +738,4 @@ passage dans le cloud, la séparation de la CI et de l'application.
 | Exercice de panne | sonde (1 requête par seconde, codes HTTP horodatés), `kubectl get pods -w`, journaux du pod dans VictoriaLogs | 07/11/2026 |
 | Incident SonarQube | état et événements du pod (`kubectl`), journaux du conteneur arrêté, mémoire du conteneur dans VictoriaMetrics, réglages Java par défaut lus dans l'image 26.10 | 07/11/2026 |
 | Requêtes perdues aux redémarrages | namespace de test jetable (chart v1.8.0) ; sonde Python et k6 2.3.0 (10 requêtes par seconde, codes et erreurs horodatés) pendant des `kubectl rollout restart`, avant et après la pause `preStop` | 08/11/2026 |
+| Panne extérieure de la CI | journaux des 5 exécutions de la CI de la PR #114 ; téléchargement rejoué depuis le poste ; historique Helm de la prod | 08/11/2026 |

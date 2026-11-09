@@ -88,26 +88,26 @@ scripts/run-tests.sh front   # ou : back
 
 **Fonctionnement** :
 
-- `front` : `ng test` (Karma, Chrome sans écran) sans surveillance des
-  fichiers ; rapport `front/coverage/microcrm/lcov.info`.
+- `front` : `ng test --no-watch` (Vitest, depuis le 08/11) : les tests
+  tournent dans Node avec jsdom, un navigateur simulé, sans Chrome ;
+  rapport `front/coverage/microcrm/lcov.info`.
 - `back` : `./gradlew test` (JUnit) ; rapport JaCoCo
   `back/build/reports/jacoco/test/jacocoTestReport.xml`.
 - Si les tests réussissent mais que le rapport est absent ou vide, le
   script s'arrête : sinon SonarQube afficherait 0 % de couverture sans
   que personne ne le remarque.
 
-**Paramètre** : `KARMA_BROWSER` (front) ; par défaut `ChromeHeadless`,
-avec le bac à sable (sandbox) de Chrome. La CI passe
-`ChromeHeadlessNoSandbox`, réglage d'origine du projet, sur des machines
-jetables.
+**Paramètre** : aucun en dehors de `front` ou `back` (le réglage
+`KARMA_BROWSER` a disparu avec Karma).
 
 **Conditions d'exécution** : dépendances installées avant
-(`install-deps.sh`) ; Chrome ou Chromium pour le front (`CHROME_BIN` si
-le navigateur n'est pas trouvé) ; `java` pour le back.
+(`install-deps.sh`) ; `node` et `npx` pour le front (aucun navigateur) ;
+`java` pour le back.
 
 **Arrêts expliqués** : tests rouges (code 1, sortie des tests au-dessus) ;
 `node_modules` absent (code 1, `fix: run scripts/install-deps.sh front`) ;
-rapport absent (code 1, vérifier `karma.conf.js` ou `build.gradle`).
+rapport absent (code 1, vérifier les options `coverage` du constructeur
+`unit-test` dans `front/angular.json`, ou `build.gradle`).
 
 ## notify.py
 
@@ -599,7 +599,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 |---|---|---|
 | `tests/common_test.sh` | bashunit | journal, codes de `die` / `die_with`, outils requis, garde contre l'exécution directe |
 | `tests/install_deps_test.sh` | bashunit | usage, `package-lock.json` absent, commandes npm et Gradle, « FAILED » détecté |
-| `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Karma lancé une fois, `KARMA_BROWSER`, tests rouges, rapport absent |
+| `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Vitest lancé une fois sans navigateur, tests rouges, Gradle lancé, rapport absent |
 | `tests/backup_test.sh` | bashunit | usage, fichier privé (600/700) et empreinte, rotation, `pg_dump` en échec sans fichier partiel, `verify` (base temporaire), fichier abîmé refusé, sauvegarde de sécurité avant restauration, table : lignes absentes seulement, table sans clé refusée, nom de table piégé ; métrique de supervision écrite après une sauvegarde réussie (fichier en 640), aucune après un échec |
 | `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, échec de Helm, test de fumée raté → retour arrière, `rollback` |
 | `tests/load_test_test.sh` | bashunit | usage, profil inconnu, prod refusée, `PUSH_METRICS` invalide, scénario absent, fumée dans `staging` contre le front (durée limitée), envoi des mesures activable, pod sans privilège sur image figée, résumé gardé, seuil dépassé (code 1), point de rupture atteint (succès) |

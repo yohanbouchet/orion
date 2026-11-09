@@ -104,11 +104,11 @@ Bash, Ansible et Docker. Leurs sondages et l'audit du 29/10 ont relevé :
 Fixés par le plan de mise en œuvre (document 2), mesurés par le rapport
 de performance (document 4) :
 
-| Objectif | Avant | Cible | Résultat au 07/11 |
+| Objectif | Avant | Cible | Résultat au 08/11 |
 | --- | --- | --- | --- |
-| 1. Aucune faille connue livrée sans décision | 95 failles dans l'image back, dont 8 critiques | 0 critique ou haute corrigeable dans une image publiée | **0** (images v1.6.0, scannées par la CI) |
-| 2. Qualité contrôlée à chaque modification | Quality Gate sans condition, couverture non mesurée | Quality Gate bloquant ; nouveau code couvert à 80 % | **3 conditions bloquantes** ; couverture 39,7 % |
-| 3. Livrer plus vite et de façon traçable | déploiement manuel, non tracé | chaque déploiement lié à une version, une image et un commit | **2,8 mises en prod par semaine**, 0,3 h entre fusion et prod (médiane), 0 % d'échec |
+| 1. Aucune faille connue livrée sans décision | 95 failles dans l'image back, dont 8 critiques | 0 critique ou haute corrigeable dans une image publiée | **0**, toutes gravités confondues (images v1.8.0, Trivy de la CI) |
+| 2. Qualité contrôlée à chaque modification | Quality Gate sans condition, couverture non mesurée | Quality Gate bloquant ; nouveau code couvert à 80 % | **3 conditions bloquantes** ; couverture 82,9 % |
+| 3. Livrer plus vite et de façon traçable | déploiement manuel, non tracé | chaque déploiement lié à une version, une image et un commit | **4,4 mises en prod par semaine**, 2,5 h entre un commit et la prod (médiane), 0 % d'échec |
 | 4. Revenir en arrière sans coupure | aucun retour arrière ni sauvegarde | retour arrière automatique ; sauvegarde restaurable | **testés** : retour arrière sans coupure ; restauration vérifiée chaque semaine |
 | 5. Voir et être prévenu | aucune supervision | disponibilité, performance et sécurité suivies | **3 tableaux de bord, 8 alertes**, indicateurs DORA chaque semaine |
 
@@ -196,7 +196,7 @@ manuelle ratée.
 
 | Type de test | Outil | Déclenchement | Couverture cible |
 | --- | --- | --- | --- |
-| Unitaires | Vitest, navigateur simulé jsdom (front, 16 tests, back simulé : chargement, création, suppression, liens entre personnes et organisations) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; aujourd'hui 39,7 % de l'ensemble (lignes 43,2 %, branches 17,2 %) |
+| Unitaires | Vitest, navigateur simulé jsdom (front, 16 tests, back simulé : chargement, création, suppression, liens entre personnes et organisations) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; au 08/11, 82,9 % de l'ensemble (lignes 87,6 %, branches 57,9 %) |
 | Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `terraform test` (6 tests) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle Terraform |
 | E2E | **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | chaque déploiement (dev, staging, prod) | le parcours complet ; un échec remet la version précédente |
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
@@ -230,19 +230,25 @@ de chaque exécution.
 
 ### 4.3 Quality Gate SonarQube
 
-Conditions vérifiées le 07/11/2026 (API de SonarQube), sur le **code
+Conditions vérifiées le 09/11/2026 (API de SonarQube), sur le **code
 nouveau** :
 
-| Critère | Seuil | Valeur au 07/11 |
+| Critère | Seuil | Valeur au 09/11 |
 | --- | --- | --- |
-| Couverture des tests | au moins 80 % | 100 % |
+| Couverture des tests | au moins 80 % | 90,9 % |
 | Lignes dupliquées | 3 % au plus | 0,0 % |
 | Nouveaux problèmes (bugs, failles, mauvaises pratiques) | 0 | 0 |
 
-Ces conditions portent sur le code nouveau : l'équipe progresse sans
-être bloquée par le code d'origine, dont la dette reste suivie (30
-problèmes, tous dans le front ; note de fiabilité D à cause d'un seul
-problème grave hérité ; rapport, section 4.2).
+Le **code nouveau** est ici tout ce qui a changé depuis le 29/10 au
+soir, juste après la photo de départ : SonarQube le compte depuis le
+dernier changement de numéro de version (réglage « version
+précédente »), et la CI ne lui transmet pas de numéro. Au 09/11 :
+717 lignes nouvelles ou modifiées, pour 977 lignes de code. Ces conditions
+portent sur ce code nouveau : l'équipe progresse sans être bloquée par
+le code d'origine, dont la dette reste suivie. Depuis
+la mise à jour vers Angular 22 (08/11), le projet n'a plus aucun
+problème ouvert et obtient la note A en sécurité, en fiabilité et en
+maintenabilité (rapport, section 4.2).
 
 **En cas d'échec** : le job `sonarqube` attend le verdict (5 min au
 plus) et échoue ; la PR ne peut pas être fusionnée. Le développeur lit le
@@ -913,16 +919,19 @@ de sécurité déclenchée par un test réel annoncé (e-mails reçus).
 par `dora.py` à partir des déploiements de production (workflow
 *DORA metrics*) :
 
-| Indicateur | Signification | Valeur (06/11) |
+| Indicateur | Signification | Valeur (09/11) |
 | --- | --- | --- |
-| Fréquence de déploiement | nombre de mises en production par semaine | 2,8 |
-| Délai de mise en production | temps entre un commit et sa mise en production (médiane) | 0,3 h |
+| Fréquence de déploiement | nombre de mises en production par semaine | 4,4 |
+| Délai de mise en production | temps entre un commit et sa mise en production (médiane) | 2,5 h |
 | Taux d'échec des changements | part des mises en production qui provoquent un incident | 0 % |
 | Temps de rétablissement | temps pour revenir à la normale après un incident | non mesurable : aucun incident déclaré |
-| Taux de reprise | part des mises en production qui corrigent une mise en production récente | 42 % |
+| Taux de reprise | part des mises en production qui ne livrent que des correctifs | 37 % |
 
-Détail, captures et analyse : [rapport de performance](04-rapport-performance.md)
-(sections 3, 5.2 et 6).
+Sur ces 19 mises en prod, 7 ont changé l'application ; les autres
+venaient de versions créées par des changements d'outillage (rapport,
+section 3.1). Détail, captures et analyse :
+[rapport de performance](04-rapport-performance.md) (sections 3, 5.2
+et 6).
 
 ## 8. Annexes
 
