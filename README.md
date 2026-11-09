@@ -40,7 +40,7 @@ DevOps » (OpenClassrooms, option B), à partir de
 
 ## État d'avancement
 
-Au 07/11/2026 :
+Au 08/11/2026 :
 
 | Étape | État |
 |---|---|
@@ -58,6 +58,9 @@ Au 07/11/2026 :
 | Supervision : métriques, journaux, alertes par e-mail, 3 tableaux de bord (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) |
 | Tests de charge k6 (6 profils) ; test de fumée k6 avant chaque mise en prod ; autoscaling (HPA) du back en `staging` et en `prod` | ✅ [`load-test.sh`](scripts/README.md#load-testsh) |
 | Indicateurs DORA, calculés chaque lundi et à la demande | ✅ [`dora.py`](scripts/README.md#dorapy) |
+| Front mis à jour vers Angular 22, tests passés à Vitest : 0 faille connue, 0 problème SonarQube | ✅ v1.7.1 |
+| Compte limité de l'application dans la base (moindre privilège) | ✅ v1.8.0, [chart](infra/helm/microcrm/README.md#sécurité) |
+| Mises à jour sans requête perdue (pause avant l'arrêt des pods) | ✅ v1.8.1, [chart](infra/helm/microcrm/README.md#sécurité) |
 | Rapport de performance (mesures avant/après, recommandations) | ✅ [`docs/04`](docs/04-rapport-performance.md) |
 | Documentation CI/CD complète (plans de tests et de sécurité, de conteneurs et de déploiement, de release, cible AWS) | ✅ [`docs/03`](docs/03-documentation-ci-cd.md) |
 
@@ -250,7 +253,7 @@ lui est fourni au déploiement, par le chart Helm.
 
 Les images publiées par la CI se récupèrent avec
 `docker pull ghcr.io/yohanbouchet/orion-back:<version>` (par exemple
-`v1.5.2`, liste dans les
+`v1.8.1`, liste dans les
 [Releases](https://github.com/yohanbouchet/orion/releases) ; de même pour
 le front).
 
@@ -553,6 +556,9 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Table de liens sans clé primaire | Migration Flyway (équipe Dev) | [scripts](scripts/README.md#backupsh) |
 | CSP sans style en ligne : un futur style de composant Angular serait bloqué | Jeton par page (« nonce », `ngCspNonce`) servi par nginx | [ZAP](#test-dintrusion-zap) |
 | Pas d'ESLint dans le front | ESLint (équipe Dev) | [audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance) |
+| Réglage par défaut de Spring Boot `spring.jpa.open-in-view` actif (avertissement au démarrage du back) : chaque requête garde sa connexion à la base jusqu'à la fin de sa réponse ; sous forte charge, la réserve de connexions s'épuise plus vite | Le désactiver, après les tests du back et un test de charge avant et après (équipe Dev) | [réglages du back](back/src/main/resources/application.properties) |
+| Après une création, l'API renvoie l'adresse du nouvel élément (en-tête `Location`) sans le préfixe `/api` ni le port : le relais du front ne transmet pas l'adresse d'origine ; le front ne se sert pas de cet en-tête | Relais qui transmet le préfixe et l'hôte d'origine (`X-Forwarded-Prefix`, `X-Forwarded-Host`), lus par Spring Boot (`server.forward-headers-strategy=framework`) | [chart](infra/helm/microcrm/README.md#limites-connues) |
+| Base de SonarQube non sauvegardée : l'historique de la qualité serait perdu avec son disque | La sauvegarder comme les bases de MicroCRM | [rapport, recommandation 20](docs/04-rapport-performance.md#83-recommandations) |
 
 ## Contribuer
 
