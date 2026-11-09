@@ -339,9 +339,21 @@ jobs:
           tofu_wrapper: false
       - name: Check formatting
         run: tofu fmt -check -recursive
+      # Fournisseurs (environ 125 Mo) gardés en cache tant que le fichier
+      # de verrouillage ne change pas : une panne du registre ou de GitHub
+      # ne bloque plus ce contrôle (erreur 500 du 09/11/2026) ; chaque
+      # archive reste vérifiée par les empreintes de .terraform.lock.hcl
+      - name: Cache the providers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/opentofu-plugins
+          key: tofu-providers-${{ hashFiles('infra/terraform/.terraform.lock.hcl') }}
       # Fournisseurs vérifiés par .terraform.lock.hcl ; aucun état lu
       - name: Initialize without state
-        run: tofu init -backend=false -input=false
+        run: |
+          mkdir -p "$HOME/.cache/opentofu-plugins"
+          TF_PLUGIN_CACHE_DIR="$HOME/.cache/opentofu-plugins" \
+            tofu init -backend=false -input=false
       - name: Validate
         run: tofu validate
       - name: Unit tests

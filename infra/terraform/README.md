@@ -147,7 +147,10 @@ tofu test     # 6 tests, faux fournisseurs : aucun cluster nécessaire
 | `non_gmail_alert_address_is_refused` | une adresse d'alerte non Gmail est refusée |
 
 Le job `opentofu` de la CI lance `tofu fmt -check`, `tofu validate` et
-ces tests à chaque PR.
+ces tests à chaque PR. Les fournisseurs y sont gardés en cache tant que
+`.terraform.lock.hcl` ne change pas (toujours vérifiés par ses
+empreintes) : une panne du registre ou de GitHub ne bloque plus ce
+contrôle.
 
 **Vérifié le 02/11/2026** (avec Terraform) : `apply` (19 objets créés,
 `dev` et `staging` importés sans interruption de l'application) ;
