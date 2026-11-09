@@ -11,11 +11,9 @@
 
 version: 2
 updates:
-  # Front (Angular) et outil de version (semantic-release)
+  # Front (Angular)
   - package-ecosystem: npm
-    directories:
-      - /front
-      - /.github/release
+    directory: /front
     schedule:
       interval: weekly
       day: monday
@@ -58,13 +56,37 @@ updates:
       - dependency-name: "@vitest/*"
         update-types:
           - version-update:semver-major
-      # Outil de version (.github/release) : la v10 exige un générateur de
-      # notes plus récent que celui de semantic-release 25 (essai du 01/11 :
-      # job release en échec) ; à monter avec release-notes-generator 15
+    # Conventional Commits. Dépendances livrées au navigateur :
+    # fix(deps): … → nouvelle version, qui ira en prod ; outils de
+    # développement : build(deps-dev): … → pas de version (.releaserc.yml)
+    commit-message:
+      prefix: fix
+      prefix-development: build
+      include: scope
+  # Outil de version (semantic-release) : outil de la CI, jamais livré
+  # → build(deps): …, pas de nouvelle version
+  - package-ecosystem: npm
+    directory: /.github/release
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    groups:
+      release-minor-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # La v10 exige un générateur de notes plus récent que celui de
+      # semantic-release 25 (essai du 01/11 : job release en échec) ; à
+      # monter avec release-notes-generator 15
       - dependency-name: conventional-changelog-conventionalcommits
         update-types:
           - version-update:semver-major
-    # Conventional Commits : build(deps): … et build(deps-dev): …
     commit-message:
       prefix: build
       prefix-development: build
@@ -123,8 +145,10 @@ updates:
         update-types:
           - minor
           - patch
+    # Bibliothèques livrées dans le jar : fix(deps): … → nouvelle
+    # version (celles des tests suivent la même règle)
     commit-message:
-      prefix: build
+      prefix: fix
       include: scope
 
   # Actions des workflows, figées par SHA : Dependabot met à jour le SHA
@@ -153,7 +177,6 @@ updates:
       - /front
       - /back
       - /infra/postgres
-      - /infra/zap
     schedule:
       interval: weekly
       day: monday
@@ -180,6 +203,22 @@ updates:
         update-types:
           - version-update:semver-major
           - version-update:semver-minor
+    # Images livrées (front, back, base de données) : fix(deps): … →
+    # nouvelle version, qui ira en prod
+    commit-message:
+      prefix: fix
+      include: scope
+  # Image du test d'intrusion (outil de la CI, jamais livrée) :
+  # build(deps): …, pas de nouvelle version
+  - package-ecosystem: docker
+    directory: /infra/zap
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 3
     commit-message:
       prefix: build
       include: scope
