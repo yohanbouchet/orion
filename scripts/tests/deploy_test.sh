@@ -50,13 +50,20 @@ STUB
   chmod +x "$FAKE_REPO/bin/kubectl"
 }
 
-# Faux helm : note ses paramètres ; « history » affiche la révision 2
+# Faux helm : note ses paramètres ; « history » affiche la révision 2 ;
+# « package » crée une archive vide dans le dossier --destination (dernier
+# paramètre) et note ce dossier, pour vérifier son effacement
 make_helm() {
   cat >"$FAKE_REPO/bin/helm" <<'STUB'
 #!/usr/bin/env bash
 echo "helm $*" >>"$CALLS_LOG"
 if [[ "$1" == history ]]; then
   printf 'REVISION\tSTATUS\n2\tdeployed\n'
+fi
+if [[ "$1" == package ]]; then
+  [[ "${PACKAGE_EXIT:-0}" == 0 ]] || exit 1
+  touch "${*: -1}/microcrm-0.1.0.tgz"
+  echo "${*: -1}" >"$CALLS_LOG.package-dir"
 fi
 # UPGRADE_EXIT=1 simule des pods jamais prêts (Helm a déjà remis la
 # version précédente)
@@ -150,6 +157,35 @@ function test_tag_sets_both_images() {
   assert_contains "--set back.image.tag=v1.2.3" "$(calls)"
   # L'image déployée est écrite dans l'historique de Helm
   assert_contains "--description image v1.2.3" "$(calls)"
+}
+
+function test_tag_packages_the_chart_with_the_deployed_version() {
+  local dir
+  run_deploy dev v1.2.3 >/dev/null
+  assert_successful_code
+  dir="$(cat "$FAKE_REPO/calls.log.package-dir")"
+  # Numéro sans le « v » (appVersion), puis installation de l'archive
+  assert_contains "helm package $FAKE_REPO/infra/helm/microcrm" "$(calls)"
+  assert_contains "--app-version 1.2.3" "$(calls)"
+  assert_contains "upgrade --install microcrm $dir/microcrm-0.1.0.tgz" \
+    "$(calls)"
+  # Dossier temporaire effacé à la sortie
+  assert_directory_not_exists "$dir"
+}
+
+function test_without_tag_the_chart_folder_is_installed_as_is() {
+  local chart="$FAKE_REPO/infra/helm/microcrm"
+  run_deploy dev >/dev/null
+  assert_not_contains "helm package" "$(calls)"
+  assert_contains "upgrade --install microcrm $chart " "$(calls)"
+}
+
+function test_failed_packaging_stops_before_upgrade() {
+  local output
+  output="$(PACKAGE_EXIT=1 run_deploy dev sha-0000000)"
+  assert_exit_code "1"
+  assert_contains "packaging of the chart failed" "$output"
+  assert_not_contains "upgrade --install" "$(calls)"
 }
 
 function test_failed_upgrade_stops_without_smoke_test() {

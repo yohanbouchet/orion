@@ -16,9 +16,19 @@ tagFormat: "v${version}"
 # Étapes, dans cet ordre ; un plugin avec réglages s'écrit en paire :
 # [nom du plugin, réglages]
 plugins:
-  # 1. Lit les commits : fix → correctif, feat → mineure, ! → majeure
+  # 1. Lit les commits : fix → correctif, feat → mineure, ! → majeure ;
+  #    mais seulement pour ce qui est livré (règle ci-dessous)
   - - "@semantic-release/commit-analyzer"
     - preset: conventionalcommits
+      # Une version = un changement de ce qui part en prod : back, front,
+      # chart Helm, image de la base, dépendances livrées (deps). Toute
+      # autre portée (monitoring, ansible, load, scripts…) ne crée pas de
+      # version : sinon la prod est redéployée à l'identique (12 des 19
+      # mises en prod du 03 au 08/11). « !(…) » : toute portée SAUF
+      # celles-ci ; un commit sans portée garde la règle par défaut
+      releaseRules:
+        - scope: "!(back|front|helm|postgres|deps)"
+          release: false
   # 2. Rédige les notes de version à partir des mêmes commits
   - - "@semantic-release/release-notes-generator"
     - preset: conventionalcommits

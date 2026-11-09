@@ -822,10 +822,30 @@ fusion sur `main` à partir des Conventional Commits :
 | `feat!` ou `BREAKING CHANGE` | majeure | 1.6.0 → 2.0.0 |
 | `docs`, `ci`, `test`, `build`, `chore`, `refactor` | aucune : pas de mise en prod | — |
 
+**Seul ce qui est livré crée une version** (règle du 09/11,
+`.github/release/.releaserc.yml`) : `feat`, `fix` et `perf` ne comptent
+que pour les portées `back`, `front`, `helm` (chart), `postgres` (image
+de la base) et `deps` (dépendances livrées). Toute autre portée
+(`monitoring`, `ansible`, `load`, `scripts`…) ne crée pas de version :
+ces changements ne sont pas livrés avec l'application, et une version
+les aurait redéployés à l'identique en prod (12 des 19 mises en prod du
+03 au 08/11). Rejouée sur l'historique, la règle aurait gardé 10 des 21
+versions, celles qui changeaient l'application. Un commit sans portée
+garde la règle par défaut : la portée est donc obligatoire pour `feat`
+et `fix`. Les versions déjà publiées ne sont pas renumérotées : une
+version publiée ne se modifie plus (SemVer).
+
+Dependabot suit la même logique : `fix(deps)` pour ce qui est livré
+(bibliothèques du front et du back, images du front, du back et de la
+base), donc une nouvelle version ; `build(deps)` et `build(deps-dev)`
+pour les outils et le développement, sans version.
+
 Plusieurs commits entre deux versions : le type le plus fort l'emporte.
-18 versions publiées du 31/10 au 07/11 (v1.0.0 à v1.6.0) ; chaque image
+22 versions publiées du 31/10 au 08/11 (v1.0.0 à v1.8.1) ; chaque image
 porte sa version et son commit, et chaque déploiement en prod remonte à
-une PR et à son ticket.
+une PR et à son ticket. Depuis le 09/11, le chart est installé avec le
+numéro de la version déployée : `helm history` l'affiche dans la colonne
+APP VERSION (auparavant figée à 1.1.0).
 
 ### 7.4 Procédure de rollback
 

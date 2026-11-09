@@ -31,6 +31,11 @@ DB_SECRET="microcrm-db"
 DB_APP_SECRET="microcrm-db-app"
 # Attente maximale des pods : Spring Boot met environ une minute à démarrer
 TIMEOUT="6m"
+# Chart emballé (voir package_chart) et son dossier temporaire, effacé
+# à la sortie du script, même en cas d'erreur
+PACKAGE_DIR=""
+CHART_ARCHIVE=""
+trap '[[ -z "$PACKAGE_DIR" ]] || rm -rf "${PACKAGE_DIR:?}"' EXIT
 
 # Mauvais usage : rappel de la syntaxe, code 2
 usage() {
@@ -103,6 +108,23 @@ smoke_test() {
   return 1
 }
 
+# Chart emballé avec la version déployée (v1.8.2 → 1.8.2, sha-abc1234
+# tel quel) : « helm history » l'affiche dans APP VERSION, et les objets
+# portent l'étiquette app.kubernetes.io/version correspondante ; seul
+# helm package sait fixer ce numéro (pas helm upgrade). Résultat dans
+# CHART_ARCHIVE (appel direct, pas « $(…) » : un sous-shell perdrait
+# PACKAGE_DIR, donc le ménage, et un arrêt sur erreur)
+package_chart() {
+  local tag="$1"
+  PACKAGE_DIR="$(mktemp -d)"
+  helm package "$CHART_DIR" --app-version "${tag#v}" \
+    --destination "$PACKAGE_DIR" >/dev/null ||
+    die "packaging of the chart failed;" \
+      "fix: run helm package $CHART_DIR to see the error"
+  local archives=("$PACKAGE_DIR"/*.tgz)
+  CHART_ARCHIVE="${archives[0]}"
+}
+
 # Déploiement : contrôles, installation ou mise à jour, test de fumée ;
 # s'il échoue, retour à la version précédente
 deploy() {
@@ -125,12 +147,17 @@ deploy() {
   ensure_db_secret "$env" "$DB_APP_SECRET"
   log INFO "checking the chart (helm lint)"
   helm lint --quiet "$CHART_DIR" "${args[@]}"
+  # Sans étiquette : le chart tel quel (appVersion de Chart.yaml)
+  local chart="$CHART_DIR"
+  if [[ -n "$tag" ]]; then
+    package_chart "$tag"
+    chart="$CHART_ARCHIVE"
+  fi
   # --rollback-on-failure : si les pods ne sont pas prêts à temps, Helm
   # remet lui-même la version précédente (Helm 4, ancien --atomic) ;
-  # --description : l'image déployée apparaît dans « helm history » (la
-  # colonne APP VERSION, figée dans Chart.yaml, ne la donne pas)
+  # --description : l'image déployée, aussi dans « helm history »
   log INFO "deploying $RELEASE to $env (image: ${tag:-chart default})"
-  helm upgrade --install "$RELEASE" "$CHART_DIR" -n "$env" "${args[@]}" \
+  helm upgrade --install "$RELEASE" "$chart" -n "$env" "${args[@]}" \
     --description "image ${tag:-chart default}" \
     --rollback-on-failure --wait --timeout "$TIMEOUT" ||
     die "deployment to $env failed: previous version kept by Helm;" \

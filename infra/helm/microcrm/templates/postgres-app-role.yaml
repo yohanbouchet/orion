@@ -8,7 +8,9 @@ Utilise  : _helpers.tpl ; variables d'environnement du conteneur
            d'initialisation (APP_USER, APP_PASSWORD, PGDATABASE)
 Utilisé par : templates/back.yaml (conteneur d'initialisation db-app-role)
 */}}
-{{- $ctx := dict "root" $ "component" "postgres" }}
+{{- /* Version de la base (image), indépendante de celle de l'appli */}}
+{{- $ctx := dict "root" $ "component" "postgres"
+      "version" .Values.postgres.image.tag }}
 {{- $name := include "microcrm.name" $ctx }}
 apiVersion: v1
 kind: ConfigMap

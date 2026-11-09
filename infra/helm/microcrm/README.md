@@ -19,10 +19,10 @@ navigateur ──► microcrm-front (nginx, :8080)
 
 | Fichier | Rôle |
 |---|---|
-| `Chart.yaml` | Nom, version du chart, version de l'application (`appVersion`) |
+| `Chart.yaml` | Nom, version du chart, version de l'application (`appVersion`, remplacée au déploiement par la version déployée : `scripts/deploy.sh`, `helm package --app-version`) |
 | `values.yaml` | Réglages par défaut (images, ressources, base, pare-feu) |
 | `values-dev.yaml`, `values-staging.yaml`, `values-prod.yaml` | Différences de chaque environnement |
-| `templates/_helpers.tpl` | Étiquettes, noms, image, durcissement : écrits une seule fois |
+| `templates/_helpers.tpl` | Étiquettes (dont `app.kubernetes.io/version` : version déployée, ou version de l'image pour la base, qui ne redémarre donc pas à chaque version), noms, image, durcissement : écrits une seule fois |
 | `templates/front.yaml` | Service et Deployment du front |
 | `templates/front-nginx-config.yaml` | Relais `/api` (ConfigMap), inclus par `front/nginx.conf` |
 | `templates/back.yaml` | Service, Deployment et HPA (si activé) du back |

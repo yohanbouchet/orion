@@ -198,7 +198,10 @@ Détails et choix : [normalisation et plan CI](docs/02-normalisation-plan-ci.md)
   `feat:`, `build:`…). À chaque fusion sur `main`, **semantic-release**
   en déduit la version (SemVer) : `fix` → correctif (`1.0.1`), `feat` →
   mineure (`1.1.0`), changement incompatible → majeure. Les autres types
-  ne publient pas de version.
+  ne publient pas de version, ni les portées qui ne sont pas livrées avec
+  l'application (`monitoring`, `ansible`, `scripts`…) : seuls `back`,
+  `front`, `helm`, `postgres` et `deps` en créent une
+  ([règle](docs/03-documentation-ci-cd.md#73-système-de-versioning)).
 - Il crée l'étiquette Git `vX.Y.Z` et la
   [Release GitHub](https://github.com/yohanbouchet/orion/releases) avec ses
   notes.
@@ -575,6 +578,8 @@ Ce qui reste à améliorer, détaillé dans chaque README :
    (`Closes #n`) ; le modèle de PR liste les vérifications.
 3. Messages de commit : type et portée en anglais, description en
    français, par exemple `fix(front): corrige l'affichage des personnes`.
+   La portée est obligatoire pour `feat` et `fix` : elle décide si une
+   version est créée (voir [Versions et publication](#versions-et-publication)).
 4. La PR est fusionnée quand la CI est verte ; les relecteurs sont
    ajoutés automatiquement ([`CODEOWNERS`](.github/CODEOWNERS)).
 

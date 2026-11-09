@@ -8,12 +8,17 @@ Utilisé par : les autres fichiers de templates/ ; ticket #64
 
 {{/*
 Étiquettes standard de Kubernetes, posées sur tous les objets.
+Version : celle du composant ; par défaut l'appVersion du chart, que
+scripts/deploy.sh fixe à la version déployée (helm package
+--app-version) ; la base passe sa propre version (« version »), pour ne
+pas redémarrer à chaque version de l'application
 Usage : include "microcrm.labels" (dict "root" $ "component" "back")
 */}}
 {{- define "microcrm.labels" -}}
+{{- $version := .version | default .root.Chart.AppVersion -}}
 {{ include "microcrm.selectorLabels" . }}
 app.kubernetes.io/part-of: microcrm
-app.kubernetes.io/version: {{ .root.Chart.AppVersion | quote }}
+app.kubernetes.io/version: {{ $version | quote }}
 app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 helm.sh/chart: {{ printf "%s-%s" .root.Chart.Name .root.Chart.Version }}
 {{- end }}
