@@ -1,7 +1,10 @@
 # Fichier  : infra/terraform/openbao.tf
 # Rôle     : coffre-fort de secrets OpenBao : namespace, certificat TLS
-#            (autorité de certification propre au cluster) et chart Helm
-# Utilise  : infra/openbao/values.yaml (réglages du chart)
+#            (autorité de certification propre au cluster), chart Helm,
+#            et son seul droit dans les namespaces des environnements
+#            (créer un jeton court du compte deployer)
+# Utilise  : infra/openbao/values.yaml (réglages du chart) ; rbac.tf
+#            (comptes deployer)
 # Utilisé par : tofu apply (l'Ops) ; initialisation et déverrouillage :
 #               infra/openbao/README.md
 
@@ -115,4 +118,52 @@ resource "helm_release" "openbao" {
   max_history = 5
 
   depends_on = [kubernetes_secret_v1.openbao_tls]
+}
+
+# --- Droits d'OpenBao dans le cluster ----------------------------------
+# Identité de la CI (infra/openbao/config) : OpenBao fabrique des jetons
+# courts du compte deployer de chaque environnement (API TokenRequest).
+# Un seul droit, sur un seul objet par namespace : créer un jeton du
+# compte « deployer » ; ni lecture des Secrets, ni autre compte
+resource "kubernetes_role_v1" "openbao_token_issuer" {
+  for_each = local.deployers
+
+  metadata {
+    name      = "openbao-token-issuer"
+    namespace = each.value.namespace
+    labels = {
+      "app.kubernetes.io/part-of"    = "openbao"
+      "app.kubernetes.io/managed-by" = "opentofu"
+    }
+  }
+  rule {
+    api_groups     = [""]
+    resources      = ["serviceaccounts/token"]
+    resource_names = [each.value.name]
+    verbs          = ["create"]
+  }
+}
+
+# Donné au compte de service du pod OpenBao (créé par son chart)
+resource "kubernetes_role_binding_v1" "openbao_token_issuer" {
+  for_each = local.deployers
+
+  metadata {
+    name      = "openbao-token-issuer"
+    namespace = each.value.namespace
+    labels = {
+      "app.kubernetes.io/part-of"    = "openbao"
+      "app.kubernetes.io/managed-by" = "opentofu"
+    }
+  }
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role_v1.openbao_token_issuer[each.key].metadata[0].name
+  }
+  subject {
+    kind      = "ServiceAccount"
+    name      = "openbao"
+    namespace = kubernetes_namespace_v1.openbao.metadata[0].name
+  }
 }
