@@ -12,6 +12,15 @@ locals {
   # (audience propre : un badge demandé pour un autre service est refusé)
   github_issuer   = "https://token.actions.githubusercontent.com"
   github_audience = "openbao-orion"
+  # Début du nom (sub) d'un job, format « immuable » : propriétaire et
+  # dépôt suivis de leurs numéros, qui ne changent jamais (un dépôt
+  # recréé sous le même nom n'a pas le même numéro)
+  github_owner     = split("/", var.github_repository)[0]
+  github_repo_name = split("/", var.github_repository)[1]
+  github_sub_prefix = format(
+    "repo:%s@%s/%s@%s", local.github_owner, var.github_owner_id,
+    local.github_repo_name, var.github_repository_id
+  )
 }
 
 # --- 1. Vérifier le badge de GitHub ------------------------------------
@@ -34,9 +43,10 @@ resource "vault_jwt_auth_backend_role" "ci" {
   role_name       = "ci-${each.key}"
   role_type       = "jwt"
   bound_audiences = [local.github_audience]
-  # sub = repo:<dépôt>:environment:<environnement> pour un job lié à un
-  # environnement GitHub
-  bound_subject = "repo:${var.github_repository}:environment:${each.key}"
+  # sub = repo:<propriétaire>@<n°>/<dépôt>@<n°>:environment:<env> pour
+  # un job lié à un environnement GitHub (refusé le 10/11 avec l'ancien
+  # format repo:<propriétaire>/<dépôt> : « invalid subject (sub) claim »)
+  bound_subject = "${local.github_sub_prefix}:environment:${each.key}"
   bound_claims = {
     repository_id = var.github_repository_id
     ref           = "refs/heads/main"

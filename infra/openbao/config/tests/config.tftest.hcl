@@ -20,7 +20,7 @@ run "roles_are_bound_to_repo_branch_and_environment" {
       for env, r in vault_jwt_auth_backend_role.ci :
       r.bound_claims["repository_id"] == "1436771310"
       && r.bound_claims["ref"] == "refs/heads/main"
-      && r.bound_subject == "repo:yohanbouchet/orion:environment:${env}"
+      && r.bound_subject == "repo:yohanbouchet@184980551/orion@1436771310:environment:${env}"
       && r.bound_audiences == toset(["openbao-orion"])
     ])
     error_message = "Each CI role must be bound to the repository, main and its environment."
