@@ -202,7 +202,7 @@ manuelle ratée.
 | E2E | **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | chaque déploiement (dev, staging, prod) | le parcours complet ; un échec remet la version précédente |
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
-| Scripts d'exploitation | bashunit (71 tests), pytest (28 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
+| Scripts d'exploitation | bashunit (74 tests), pytest (28 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
 | Infrastructure | `tofu fmt`, `validate` et `test` ; `ansible-playbook --syntax-check`, ansible-lint (profil production) ; **Molecule** : 5 rôles Ansible appliqués à une machine jetable, idempotence, contrôles | chaque PR | 100 % des fichiers Terraform et Ansible ; 5 rôles sur 8 exécutés |
 
 **Limite** : pas de test de bout en bout dans un navigateur (Cypress,
@@ -875,7 +875,7 @@ base), donc une nouvelle version ; `build(deps)` et `build(deps-dev)`
 pour les outils et le développement, sans version.
 
 Plusieurs commits entre deux versions : le type le plus fort l'emporte.
-22 versions publiées du 31/10 au 08/11 (v1.0.0 à v1.8.1) ; chaque image
+25 versions publiées du 31/10 au 09/11 (v1.0.0 à v1.9.0) ; chaque image
 porte sa version et son commit, et chaque déploiement en prod remonte à
 une PR et à son ticket. Depuis le 09/11, le chart est installé avec le
 numéro de la version déployée : `helm history` l'affiche dans la colonne

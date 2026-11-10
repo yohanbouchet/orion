@@ -185,7 +185,8 @@ de l'audit : des journaux aujourd'hui en texte libre et non centralisés.
 > très utilisés, conseillés par le mentor pour leur faible consommation
 > (mesurée : environ 1 Gio de mémoire pour toute la pile) ; les alertes
 > sont gratuites, sans limite de l'offre gratuite. La pile est installée
-> **dans le cluster** (namespaces dédiés), par Terraform, et non plus hors
+> **dans le cluster** (namespaces dédiés), par Terraform (OpenTofu depuis
+> le 09/11), et non plus hors
 > du cluster avec Docker Compose (2.3.6 et R6) : un seul outil
 > d'installation, une seule machine. Limite acceptée : un incident du
 > cluster touche aussi sa supervision. Les mentions d'ELK ci-dessous (R6,
@@ -516,7 +517,8 @@ support publiées sur **endoflife.date** (maintenance).
 - **Raisonnement** : aucune supervision ni alerte aujourd'hui (3.3.6).
 - **Implémentation** : phase 6 ; ELK placé hors du cluster supervisé, pour
   rester disponible en cas d'incident sur celui-ci (répartition à confirmer).
-  Réalisé autrement : pile installée dans le cluster par Terraform (2.3.7).
+  Réalisé autrement : pile installée dans le cluster par Terraform,
+  remplacé par OpenTofu le 09/11 (2.3.7).
 - **Impacts** : incidents détectés avant les utilisateurs ; progrès de la
   démarche DevOps mesurés.
 
