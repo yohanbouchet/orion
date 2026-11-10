@@ -471,9 +471,11 @@ helm install orion-local --namespace arc-runners --version 0.15.1 \
 scripts/deploy-sonarqube.sh
 ```
 
-Enfin, dans GitHub (**Settings** → **Environments** → `sonarqube`) : le
-secret `SONAR_TOKEN` (jeton d'analyse du projet) et la variable
-`SONAR_HOST_URL` (adresse de SonarQube vue depuis le runner).
+Enfin, le jeton d'analyse du projet est rangé dans **OpenBao**
+(`kv/ci/sonarqube`, [procédure](infra/openbao/README.md#jeton-sonarqube)),
+plus dans GitHub ; dans GitHub (**Settings** → **Environments** →
+`sonarqube`), seulement la variable `SONAR_HOST_URL` (adresse de
+SonarQube vue depuis le runner).
 
 ## Sauvegarder la base
 

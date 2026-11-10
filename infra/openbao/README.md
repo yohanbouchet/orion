@@ -151,7 +151,8 @@ besoin du coffre ouvert.
 | [`config/main.tf`](config/main.tf) | méthode `jwt` (badges GitHub), rôles et règles par environnement, moteur `kubernetes` (jetons courts) |
 | [`config/variables.tf`](config/variables.tf) | dépôt autorisé, environnements, namespaces, workflows, durées (10 à 45 min, contrôlées) |
 | [`config/providers.tf`](config/providers.tf), [`config/versions.tf`](config/versions.tf) | fournisseur `hashicorp/vault` 5.13 (MPL-2.0, même API qu'OpenBao), HTTPS vérifié |
-| [`config/tests/`](config/tests/) | 4 tests (`tofu test`, faux fournisseur) : conditions des rôles, règles limitées, jetons courts, durée refusée |
+| [`config/sonarqube.tf`](config/sonarqube.tf) | moteur `kv` (secrets statiques), rôle et règle `ci-sonarqube` (lecture du seul jeton SonarQube) |
+| [`config/tests/`](config/tests/) | 5 tests (`tofu test`, faux fournisseur) : conditions des rôles, règles limitées, jetons courts, durée refusée, rôle SonarQube |
 
 ### Appliquer la configuration (Ops, coffre déverrouillé)
 
@@ -178,6 +179,31 @@ find ~/.local/state/orion-openbao -maxdepth 1 -type f -exec chmod 600 {} +
 Côté GitHub, une seule valeur, **publique** : la variable de dépôt
 `OPENBAO_CA` (certificat de l'autorité, `tofu output -raw
 openbao_ca_cert` dans `infra/terraform`).
+
+### Jeton SonarQube
+
+SonarQube ne sait pas créer de jetons courts : son jeton d'analyse
+(limité au projet) reste de longue durée, mais il est rangé dans
+OpenBao (moteur `kv` version 2, chemin `kv/ci/sonarqube`) et plus dans
+GitHub. Le job `sonarqube` le lit avec l'action
+[`openbao-secret`](../../.github/actions/openbao-secret/action.yml)
+(rôle `ci-sonarqube` : environnement `sonarqube`, workflow `ci.yml`,
+`main` ou une PR du dépôt, lecture de ce seul chemin,
+[`config/sonarqube.tf`](config/sonarqube.tf)). Chaque lecture est
+tracée dans l'audit.
+
+La **valeur** n'est jamais dans OpenTofu (elle finirait dans l'état) :
+l'Ops l'écrit, saisie sans écho (jeton racine, puis jeton SonarQube) :
+
+```shell
+kubectl -n openbao exec -it openbao-0 -- sh -c \
+  'printf "Root token: "; read -rs BAO_TOKEN; echo; export BAO_TOKEN;
+   printf "SonarQube token: "; read -rs SONAR; echo;
+   printf "%s" "$SONAR" | bao kv put -mount=kv ci/sonarqube token=-'
+```
+
+Rotation : nouveau jeton dans SonarQube (My Account → Security), même
+commande (nouvelle version), puis révocation de l'ancien dans SonarQube.
 
 ## Sauvegarde
 
@@ -229,3 +255,4 @@ Certificat public de l'autorité (à donner aux clients) :
 | Les 3 parts de clé sont chez une seule personne | en équipe : une part par personne |
 | La configuration d'OpenBao est appliquée avec le jeton racine | méthode d'authentification propre à l'Ops (OIDC de l'entreprise), jeton racine révoqué |
 | Un jeton Kubernetes ne peut pas être révoqué avant sa fin (limite de Kubernetes) | durées déjà courtes (15 min ; 45 min pour les tests longs de staging) |
+| Jeton SonarQube de longue durée (SonarQube ne crée pas de jetons courts), lisible par un job de PR du dépôt (comme avant dans GitHub) | rotation régulière ; jeton à date d'expiration (réglage de SonarQube) |
