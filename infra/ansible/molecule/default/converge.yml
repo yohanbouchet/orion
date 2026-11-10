@@ -1,0 +1,25 @@
+# Fichier  : infra/ansible/molecule/default/converge.yml
+# Rôle     : rôles du poste Ops testés par Molecule, avec les valeurs de
+#            la machine de test (pas de cluster Minikube ici)
+# Utilise  : roles/ (ops_tools, docker_hygiene, backup, node_exporter,
+#            hardening) ; group_vars/all.yml (versions, empreintes)
+# Utilisé par : molecule.yml
+# Non testés ici (ils demandent le cluster) : minikube_service,
+# cluster_images, metrics_server
+
+- name: Converge
+  hosts: all
+  become: false
+  vars_files:
+    - ../../group_vars/all.yml
+  vars:
+    # Valeurs lues sur le réseau du cluster dans site.yml : ici, la
+    # machine elle-même
+    minikube_gateway: 127.0.0.1
+    minikube_subnet: 127.0.0.0/8
+  roles:
+    - ops_tools
+    - docker_hygiene
+    - backup
+    - node_exporter
+    - hardening

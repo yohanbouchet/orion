@@ -382,12 +382,14 @@ jobs:
         run: |
           for dir in $TOFU_DIRS; do tofu -chdir="$dir" test; done
 
-  # Code Ansible du poste Ops (infra/ansible) : syntaxe et bonnes pratiques
-  # (ansible-lint, profil « production ») ; le playbook n'est JAMAIS lancé
-  # par la CI : il agit sur la machine hôte, avec sudo
+  # Code Ansible du poste Ops (infra/ansible) : syntaxe, bonnes pratiques
+  # (ansible-lint, profil « production ») et tests des rôles (Molecule, sur
+  # la machine jetable du job) ; le playbook n'est JAMAIS lancé sur le
+  # poste Ops par la CI : il agit sur la machine hôte, avec sudo
   ansible:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Molecule télécharge les outils et installe des paquets : 20 min
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: infra/ansible
@@ -415,6 +417,12 @@ jobs:
         run: ansible-playbook site.yml --syntax-check
       - name: Lint
         run: ansible-lint
+      # Molecule : les rôles appliqués pour de vrai à la machine du job
+      # (Ubuntu 24.04 jetable, détruite après), puis 2e passage sans
+      # changement (idempotence) et contrôles (molecule/default) ; les
+      # rôles qui demandent le cluster ne sont pas testés ici
+      - name: Test the roles (Molecule)
+        run: molecule test
 
   # Failles connues dans les dépendances (npm, Gradle) : bloque sur les
   # failles hautes et critiques, sauf exceptions justifiées et datées dans

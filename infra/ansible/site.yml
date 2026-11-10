@@ -5,7 +5,8 @@
 #            métriques de la machine ; relançable sans effet (idempotent)
 # Utilise  : inventory.ini, group_vars/all.yml, roles/
 # Utilisé par : l'opérateur (README de ce dossier) ; job ansible de la CI
-#               (vérification seulement, jamais exécuté par la CI)
+#               (vérification seulement ; ses rôles sont testés par
+#               Molecule sur la machine jetable du job, jamais sur le poste)
 # Usage    : ansible-playbook site.yml -K   (-K : mot de passe sudo,
 #            demandé une fois, pour les seules tâches marquées become)
 
