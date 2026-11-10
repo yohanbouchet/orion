@@ -653,7 +653,7 @@ GitHub) ; chaque secret est rangé au plus près de son seul utilisateur.
 | Secret | Où il est rangé | Qui y accède |
 | --- | --- | --- |
 | Accès au cluster de la CI | **aucun secret rangé** (depuis le 10/11) : jeton du compte `deployer` délivré par OpenBao contre le badge OIDC du job, 15 min (45 min pour les tests de staging) | le seul job de cet environnement, depuis `main`, dans un workflow autorisé ; la prod après approbation |
-| Clés de déverrouillage et jeton racine d'OpenBao | Bitwarden de l'Ops, jamais sur le poste ni dans le dépôt | Ops (déverrouillage du matin, configuration d'OpenBao) |
+| Clés de déverrouillage et jeton racine d'OpenBao | Bitwarden de l'Ops, jamais sur le poste ni dans le dépôt | Ops (déverrouillage du matin, configuration d'OpenBao) ; évolution : déverrouillage automatique ([comparatif](../infra/openbao/README.md#déverrouillage-automatique--comparatif) : AWS KMS, OVHcloud KMS, HSM, Transit) |
 | Jeton d'analyse SonarQube | OpenBao (`kv/ci/sonarqube`, depuis le 10/11 ; avant : environnement GitHub `sonarqube`) | le seul job `sonarqube` (main ou PR du dépôt), au vu de son badge OIDC ; jeton limité au projet ; chaque lecture tracée |
 | `GITHUB_TOKEN` | créé par GitHub pour chaque exécution | droits minimaux par job ; expire à la fin du job |
 | Mot de passe du superutilisateur de la base (`microcrm`) | Secret Kubernetes `microcrm-db`, valeur aléatoire créée par `deploy.sh`, jamais affichée | pod de la base ; pod de l'API, seulement pour Flyway et pour le conteneur d'initialisation (limite : section 6.5) |
