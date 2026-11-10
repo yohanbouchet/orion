@@ -180,7 +180,7 @@ main depuis l'onglet **Actions**.
 | `shellcheck` | Erreurs courantes des scripts Bash | ShellCheck | GitHub |
 | `script-tests` | Tests des scripts | bashunit, pytest | GitHub |
 | `opentofu` | Mise en forme, validité et tests du socle et de la configuration d'OpenBao (fichiers Terraform, 2 dossiers) | OpenTofu (`fmt`, `validate`, `test`) | GitHub |
-| `ansible` | Syntaxe et bonnes pratiques du code Ansible (jamais exécuté par la CI) | ansible-playbook `--syntax-check`, ansible-lint (profil production) | GitHub |
+| `ansible` | Syntaxe et bonnes pratiques du code Ansible ; rôles appliqués à la machine jetable du job, idempotence et contrôles (jamais au poste Ops) | ansible-playbook `--syntax-check`, ansible-lint (profil production), Molecule | GitHub |
 | `trivy` | Failles des dépendances (production et outillage) | Trivy | GitHub |
 | `images` | Construction et scan des images front et back | Docker, Trivy | GitHub |
 | `release` | Numéro de version et Release GitHub (sur `main`) | semantic-release | GitHub |
@@ -591,7 +591,8 @@ sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.m
 - **Machine hôte** (Ansible) : mises à jour de sécurité automatiques,
   pare-feu (entrée refusée sauf SSH du réseau local), fail2ban, journaux
   Docker limités, outils à version figée et empreinte vérifiée ; le
-  playbook n'est jamais lancé par la CI.
+  playbook n'est jamais lancé par la CI sur le poste : Molecule teste ses
+  rôles sur la machine jetable du job.
 
 ## Limites connues et évolutions
 
@@ -601,7 +602,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 |---|---|---|
 | Tout tourne sur une seule machine (Minikube) | Cible cloud AWS : EKS sur 2 zones, RDS Multi-AZ, S3 | [documentation CI/CD, 5.2.1](docs/03-documentation-ci-cd.md#521-schéma-dinfrastructure-cloud) |
 | Sauvegarde quotidienne complète, non chiffrée fichier par fichier sur la machine (la copie hors site, elle, est chiffrée) | Restauration à un instant donné (WAL, CloudNativePG ou RDS), sauvegarde incrémentale | [scripts](scripts/README.md#backupsh) |
-| Poste Ops : SSH accepte encore les mots de passe ; un seul poste ; rôles Ansible testés par lint et idempotence, sans machine jetable | Clé SSH seule, inventaire multi-machines, Molecule | [Ansible](infra/ansible/README.md#limites-et-évolutions) |
+| Poste Ops : SSH accepte encore les mots de passe ; un seul poste ; Molecule ne teste pas les rôles liés au cluster (Minikube, images, metrics-server) | Clé SSH seule, inventaire multi-machines ; machine virtuelle avec Minikube pour ces rôles | [Ansible](infra/ansible/README.md#limites-et-évolutions) |
 | Déploiement « poussé » par la CI (jeton court délivré par OpenBao) ; infrastructure (OpenTofu) vérifiée et testée par la CI mais appliquée par l'Ops ; une modification faite à la main dans le cluster n'est pas détectée | **GitOps** (Flux ou Argo CD, Apache 2.0, CNCF) : le cluster lit lui-même Git, applique l'application et l'infrastructure, corrige tout écart ; la CI n'a plus aucun accès au cluster | [documentation CI/CD, 5.8](docs/03-documentation-ci-cd.md) |
 | État OpenTofu local ; coffre OpenBao sur un seul serveur, déverrouillé à la main chaque matin | État distant chiffré et verrouillé ; OpenBao à 3 serveurs, déverrouillage automatique (KMS, HSM) | [OpenTofu](infra/terraform/README.md#limites-connues-et-évolutions), [OpenBao](infra/openbao/README.md#limites) |
 | Versions de `kubectl` et `helm` (jobs du runner local) et images d'outils des workflows (Trivy, gitleaks, hadolint, ShellCheck) mises à jour à la main : Dependabot ne les suit pas (l'image ZAP, elle, est suivie via `infra/zap/Dockerfile`) | Image du runner contenant ces outils, et fichier d'images d'outils, suivis par Dependabot | [CI](#déploiement-continu-ci) |

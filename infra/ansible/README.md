@@ -51,10 +51,29 @@ redémarrage de Docker.
 
 ## Sécurité
 
-- **Jamais lancé par la CI.** Le playbook agit sur l'hôte avec sudo ; le
-  donner au runner (un pod sans droits) annulerait son durcissement. La CI
-  **vérifie** le code (job `ansible` : syntaxe, ansible-lint profil
-  « production ») ; l'opérateur **l'exécute**.
+- **Jamais lancé par la CI sur le poste.** Le playbook agit sur l'hôte
+  avec sudo ; le donner au runner (un pod sans droits) annulerait son
+  durcissement. La CI **vérifie** le code (job `ansible` : syntaxe,
+  ansible-lint profil « production ») et **teste** les rôles avec
+  Molecule (ci-dessous) ; l'opérateur **l'exécute** sur le poste.
+
+## Tests des rôles (Molecule)
+
+Molecule 26.11 ([`molecule/default/`](molecule/default/)), à chaque PR,
+dans le job `ansible` : les rôles sont appliqués **pour de vrai** à la
+machine Ubuntu 24.04 du job (jetable, détruite après ; systemd et sudo
+comme sur le poste), sans conteneur à créer.
+
+| Étape | Ce qui est vérifié |
+| --- | --- |
+| `syntax` | syntaxe du scénario |
+| `converge` | `ops_tools`, `docker_hygiene`, `backup`, `node_exporter`, `hardening` s'appliquent sans erreur |
+| `idempotence` | un 2e passage ne change **rien** |
+| `verify` ([`verify.yml`](molecule/default/verify.yml)) | versions de kubectl, helm, OpenTofu ; sauvegardes planifiées (cron, dont `@reboot`) ; node_exporter et fail2ban en marche, métriques lisibles ; pare-feu actif ; journaux Docker limités |
+
+Non testés par Molecule (ils demandent le cluster) : `minikube_service`,
+`cluster_images`, `metrics_server`. **Ne jamais lancer `molecule test`
+sur le poste Ops** : il appliquerait les rôles à la machine elle-même.
 - **Pas de root par défaut** : seules les tâches qui en ont besoin
   demandent sudo (`become`) ; le playbook refuse d'être lancé en root.
 - **Tout est figé et vérifié** : binaires par empreinte SHA-256, image de
@@ -75,7 +94,7 @@ redémarrage de Docker.
 | `ansible.cfg` impose le sudo classique (`sudo.ws`) : Ansible bloque avec sudo-rs, le sudo par défaut d'Ubuntu depuis la 25.10 (bug Launchpad #2122414) | retirer `become_exe` quand le correctif d'Ansible sera publié |
 | Un seul poste, en local (inventaire `localhost`) | inventaire de plusieurs machines, connexion SSH |
 | Collections et versions des outils mises à jour à la main (Dependabot ne suit ni Galaxy ni ces binaires) | Renovate, qui sait les suivre |
-| Tests : syntaxe, lint, idempotence et vérifications finales ; test manuel sur une Ubuntu 26.04 vierge (conteneur jetable, 04/11) des rôles `ops_tools`, `node_exporter`, `hardening` : 1er passage sans erreur, 2e passage changed=0. Les rôles liés au cluster ne sont pas testables en conteneur | Molecule (machine jetable) pour tester chaque rôle en CI ; machine virtuelle pour les rôles liés au cluster |
+| Molecule teste 5 rôles sur la machine du job (Ubuntu 24.04, le poste est en 26.04) ; les rôles liés au cluster ne sont pas testés | machine virtuelle Ubuntu 26.04 avec Minikube pour tous les rôles |
 | L'image ZAP est reconstruite avec le cache : un correctif Debian récent n'est pris qu'en reconstruisant sans cache | reconstruction planifiée sans cache |
 
 Fichiers : [`site.yml`](site.yml) (le playbook),
