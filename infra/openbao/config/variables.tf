@@ -30,6 +30,15 @@ variable "github_repository_id" {
   default     = "1436771310"
 }
 
+# Identifiant numérique du propriétaire : il figure dans le nom (sub) du
+# job, format « immuable » de GitHub (réglage du dépôt, lu par l'API
+# actions/oidc/customization/sub le 10/11/2026)
+variable "github_owner_id" {
+  description = "Numeric id of the repository owner"
+  type        = string
+  default     = "184980551"
+}
+
 # Un rôle par environnement GitHub : namespace visé, workflows autorisés
 # et durée du jeton Kubernetes (au moins 10 min, minimum de Kubernetes ;
 # au plus la durée maximale du job qui l'utilise)

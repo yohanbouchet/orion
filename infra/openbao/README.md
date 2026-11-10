@@ -131,7 +131,7 @@ job GitHub (runner local, environnement dev / staging / production)
 | Condition du rôle `ci-<env>` | Ce qu'elle empêche |
 | --- | --- |
 | `repository_id` = 1436771310 | un autre dépôt, même renommé ou recréé sous le même nom |
-| `sub` = `repo:yohanbouchet/orion:environment:<env>` | un job d'un autre environnement, ou sans environnement (approbation de production contournée) |
+| `sub` = `repo:yohanbouchet@184980551/orion@1436771310:environment:<env>` (format « immuable » de GitHub, avec les numéros du propriétaire et du dépôt) | un job d'un autre environnement, ou sans environnement (approbation de production contournée) ; un dépôt recréé sous le même nom |
 | `ref` = `refs/heads/main` | une branche, une PR |
 | `job_workflow_ref` : `deploy.yml` (+ `zap.yml`, `load-test.yml` en staging) | un autre workflow, même dans le dépôt |
 | audience `openbao-orion` | un badge demandé pour un autre service |
