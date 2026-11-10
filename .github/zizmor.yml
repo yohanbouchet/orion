@@ -1,0 +1,13 @@
+# Fichier  : .github/zizmor.yml
+# Rôle     : réglages de zizmor (audit de sécurité des workflows) : règles
+#            désactivées, chacune avec sa raison
+# Utilise  : rien
+# Utilisé par : zizmor (lancé en local avant chaque PR ; lu tout seul
+#               dans .github/)
+
+rules:
+  # Syntaxe « $/ » de GitHub (juillet 2026) pour appeler une action du
+  # dépôt : actionlint 1.7.12 (dernière version, mars 2026) la refuse
+  # encore ; on garde « ./ » jusqu'à ce qu'il la connaisse (10/11/2026)
+  self-repository:
+    disable: true

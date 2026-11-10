@@ -51,7 +51,11 @@ runs:
         HELM_VERSION: v4.3.1
         HELM_SHA256: 0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b
         WITH_HELM: ${{ inputs.helm }}
-      run: |
+      # Dossier ajouté au PATH (GITHUB_PATH) : chemin fixe du runner
+      # ($RUNNER_TEMP), jamais une valeur venue d'un tiers ; aucun
+      # workflow appelant n'a de déclencheur dangereux (pas de
+      # pull_request_target ni workflow_run) : exception justifiée
+      run: | # zizmor: ignore[github-env]
         bin="$RUNNER_TEMP/bin"
         mkdir -p "$bin"
         cd "$RUNNER_TEMP"
@@ -85,7 +89,10 @@ runs:
         # service y est refusé
         OPENBAO_ADDR: https://openbao.openbao.svc:8200
         AUDIENCE: openbao-orion
-      run: |
+      # KUBECONFIG (GITHUB_ENV) : chemin fixe du runner, jamais une valeur
+      # venue d'un tiers ; le jeton reste dans le fichier, pas dans
+      # l'environnement ; exception justifiée (même raison que plus haut)
+      run: | # zizmor: ignore[github-env]
         set -euo pipefail
         umask 077
         if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
