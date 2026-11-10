@@ -319,7 +319,9 @@ Règles :
 - **Secrets** : jamais dans Git (`.gitignore`, modèles `.env.example` sans
   valeur) ; stockés dans les secrets GitHub Actions (pipeline), rangés dans
   un **environnement** quand seul un job en a besoin (le jeton SonarQube,
-  limité au projet, n'est visible que du job d'analyse), ou dans des
+  limité au projet, n'est visible que du job d'analyse ; depuis le 10/11,
+  aucun secret dans GitHub : le coffre OpenBao délivre les accès de la CI
+  contre le badge OIDC de chaque job), ou dans des
   Secrets Kubernetes générés aléatoirement par les scripts de déploiement,
   jamais affichés (infrastructure) ; un secret exposé est **révoqué et
   remplacé immédiatement**.

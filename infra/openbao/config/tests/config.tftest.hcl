@@ -84,3 +84,27 @@ run "too_long_ttl_is_refused" {
   }
   expect_failures = [var.environments]
 }
+
+# SonarQube : lecture du seul jeton d'analyse, environnement sonarqube,
+# workflow ci.yml de notre dépôt, main ou une PR
+run "sonarqube_role_reads_only_its_token" {
+  command = plan
+
+  assert {
+    condition = (
+      vault_jwt_auth_backend_role.ci_sonarqube.bound_subject
+      == "repo:yohanbouchet@184980551/orion@1436771310:environment:sonarqube"
+      && vault_jwt_auth_backend_role.ci_sonarqube.bound_claims["repository_id"] == "1436771310"
+      && vault_jwt_auth_backend_role.ci_sonarqube.bound_claims["job_workflow_ref"]
+      == "yohanbouchet/orion/.github/workflows/ci.yml@*"
+    )
+    error_message = "The SonarQube role must be bound to the repository, its environment and ci.yml."
+  }
+  assert {
+    condition = (
+      strcontains(vault_policy.ci_sonarqube.policy, "kv/data/ci/sonarqube\"")
+      && strcontains(vault_policy.ci_sonarqube.policy, "[\"read\"]")
+    )
+    error_message = "The SonarQube policy must only read its token."
+  }
+}

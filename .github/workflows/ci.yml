@@ -181,8 +181,14 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: orion-local
     timeout-minutes: 15
-    # Seul ce job a accès aux secrets de l'environnement sonarqube
+    # Environnement sonarqube : figure dans le badge OIDC du job ; seul ce
+    # job peut lire le jeton d'analyse dans OpenBao (rôle ci-sonarqube)
     environment: sonarqube
+    # id-token : demander à GitHub le badge OIDC du job (présenté à
+    # OpenBao) ; aucun autre droit
+    permissions:
+      contents: read
+      id-token: write
     steps:
       # Historique complet : SonarQube s'en sert pour repérer le code
       # nouveau
@@ -204,12 +210,22 @@ jobs:
         with:
           name: back-reports
           path: back/build
+      # Jeton d'analyse lu dans OpenBao (plus rangé dans GitHub), masqué
+      # dans les journaux
+      - name: SonarQube token from OpenBao
+        id: sonar-token
+        uses: ./.github/actions/openbao-secret
+        with:
+          role: ci-sonarqube
+          path: ci/sonarqube
+          field: token
+          openbao-ca: ${{ vars.OPENBAO_CA }}
       # Analyse (réglages dans sonar-project.properties) puis attente du
       # Quality Gate ; le jeton n'est donné qu'à cette étape
       - name: SonarQube analysis
         uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ steps.sonar-token.outputs.value }}
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
 
   # Secrets oubliés (mots de passe, jetons, clés) dans tout l'historique
