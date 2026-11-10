@@ -203,7 +203,7 @@ manuelle ratée.
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
 | Scripts d'exploitation | bashunit (71 tests), pytest (28 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
-| Infrastructure | `tofu fmt` et `validate`, `ansible-playbook --syntax-check`, ansible-lint (profil production) | chaque PR | 100 % des fichiers Terraform et Ansible |
+| Infrastructure | `tofu fmt`, `validate` et `test` ; `ansible-playbook --syntax-check`, ansible-lint (profil production) ; **Molecule** : 5 rôles Ansible appliqués à une machine jetable, idempotence, contrôles | chaque PR | 100 % des fichiers Terraform et Ansible ; 5 rôles sur 8 exécutés |
 
 **Limite** : pas de test de bout en bout dans un navigateur (Cypress,
 Playwright) ; le test de fumée couvre le chemin technique, pas les
@@ -626,7 +626,8 @@ validé par la direction.
   modifiées hors du dépôt).
 - **Gestion de l'infrastructure** : la CI **vérifie et teste** chaque
   modification (`tofu fmt`, `validate`, `test` sur 2 dossiers ; Ansible :
-  syntaxe et ansible-lint) ; l'Ops relit le `tofu plan`, puis lance
+  syntaxe, ansible-lint, Molecule sur une machine jetable) ; l'Ops relit
+  le `tofu plan`, puis lance
   `tofu apply`. Choix du 10/11 : la CI **n'applique pas** l'infrastructure.
   L'appliquer demanderait à la CI des droits presque administrateur sur
   le cluster ; et OpenBao, qui délivre les accès de la CI, est lui-même

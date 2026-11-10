@@ -1,0 +1,41 @@
+# Fichier  : infra/ansible/molecule/default/molecule.yml
+# Rôle     : scénario Molecule : applique les rôles du poste Ops sur une
+#            machine JETABLE (la machine Ubuntu 24.04 de GitHub qui lance
+#            le job), vérifie qu'un 2e passage ne change rien
+#            (idempotence) puis contrôle le résultat (verify.yml)
+# Utilise  : converge.yml, verify.yml, roles/ du dossier infra/ansible
+# Utilisé par : job ansible de .github/workflows/ci.yml (molecule test) ;
+#               JAMAIS lancé sur le poste Ops (il le modifierait)
+
+# Aucune machine à créer : la machine du job est elle-même jetable
+driver:
+  name: default
+  options:
+    managed: false
+    ansible_connection_options:
+      ansible_connection: local
+
+platforms:
+  - name: localhost
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      roles_path: ${MOLECULE_PROJECT_DIRECTORY}/roles
+      collections_path: ${MOLECULE_PROJECT_DIRECTORY}/collections
+    # sudo classique (le poste Ops, en Ubuntu 26.04, l'appelle sudo.ws)
+    privilege_escalation:
+      become_exe: sudo
+
+# Ni création ni destruction : syntaxe, application, idempotence,
+# vérification
+scenario:
+  test_sequence:
+    - syntax
+    - converge
+    - idempotence
+    - verify
+
+verifier:
+  name: ansible

@@ -1,0 +1,84 @@
+# Fichier  : infra/ansible/molecule/default/verify.yml
+# Rôle     : contrôles après application des rôles : outils aux bonnes
+#            versions, tâches planifiées, node_exporter et fail2ban en
+#            marche, pare-feu actif, journaux Docker limités
+# Utilise  : group_vars/all.yml (versions attendues)
+# Utilisé par : molecule.yml (étape verify)
+
+- name: Verify
+  hosts: all
+  become: false
+  vars_files:
+    - ../../group_vars/all.yml
+  tasks:
+    - name: Read the installed tool versions
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - "{{ ops_home }}/.local/bin/kubectl version --client"
+        - "{{ ops_home }}/.local/bin/helm version --short"
+        - "{{ ops_home }}/.local/bin/tofu version"
+      register: verify_versions
+      changed_when: false
+
+    - name: Check the tool versions
+      ansible.builtin.assert:
+        that:
+          - "'v1.37.2' in verify_versions.results[0].stdout"
+          - helm_version in verify_versions.results[1].stdout
+          - ('v' ~ tofu_version) in verify_versions.results[2].stdout
+        quiet: true
+
+    - name: Read the user crontab
+      ansible.builtin.command: crontab -l
+      register: verify_crontab
+      changed_when: false
+
+    - name: Check the planned backups
+      ansible.builtin.assert:
+        that:
+          - verify_crontab.stdout is search('backup.sh')
+          - verify_crontab.stdout is search('@reboot')
+        quiet: true
+
+    - name: Read the services
+      ansible.builtin.service_facts:
+
+    - name: Check that node_exporter and fail2ban are running
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['node_exporter.service'].state == 'running'
+          - ansible_facts.services['fail2ban.service'].state == 'running'
+        quiet: true
+
+    - name: Read the host metrics
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9100/metrics
+        return_content: true
+      register: verify_metrics
+
+    - name: Check the host metrics
+      ansible.builtin.assert:
+        that: verify_metrics.content is search('node_cpu_seconds_total')
+        quiet: true
+
+    - name: Read the firewall state
+      become: true
+      ansible.builtin.command: ufw status
+      register: verify_ufw
+      changed_when: false
+
+    - name: Check that the firewall is active
+      ansible.builtin.assert:
+        that: verify_ufw.stdout is search('Status. active')
+        quiet: true
+
+    - name: Read the Docker daemon settings
+      ansible.builtin.slurp:
+        src: /etc/docker/daemon.json
+      register: verify_daemon
+
+    - name: Check that container logs are limited
+      ansible.builtin.assert:
+        that:
+          - (verify_daemon.content | b64decode | from_json)['log-opts']['max-size'] == docker_log_max_size
+        quiet: true

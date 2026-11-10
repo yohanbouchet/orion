@@ -2,6 +2,7 @@
 # Rôle     : redémarre Docker quand sa configuration change (une seule
 #            fois, à la fin), puis relance le cluster : le service est un
 #            « oneshot » resté actif, « started » ne le relancerait pas
+# Utilise  : defaults/main.yml (docker_hygiene_restart_minikube)
 # Utilisé par : tasks/main.yml (notify)
 
 # Le 1er passage arrête les conteneurs (live-restore n'est pas encore
@@ -13,8 +14,11 @@
     state: restarted
   notify: Restart the Minikube service
 
+# Désactivable (defaults/main.yml) : la machine de test Molecule n'a pas
+# de cluster
 - name: Restart the Minikube service
   become: true
   ansible.builtin.systemd_service:
     name: "minikube@{{ ops_user }}"
     state: restarted
+  when: docker_hygiene_restart_minikube
