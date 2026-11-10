@@ -92,9 +92,31 @@ runs:
           echo "::error::Missing id-token: write permission on the job"
           exit 1
         fi
+        if [ -z "$OPENBAO_CA" ]; then
+          echo "::error::OPENBAO_CA is empty; set the repository variable"
+          exit 1
+        fi
         work="$(mktemp -d "$RUNNER_TEMP/kube-access.XXXXXX")"
         trap 'rm -rf "${work:?}"' EXIT
         printf '%s\n' "$OPENBAO_CA" > "$work/openbao-ca.pem"
+
+        # Appel à OpenBao : réponse rangée dans un fichier (jamais
+        # affichée, elle contient le jeton) ; en cas de refus, seul le
+        # message d'erreur d'OpenBao est affiché (il ne contient aucun
+        # secret : ex. « claim "ref" does not match »)
+        bao_call() {
+          local path="$1" code
+          shift
+          code="$(curl -sS --cacert "$work/openbao-ca.pem" "$@" \
+            -o "$work/response.json" -w '%{http_code}' \
+            "$OPENBAO_ADDR/v1/$path")"
+          if [ "$code" != "200" ]; then
+            echo "::error::OpenBao refused $path (HTTP $code): $(jq -r \
+              '(.errors // ["no message"]) | join("; ")' \
+              "$work/response.json" 2>/dev/null)"
+            exit 1
+          fi
+        }
 
         # 1. Badge OIDC du job, signé par GitHub (dépôt, branche,
         #    environnement, workflow), valable quelques minutes
@@ -110,10 +132,10 @@ runs:
 
         # 2. OpenBao vérifie le badge et rend un jeton limité à la règle
         #    de cet environnement
-        bao_token="$(jq -n --arg role "ci-$ENVIRONMENT" --arg jwt "$jwt" \
-          '{role: $role, jwt: $jwt}' \
-          | curl -fsS --cacert "$work/openbao-ca.pem" --data @- \
-            "$OPENBAO_ADDR/v1/auth/jwt/login" | jq -r '.auth.client_token')"
+        jq -n --arg role "ci-$ENVIRONMENT" --arg jwt "$jwt" \
+          '{role: $role, jwt: $jwt}' > "$work/login.json"
+        bao_call auth/jwt/login --data @"$work/login.json"
+        bao_token="$(jq -r '.auth.client_token' "$work/response.json")"
         if [ -z "$bao_token" ] || [ "$bao_token" = "null" ]; then
           echo "::error::OpenBao refused the OIDC token (role ci-$ENVIRONMENT)"
           exit 1
@@ -123,11 +145,11 @@ runs:
         # 3. Jeton Kubernetes du deployer de ce namespace, qui expire seul
         #    (15 min, 45 min pour les tests de staging : rôle OpenBao)
         printf 'X-Vault-Token: %s\n' "$bao_token" > "$work/bao-header"
-        kube_token="$(jq -n --arg ns "$NAMESPACE" \
-          '{kubernetes_namespace: $ns}' \
-          | curl -fsS --cacert "$work/openbao-ca.pem" -H @"$work/bao-header" \
-            --data @- "$OPENBAO_ADDR/v1/kubernetes/creds/$ENVIRONMENT" \
-          | jq -r '.data.service_account_token')"
+        jq -n --arg ns "$NAMESPACE" '{kubernetes_namespace: $ns}' \
+          > "$work/creds.json"
+        bao_call "kubernetes/creds/$ENVIRONMENT" -H @"$work/bao-header" \
+          --data @"$work/creds.json"
+        kube_token="$(jq -r '.data.service_account_token' "$work/response.json")"
         if [ -z "$kube_token" ] || [ "$kube_token" = "null" ]; then
           echo "::error::OpenBao gave no Kubernetes token for $NAMESPACE"
           exit 1
