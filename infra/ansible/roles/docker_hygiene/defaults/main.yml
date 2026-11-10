@@ -1,0 +1,8 @@
+# Fichier  : infra/ansible/roles/docker_hygiene/defaults/main.yml
+# Rôle     : valeurs par défaut du rôle (modifiables par le playbook)
+# Utilisé par : handlers/main.yml
+
+# Relancer le cluster après un redémarrage de Docker : oui sur le poste
+# Ops ; non dans le test Molecule (machine sans cluster ni service
+# minikube@)
+docker_hygiene_restart_minikube: true

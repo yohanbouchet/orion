@@ -17,6 +17,8 @@
     # machine elle-même
     minikube_gateway: 127.0.0.1
     minikube_subnet: 127.0.0.0/8
+    # Pas de cluster à relancer après le redémarrage de Docker
+    docker_hygiene_restart_minikube: false
   roles:
     - ops_tools
     - docker_hygiene

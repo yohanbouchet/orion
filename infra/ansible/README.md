@@ -72,7 +72,9 @@ comme sur le poste), sans conteneur à créer.
 | `verify` ([`verify.yml`](molecule/default/verify.yml)) | versions de kubectl, helm, OpenTofu ; sauvegardes planifiées (cron, dont `@reboot`) ; node_exporter et fail2ban en marche, métriques lisibles ; pare-feu actif ; journaux Docker limités |
 
 Non testés par Molecule (ils demandent le cluster) : `minikube_service`,
-`cluster_images`, `metrics_server`. **Ne jamais lancer `molecule test`
+`cluster_images`, `metrics_server` ; pour la même raison, le scénario
+désactive la relance du cluster après le redémarrage de Docker
+(`docker_hygiene_restart_minikube: false`, vraie par défaut sur le poste). **Ne jamais lancer `molecule test`
 sur le poste Ops** : il appliquerait les rôles à la machine elle-même.
 - **Pas de root par défaut** : seules les tâches qui en ont besoin
   demandent sudo (`become`) ; le playbook refuse d'être lancé en root.
