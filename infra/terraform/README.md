@@ -10,12 +10,13 @@ cluster et ne change presque jamais. Ils sont exécutés par **OpenTofu**
 
 ```text
 OpenTofu (opérateur, droits d'administration)
-  ├── namespace dev      ── compte deployer, ses droits, son jeton
-  ├── namespace staging  ── compte deployer, ses droits, son jeton
-  └── namespace prod     ── compte deployer, ses droits, son jeton
-      (chacun au niveau Pod Security « restricted »)
+  ├── namespace dev      ── compte deployer et ses droits
+  ├── namespace staging  ── compte deployer et ses droits
+  └── namespace prod     ── compte deployer et ses droits
+      (chacun au niveau Pod Security « restricted » ; aucun jeton
+      rangé : OpenBao en délivre de 15 min à la CI)
                  │
-Helm (scripts/deploy.sh, avec le jeton du deployer de l'environnement)
+Helm (scripts/deploy.sh, avec le jeton court du deployer de l'environnement)
   └── MicroCRM dans le namespace : front, back, PostgreSQL
 ```
 
@@ -27,7 +28,7 @@ Helm (scripts/deploy.sh, avec le jeton du deployer de l'environnement)
 | `providers.tf` | Connexion au cluster : kubeconfig de l'opérateur, contexte `orion` |
 | `variables.tf` | Réglages : kubeconfig, contexte, environnements (`dev`, `staging`, `prod` seulement), adresse Gmail des alertes (`ops_email`, sensible, hors du dépôt) |
 | `main.tf` | Un namespace par environnement, niveau Pod Security « restricted » |
-| `rbac.tf` | Un compte `deployer` par namespace, ses droits et son jeton |
+| `rbac.tf` | Un compte `deployer` par namespace et ses droits (aucun jeton rangé depuis le 10/11) |
 | `monitoring.tf` | Supervision : namespaces `monitoring` (« restricted ») et `monitoring-collector` (« privileged », collecteur de journaux seul), pile VictoriaMetrics + VictoriaLogs + Grafana (chart Helm figé), tableaux de bord ([détails](../monitoring/README.md)) |
 | `openbao.tf` | Coffre-fort OpenBao : namespace `openbao` (« restricted »), autorité de certification et certificat TLS, chart Helm figé, droit d'OpenBao de créer des jetons courts des comptes `deployer` ([détails](../openbao/README.md)) |
 | `outputs.tf` | Jetons et certificat du cluster (valeurs sensibles, jamais affichées) ; certificat public de l'autorité d'OpenBao |
@@ -63,7 +64,8 @@ cluster.
 cd infra/terraform
 
 # 1. Une seule fois : l'état est rangé HORS du dépôt, car il contient
-#    en clair les jetons des comptes deployer et l'adresse des alertes
+#    en clair les clés privées du certificat d'OpenBao et l'adresse
+#    des alertes
 mkdir -p -m 700 ~/.local/state/orion-terraform
 tofu init \
   -backend-config="path=$HOME/.local/state/orion-terraform/terraform.tfstate"
@@ -91,17 +93,17 @@ kubectl auth can-i patch deployments -n dev --as=$SA    # yes
 kubectl auth can-i patch deployments -n prod --as=$SA   # no
 ```
 
-Depuis le 10/11/2026, la CI n'utilise plus ces jetons de longue durée :
-OpenBao lui délivre un jeton de 15 min du même compte, contre le badge
-OIDC du job ([Identité de la CI](../openbao/README.md#identité-de-la-ci)) ;
-OpenBao n'a que le droit d'en créer (`openbao.tf`). Les jetons de
-longue durée seront supprimés dès qu'un pipeline complet aura réussi
-sans eux. Le certificat du cluster reste dans la variable de dépôt
-`KUBE_CA` (public) :
+**Aucun jeton de longue durée** (supprimés le 10/11/2026, après deux
+pipelines complets réussis sans eux) : OpenBao délivre à la CI un jeton
+de 15 min du même compte, contre le badge OIDC du job
+([Identité de la CI](../openbao/README.md#identité-de-la-ci)) ;
+OpenBao n'a que le droit d'en créer (`openbao.tf`). Les deux certificats
+**publics** vont dans les variables de dépôt GitHub `KUBE_CA` et
+`OPENBAO_CA` :
 
 ```shell
-tofu output -json deployer_tokens | jq -r .dev   # puis clear
-tofu output -raw cluster_ca
+tofu output -raw cluster_ca        # lu dans la ConfigMap kube-root-ca.crt
+tofu output -raw openbao_ca_cert
 ```
 
 ## Supervision
@@ -198,10 +200,11 @@ Le dossier garde son nom (`infra/terraform`, état dans
 
 ## Sécurité
 
-- État hors du dépôt (dossier 700, fichiers 600) : il contient les
-  jetons ; plan enregistré au même endroit.
-- Jetons et certificat marqués `sensitive` : jamais affichés par
-  OpenTofu.
+- État hors du dépôt (dossier 700, fichiers 600) : il contient les clés
+  privées du certificat d'OpenBao et l'adresse des alertes ; plan
+  enregistré au même endroit.
+- Aucun jeton dans l'état ni dans GitHub ; adresse des alertes marquée
+  `sensitive` : jamais affichée par OpenTofu.
 - Moindre privilège : un compte par environnement, enfermé dans son
   namespace.
 - Versions des fournisseurs figées et vérifiées (`.terraform.lock.hcl`,
@@ -215,6 +218,5 @@ Le dossier garde son nom (`infra/terraform`, état dans
 
 | Limite | Évolution |
 |---|---|
-| Jetons de longue durée encore présents dans le cluster (plus utilisés par la CI depuis le 10/11) | Suppression après un pipeline complet réussi avec OpenBao |
 | Un `deployer` peut lire les Secrets de son namespace, dont le mot de passe de la base (Helm range ses versions dans des Secrets) | Inhérent à Helm ; à compenser par un mot de passe propre à chaque environnement (déjà le cas) et la rotation |
 | État local sur une seule machine, sans verrou contre deux `apply` simultanés | État distant chiffré et verrouillé (par exemple S3 avec verrou, dans la cible cloud) |

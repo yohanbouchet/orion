@@ -1,11 +1,12 @@
 # Fichier  : infra/terraform/rbac.tf
 # Rôle     : un compte de service « deployer » par environnement, avec
 #            les seuls droits nécessaires à scripts/deploy.sh (et, en
-#            staging, à scripts/zap-scan.sh) dans SON namespace, et son
-#            jeton (rangé ensuite dans l'environnement GitHub correspondant)
+#            staging, à scripts/zap-scan.sh et load-test.sh) dans SON
+#            namespace ; aucun jeton rangé : OpenBao délivre des jetons
+#            courts (openbao.tf)
 # Utilise  : main.tf (namespaces)
-# Utilisé par : jobs de déploiement et de test d'intrusion (ZAP) de la
-#               CI (jeton) ; outputs.tf ; ticket #64
+# Utilisé par : jobs de déploiement, de ZAP et de test de charge de la
+#               CI (jeton OpenBao) ; openbao.tf ; ticket #64
 
 locals {
   # Comptes deployer réduits à leurs métadonnées (nom, namespace) : boucler
@@ -144,18 +145,6 @@ resource "kubernetes_cluster_role_binding_v1" "namespace_reader" {
   }
 }
 
-# Jeton de longue durée du compte (limite connue : rotation manuelle ;
-# cible : fédération OIDC GitHub → cluster, jetons de quelques minutes)
-resource "kubernetes_secret_v1" "deployer_token" {
-  for_each = local.deployers
-
-  metadata {
-    name      = "deployer-token"
-    namespace = each.value.namespace
-    annotations = {
-      "kubernetes.io/service-account.name" = each.value.name
-    }
-  }
-  type                           = "kubernetes.io/service-account-token"
-  wait_for_service_account_token = true
-}
+# Aucun jeton de longue durée (supprimés le 10/11/2026) : la CI reçoit un
+# jeton de 15 min du compte, délivré par OpenBao contre le badge OIDC de
+# son job (openbao.tf, infra/openbao/config)

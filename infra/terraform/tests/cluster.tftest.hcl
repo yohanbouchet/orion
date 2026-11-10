@@ -8,14 +8,12 @@
 # Faux fournisseurs : les ressources sont « planifiées » sans cluster
 mock_provider "kubernetes" {}
 
-# Secrets des jetons deployer : OpenTofu remplit les attributs calculés
-# d'une table vide ; jeton et certificat fictifs, lus par outputs.tf
-# (ciblés : le Secret TLS d'OpenBao, lui, fixe ses propres données)
-override_resource {
-  target = kubernetes_secret_v1.deployer_token
+# Certificat du cluster : OpenTofu remplit les attributs calculés d'une
+# table vide ; certificat fictif, lu par outputs.tf
+override_data {
+  target = data.kubernetes_config_map_v1.cluster_ca
   values = {
     data = {
-      token    = "test-token"
       "ca.crt" = "test-ca"
     }
   }

@@ -660,7 +660,7 @@ GitHub) ; chaque secret est rangé au plus près de son seul utilisateur.
 | Mot de passe du compte de l'application (`microcrm_app`) | Secret Kubernetes `microcrm-db-app`, créé de la même façon | pod de l'API (connexions de l'application) |
 | Mot de passe d'application Gmail (alertes) | Secret Kubernetes, saisi sans écho par l'Ops | Alertmanager |
 | Clé de l'application GitHub du runner local, mots de passe de SonarQube | Secrets Kubernetes ; copies sur le poste Ops en droits 600 | ARC ; Ops |
-| État OpenTofu (contient les jetons) | hors du dépôt, sur le poste Ops, droits 600 | Ops |
+| États OpenTofu (clés privées du certificat d'OpenBao, adresse des alertes ; aucun jeton) | hors du dépôt, sur le poste Ops, droits 600 | Ops |
 
 **Rotation** : un secret exposé est **révoqué et remplacé tout de
 suite** (appliqué le 28/10 : mot de passe de la base de SonarQube changé
