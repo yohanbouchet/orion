@@ -10,5 +10,8 @@ output "github_audience" {
 
 output "ci_roles" {
   description = "OpenBao role of each GitHub environment"
-  value       = { for env, r in vault_jwt_auth_backend_role.ci : env => r.role_name }
+  value = merge(
+    { for env, r in vault_jwt_auth_backend_role.ci : env => r.role_name },
+    { sonarqube = vault_jwt_auth_backend_role.ci_sonarqube.role_name }
+  )
 }
