@@ -5,22 +5,20 @@
 #            test → Run workflow) ; résumé de k6 dans le résumé de
 #            l'exécution et en artefact ; mesures dans Grafana
 # Utilise  : scripts/load-test.sh, infra/k6/microcrm.js ; action
-#            .github/actions/kube-access ; environnement GitHub staging
-#            (secret KUBE_TOKEN, main seulement) ; variable KUBE_CA
+#            .github/actions/kube-access (jeton court délivré par OpenBao) ;
+#            environnement GitHub staging (main seulement) ; variables
+#            KUBE_CA et OPENBAO_CA (certificats publics)
 # Utilisé par : job load-test de ci.yml ; lancement manuel ; ticket #92
 
 name: Load test
 
 on:
-  # Appelé par ci.yml (fumée) ; le jeton doit être transmis
+  # Appelé par ci.yml (fumée)
   workflow_call:
     inputs:
       profile:
         type: string
         default: smoke
-    secrets:
-      KUBE_TOKEN:
-        required: true
   # Lancement manuel : profil au choix
   workflow_dispatch:
     inputs:
@@ -39,9 +37,13 @@ jobs:
     runs-on: orion-local
     # Endurance : 30 min de test + marge
     timeout-minutes: 45
-    # Jeton du deployer de staging (droit de lancer le Job k6) ; branche
-    # main seulement
+    # Deployer de staging (droit de lancer le Job k6), jeton délivré par
+    # OpenBao au vu du badge OIDC ; branche main seulement
     environment: staging
+    # id-token : demander à GitHub le badge OIDC du job ; aucun autre droit
+    permissions:
+      contents: read
+      id-token: write
     # Jamais pendant un déploiement de staging ni pendant ZAP (même groupe)
     concurrency:
       group: deploy-staging
@@ -56,9 +58,10 @@ jobs:
       - name: Kubernetes access
         uses: ./.github/actions/kube-access
         with:
+          environment: staging
           namespace: staging
           ca: ${{ vars.KUBE_CA }}
-          token: ${{ secrets.KUBE_TOKEN }}
+          openbao-ca: ${{ vars.OPENBAO_CA }}
       # Échoue si un seuil de k6 est dépassé (sauf point de rupture)
       - name: Run k6
         env:

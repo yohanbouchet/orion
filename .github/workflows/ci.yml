@@ -642,10 +642,11 @@ jobs:
     with:
       environment: dev
       namespace: dev
-    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
-    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
-    secrets:
-      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+    # Aucun secret transmis : le job prouve son identité à OpenBao avec
+    # son badge OIDC (id-token), qui lui rend un jeton court
+    permissions:
+      contents: read
+      id-token: write
 
   deploy-staging:
     needs: deploy-dev
@@ -653,10 +654,11 @@ jobs:
     with:
       environment: staging
       namespace: staging
-    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
-    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
-    secrets:
-      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+    # Aucun secret transmis : le job prouve son identité à OpenBao avec
+    # son badge OIDC (id-token), qui lui rend un jeton court
+    permissions:
+      contents: read
+      id-token: write
 
   # Test d'intrusion passif (ZAP baseline) de staging, à chaque
   # déploiement ; une alerte réglée sur FAIL (infra/zap/rules.tsv) bloque
@@ -666,10 +668,11 @@ jobs:
     uses: ./.github/workflows/zap.yml
     with:
       mode: baseline
-    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
-    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
-    secrets:
-      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+    # Aucun secret transmis : le job prouve son identité à OpenBao avec
+    # son badge OIDC (id-token), qui lui rend un jeton court
+    permissions:
+      contents: read
+      id-token: write
 
   # Test de charge de fumée (k6, 1 utilisateur, 30 s) de staging, après
   # ZAP (jamais en même temps : les mesures seraient faussées) ; un seuil
@@ -679,10 +682,11 @@ jobs:
     uses: ./.github/workflows/load-test.yml
     with:
       profile: smoke
-    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
-    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
-    secrets:
-      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+    # Aucun secret transmis : le job prouve son identité à OpenBao avec
+    # son badge OIDC (id-token), qui lui rend un jeton court
+    permissions:
+      contents: read
+      id-token: write
 
   # Prod seulement si une version vX.Y.Z vient d'être publiée, si ZAP et le
   # test de charge n'ont rien trouvé de bloquant, et après l'approbation
@@ -695,10 +699,11 @@ jobs:
       environment: production
       namespace: prod
       tag: ${{ needs.release.outputs.version }}
-    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
-    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
-    secrets:
-      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+    # Aucun secret transmis : le job prouve son identité à OpenBao avec
+    # son badge OIDC (id-token), qui lui rend un jeton court
+    permissions:
+      contents: read
+      id-token: write
 
   # Notification du résultat sur main (ticket de panne, e-mail par GitHub),
   # même si un job a échoué (always) ; ticket #56

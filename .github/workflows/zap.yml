@@ -5,22 +5,20 @@
 #            (Actions → ZAP → Run workflow) ; rapport dans le résumé de
 #            l'exécution et en artefact
 # Utilise  : scripts/zap-scan.sh, infra/zap/rules.tsv ; action
-#            .github/actions/kube-access ; environnement GitHub staging
-#            (secret KUBE_TOKEN, main seulement) ; variable KUBE_CA
+#            .github/actions/kube-access (jeton court délivré par OpenBao) ;
+#            environnement GitHub staging (main seulement) ; variables
+#            KUBE_CA et OPENBAO_CA (certificats publics)
 # Utilisé par : job zap de ci.yml ; lancement manuel ; ticket #64
 
 name: ZAP
 
 on:
-  # Appelé par ci.yml (baseline) ; le jeton doit être transmis
+  # Appelé par ci.yml (baseline)
   workflow_call:
     inputs:
       mode:
         type: string
         default: baseline
-    secrets:
-      KUBE_TOKEN:
-        required: true
   # Lancement manuel : scan actif par défaut
   workflow_dispatch:
     inputs:
@@ -38,9 +36,13 @@ jobs:
     # Runner local : le seul qui atteint le cluster Minikube
     runs-on: orion-local
     timeout-minutes: 45
-    # Jeton du deployer de staging (droit de lancer le Job ZAP) ; branche
-    # main seulement
+    # Deployer de staging (droit de lancer le Job ZAP), jeton délivré par
+    # OpenBao au vu du badge OIDC ; branche main seulement
     environment: staging
+    # id-token : demander à GitHub le badge OIDC du job ; aucun autre droit
+    permissions:
+      contents: read
+      id-token: write
     # Jamais pendant un déploiement de staging (même groupe que deploy.yml)
     concurrency:
       group: deploy-staging
@@ -55,9 +57,10 @@ jobs:
       - name: Kubernetes access
         uses: ./.github/actions/kube-access
         with:
+          environment: staging
           namespace: staging
           ca: ${{ vars.KUBE_CA }}
-          token: ${{ secrets.KUBE_TOKEN }}
+          openbao-ca: ${{ vars.OPENBAO_CA }}
       # Échoue si une alerte réglée sur FAIL dans rules.tsv est trouvée
       - name: Scan
         env:
