@@ -1,0 +1,112 @@
+# Fichier  : .github/actions/openbao-secret/action.yml
+# Rôle     : lit UN secret statique dans OpenBao (moteur kv) pour un job
+#            du runner local : badge OIDC du job (signé par GitHub) →
+#            connexion au rôle demandé → lecture d'un champ ; la valeur
+#            est masquée dans les journaux et rendue en sortie d'étape
+#            (à donner à la seule étape qui en a besoin)
+# Utilise  : OpenBao (infra/openbao/config/sonarqube.tf) ; certificat
+#            public OPENBAO_CA transmis par le job ; le job doit avoir la
+#            permission id-token: write
+# Utilisé par : job sonarqube de .github/workflows/ci.yml
+
+name: OpenBao secret
+description: Read one static secret from OpenBao with the job OIDC token
+
+inputs:
+  role:
+    description: OpenBao JWT role (ci-<name>)
+    required: true
+  path:
+    description: Secret path in the kv engine (e.g. ci/sonarqube)
+    required: true
+  field:
+    description: Field to read in the secret
+    required: true
+  openbao-ca:
+    description: Public certificate (PEM) of the OpenBao authority
+    required: true
+
+outputs:
+  value:
+    description: Secret value (masked in the logs)
+    value: ${{ steps.read.outputs.value }}
+
+runs:
+  using: composite
+  steps:
+    # Même échange que l'action kube-access : badge OIDC → OpenBao ;
+    # réponses rangées dans des fichiers effacés à la fin, jamais
+    # affichées ; en cas de refus, seul le message d'OpenBao (sans
+    # secret) est affiché
+    - name: Read the secret
+      id: read
+      shell: bash
+      env:
+        ROLE: ${{ inputs.role }}
+        SECRET_PATH: ${{ inputs.path }}
+        FIELD: ${{ inputs.field }}
+        OPENBAO_CA: ${{ inputs.openbao-ca }}
+        OPENBAO_ADDR: https://openbao.openbao.svc:8200
+        AUDIENCE: openbao-orion
+      run: |
+        set -euo pipefail
+        umask 077
+        if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          echo "::error::Missing id-token: write permission on the job"
+          exit 1
+        fi
+        if [ -z "$OPENBAO_CA" ]; then
+          echo "::error::OPENBAO_CA is empty; set the repository variable"
+          exit 1
+        fi
+        work="$(mktemp -d "$RUNNER_TEMP/openbao-secret.XXXXXX")"
+        trap 'rm -rf "${work:?}"' EXIT
+        printf '%s\n' "$OPENBAO_CA" > "$work/openbao-ca.pem"
+
+        bao_call() {
+          local path="$1" code
+          shift
+          code="$(curl -sS --cacert "$work/openbao-ca.pem" "$@" \
+            -o "$work/response.json" -w '%{http_code}' \
+            "$OPENBAO_ADDR/v1/$path")"
+          if [ "$code" != "200" ]; then
+            echo "::error::OpenBao refused $path (HTTP $code): $(jq -r \
+              '(.errors // ["no message"]) | join("; ")' \
+              "$work/response.json" 2>/dev/null)"
+            exit 1
+          fi
+        }
+
+        # 1. Badge OIDC du job, signé par GitHub
+        printf 'Authorization: bearer %s\n' "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          > "$work/gh-header"
+        jwt="$(curl -fsS -H @"$work/gh-header" \
+          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r '.value')"
+        if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
+          echo "::error::GitHub gave no OIDC token"
+          exit 1
+        fi
+        echo "::add-mask::$jwt"
+
+        # 2. Connexion au rôle demandé (règle de lecture de ce seul secret)
+        jq -n --arg role "$ROLE" --arg jwt "$jwt" \
+          '{role: $role, jwt: $jwt}' > "$work/login.json"
+        bao_call auth/jwt/login --data @"$work/login.json"
+        bao_token="$(jq -r '.auth.client_token' "$work/response.json")"
+        if [ -z "$bao_token" ] || [ "$bao_token" = "null" ]; then
+          echo "::error::OpenBao refused the OIDC token (role $ROLE)"
+          exit 1
+        fi
+        echo "::add-mask::$bao_token"
+
+        # 3. Lecture du champ (moteur kv version 2 : chemin kv/data/...)
+        printf 'X-Vault-Token: %s\n' "$bao_token" > "$work/bao-header"
+        bao_call "kv/data/$SECRET_PATH" -H @"$work/bao-header"
+        value="$(jq -r --arg f "$FIELD" '.data.data[$f] // empty' \
+          "$work/response.json")"
+        if [ -z "$value" ]; then
+          echo "::error::Field $FIELD is missing in kv/$SECRET_PATH"
+          exit 1
+        fi
+        echo "::add-mask::$value"
+        echo "value=$value" >> "$GITHUB_OUTPUT"
