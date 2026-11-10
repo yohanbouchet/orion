@@ -19,11 +19,12 @@ updates:
       day: monday
       time: "06:00"
       timezone: Europe/Paris
-    # Refroidissement (docs/02, 2.7) : 3 jours, 7 pour une majeure ;
-    # jamais appliqué aux mises à jour de sécurité
+    # Refroidissement (docs/02, 2.7) : 7 jours, 14 pour une majeure
+    # (minimum conseillé par zizmor : 7 ; 3 jusqu'au 10/11/2026) ; jamais
+    # appliqué aux mises à jour de sécurité
     cooldown:
-      default-days: 3
-      semver-major-days: 7
+      default-days: 7
+      semver-major-days: 14
     # Mineures et correctifs dans une seule PR : moins de PR, testées ensemble
     groups:
       npm-minor-patch:
@@ -73,8 +74,8 @@ updates:
       time: "06:00"
       timezone: Europe/Paris
     cooldown:
-      default-days: 3
-      semver-major-days: 7
+      default-days: 7
+      semver-major-days: 14
     groups:
       release-minor-patch:
         update-types:
@@ -104,8 +105,8 @@ updates:
       time: "06:00"
       timezone: Europe/Paris
     cooldown:
-      default-days: 3
-      semver-major-days: 7
+      default-days: 7
+      semver-major-days: 14
     groups:
       pip-minor-patch:
         update-types:
@@ -127,8 +128,8 @@ updates:
       time: "06:00"
       timezone: Europe/Paris
     cooldown:
-      default-days: 3
-      semver-major-days: 7
+      default-days: 7
+      semver-major-days: 14
     commit-message:
       prefix: build
       include: scope
@@ -141,8 +142,8 @@ updates:
       time: "06:00"
       timezone: Europe/Paris
     cooldown:
-      default-days: 3
-      semver-major-days: 7
+      default-days: 7
+      semver-major-days: 14
     groups:
       gradle-minor-patch:
         update-types:
@@ -163,9 +164,9 @@ updates:
       day: monday
       time: "06:00"
       timezone: Europe/Paris
-    # Pas de SemVer garanti pour les actions : un seul délai, 3 jours
+    # Pas de SemVer garanti pour les actions : un seul délai, 7 jours
     cooldown:
-      default-days: 3
+      default-days: 7
     groups:
       actions-minor-patch:
         update-types:
@@ -186,9 +187,9 @@ updates:
       time: "06:00"
       timezone: Europe/Paris
     # Pas de SemVer garanti pour les étiquettes d'images : un seul délai,
-    # 3 jours
+    # 7 jours
     cooldown:
-      default-days: 3
+      default-days: 7
     # Changements décidés, pas automatiques : version de Java (LTS 17, 21,
     # 25), de Node (avec Angular, R4), de PostgreSQL (migration des
     # données) ; nginx reste sur sa branche stable (numéro mineur pair)
@@ -221,7 +222,7 @@ updates:
       time: "06:00"
       timezone: Europe/Paris
     cooldown:
-      default-days: 3
+      default-days: 7
     commit-message:
       prefix: build
       include: scope

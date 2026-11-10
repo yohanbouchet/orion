@@ -284,8 +284,8 @@ Règles :
   (back), les actions GitHub et les images de base des Dockerfiles ; une PR
   chaque lundi, mineures et correctifs groupés, relue et testée par la CI
   comme toute autre PR. **Délai de refroidissement** : une version publiée
-  depuis moins de 3 jours (7 pour une version majeure de npm ou Gradle ;
-  un seul délai de 3 jours pour les actions et les images Docker, qui ne
+  depuis moins de 7 jours (14 pour une version majeure de npm ou Gradle ;
+  un seul délai de 7 jours pour les actions et les images Docker, qui ne
   suivent pas SemVer) n'est pas encore proposée, le temps qu'un paquet
   piégé soit détecté ; ce délai ne
   s'applique **jamais** aux mises à jour de sécurité, proposées tout de
