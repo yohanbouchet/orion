@@ -239,7 +239,7 @@ dans le pod de l'API, pour les migrations de schéma (recommandation 19).
 **Comment une faille est traitée** : Trivy bloque toute image qui
 contient une faille critique ou haute corrigeable ; une exception doit
 être écrite, justifiée et datée (expiration) ; Dependabot propose les
-mises à jour, appliquées après un délai de 3 jours (protection contre
+mises à jour, appliquées après un délai de 7 jours (3 jusqu'au 10/11 ; protection contre
 une version piégée), selon la règle du document 2 (section 2.7).
 
 ### 5.2 Supervision de la sécurité
