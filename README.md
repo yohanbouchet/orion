@@ -40,7 +40,7 @@ DevOps » (OpenClassrooms, option B), à partir de
 
 ## État d'avancement
 
-Au 08/11/2026 :
+Au 10/11/2026 :
 
 | Étape | État |
 |---|---|
@@ -53,10 +53,11 @@ Au 08/11/2026 :
 | Déploiement continu : `dev` puis `staging` à chaque fusion, `prod` sur une version après approbation | ✅ [`deploy.yml`](.github/workflows/deploy.yml) |
 | Test d'intrusion automatisé (ZAP) : passif à chaque déploiement de `staging` (bloque la prod), actif à la demande | ✅ [`zap.yml`](.github/workflows/zap.yml), [règles](infra/zap/rules.tsv) |
 | Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée au démarrage du poste et chaque jour, restauration vérifiée chaque semaine, copie hors site chiffrée |
-| Socle du cluster en code : fichiers Terraform, exécutés par OpenTofu depuis le 09/11 (namespaces, comptes de déploiement aux droits limités) | ✅ [`infra/terraform/`](infra/terraform/README.md) |
+| Socle du cluster en code : fichiers Terraform, exécutés par OpenTofu depuis le 09/11 (namespaces, comptes de déploiement aux droits limités, supervision, OpenBao) ; vérifiés et testés par la CI, appliqués par l'Ops | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) | ✅ [`infra/ansible/`](infra/ansible/README.md) |
-| Supervision : métriques, journaux, alertes par e-mail, 3 tableaux de bord (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) |
-| Coffre-fort de secrets OpenBao (TLS, déverrouillage manuel par l'Ops, clés hors du dépôt) | ✅ [`infra/openbao/`](infra/openbao/README.md) |
+| Supervision : métriques, journaux structurés en JSON, 9 alertes par e-mail, 3 tableaux de bord (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) ; journaux JSON : v1.9.0 |
+| Coffre-fort de secrets OpenBao (TLS, déverrouillage manuel par l'Ops, clés hors du dépôt, journal d'audit) | ✅ [`infra/openbao/`](infra/openbao/README.md) |
+| Identité de la CI : **aucun secret dans GitHub** ; chaque job reçoit d'OpenBao un accès court contre son badge OIDC ; jetons longue durée supprimés | ✅ [Identité de la CI](infra/openbao/README.md#identité-de-la-ci) |
 | Tests de charge k6 (6 profils) ; test de fumée k6 avant chaque mise en prod ; autoscaling (HPA) du back en `staging` et en `prod` | ✅ [`load-test.sh`](scripts/README.md#load-testsh) |
 | Indicateurs DORA, calculés chaque lundi et à la demande | ✅ [`dora.py`](scripts/README.md#dorapy) |
 | Front mis à jour vers Angular 22, tests passés à Vitest : 0 faille connue, 0 problème SonarQube | ✅ v1.7.1 |
@@ -78,17 +79,24 @@ orchestre la CI et héberge le registre d'images.
           ▼                                ▼
  Runners hébergés par GitHub       Runner local ARC (dans Minikube)
  tests, scans, images,             analyse SonarQube, déploiement
- version, publication              (dev, staging, prod), test ZAP
-          │ images vX.Y.Z                  │
+ version, publication              (dev, staging, prod), tests ZAP et k6
+          │ images vX.Y.Z                  │ badge OIDC signé par GitHub
+          │                                ▼
+          │                        OpenBao : jeton Kubernetes de 15 min
+          │                        (ou jeton SonarQube) ; aucun secret
+          │                        rangé dans GitHub
           ▼                                ▼
  GHCR (registre d'images) ──────▶ Cluster Minikube « orion »
                                    ├─ arc-runners : runners de la CI
+                                   ├─ openbao     : coffre-fort (TLS,
+                                   │  déverrouillé chaque matin par l'Ops)
                                    ├─ sonarqube   : SonarQube + PostgreSQL
                                    ├─ monitoring  : métriques, journaux,
                                    │  Grafana, alertes (+ collecteur de
                                    │  journaux : monitoring-collector)
                                    └─ dev, staging, prod : MicroCRM
-                                      (+ pod ZAP éphémère en staging)
+                                      (+ pods ZAP et k6 éphémères en
+                                      staging)
 
  Dans chaque namespace de l'application :
  navigateur ──▶ front (nginx :8080) ──/api──▶ back (Spring Boot :8080)
@@ -107,8 +115,13 @@ orchestre la CI et héberge le registre d'images.
   compte propriétaire de la base.
 - Le runner local n'a ni Docker, ni sudo, ni droits élevés : tout ce qui
   construit ou exécute du code tourne sur les machines jetables de GitHub.
-  Le test d'intrusion tourne dans un pod jetable de `staging`, lancé par
-  le runner avec les droits du deployer de `staging`.
+  Les tests d'intrusion (ZAP) et de charge (k6) tournent dans des pods
+  jetables de `staging`, lancés par le runner avec les droits du deployer
+  de `staging`.
+- **OpenBao** délivre les accès de la CI : chaque job présente le badge
+  OIDC que GitHub signe pour lui (dépôt, branche, environnement,
+  workflow) et reçoit un jeton du deployer de son namespace, valable
+  15 min ([Identité de la CI](infra/openbao/README.md#identité-de-la-ci)).
 
 ## Contenu du dépôt
 
@@ -121,6 +134,9 @@ orchestre la CI et héberge le registre d'images.
   workflows/dora.yml      indicateurs DORA (chaque lundi ou à la main)
   workflows/runner-smoke-test.yml  test du runner local (à la main)
   actions/kube-access/    accès au cluster des jobs du runner local
+                          (jeton court délivré par OpenBao)
+  actions/openbao-secret/ lecture d'un secret dans OpenBao (SonarQube)
+  zizmor.yml              réglages de l'audit des workflows
   dependabot.yml          mises à jour automatiques des dépendances
   release/                semantic-release (versions figées)
   ISSUE_TEMPLATE/         formulaires de tickets [Dev] et [Ops]
@@ -163,7 +179,7 @@ main depuis l'onglet **Actions**.
 | `hadolint` | Bonnes pratiques des Dockerfiles | hadolint | GitHub |
 | `shellcheck` | Erreurs courantes des scripts Bash | ShellCheck | GitHub |
 | `script-tests` | Tests des scripts | bashunit, pytest | GitHub |
-| `opentofu` | Mise en forme, validité et tests du socle (fichiers Terraform) | OpenTofu (`fmt`, `validate`, `test`) | GitHub |
+| `opentofu` | Mise en forme, validité et tests du socle et de la configuration d'OpenBao (fichiers Terraform, 2 dossiers) | OpenTofu (`fmt`, `validate`, `test`) | GitHub |
 | `ansible` | Syntaxe et bonnes pratiques du code Ansible (jamais exécuté par la CI) | ansible-playbook `--syntax-check`, ansible-lint (profil production) | GitHub |
 | `trivy` | Failles des dépendances (production et outillage) | Trivy | GitHub |
 | `images` | Construction et scan des images front et back | Docker, Trivy | GitHub |
@@ -296,9 +312,12 @@ minikube -p orion image load orion/zap:2.17.0-hardened
 ```
 
 2. Socle du cluster, une seule fois, par OpenTofu : namespaces `dev`,
-   `staging` et `prod` au niveau de sécurité « restricted », et un compte
-   de déploiement par namespace, enfermé dans celui-ci
-   ([`infra/terraform`](infra/terraform/README.md#utilisation)).
+   `staging` et `prod` au niveau de sécurité « restricted », un compte
+   de déploiement par namespace, enfermé dans celui-ci, la supervision
+   et le coffre-fort OpenBao
+   ([`infra/terraform`](infra/terraform/README.md#utilisation)) ; puis
+   OpenBao initialisé, déverrouillé et configuré
+   ([installation](#installer-la-chaîne-sur-le-poste-ops), étape 6).
 
 3. Déploiement, vérifié par un test de fumée, avec retour arrière
    automatique en cas d'échec
@@ -352,8 +371,8 @@ lui transmet aucun secret. Chaque déploiement est tracé dans l'onglet
 **Deployments** du dépôt (environnement, commit, exécution) et dans le
 résumé de l'exécution (image déployée).
 
-- Chaque job ne reçoit que le jeton de **son** environnement, et ce jeton
-  ne permet d'agir que dans **son** namespace
+- Chaque job ne reçoit d'OpenBao que le jeton de **son** environnement,
+  valable 15 min, et ce jeton ne permet d'agir que dans **son** namespace
   ([OpenTofu](infra/terraform/README.md#droits-dun-compte-deployer)).
 - Les règles s'appliquent aussi aux administrateurs du dépôt
   (contournement désactivé).
@@ -471,11 +490,24 @@ helm install orion-local --namespace arc-runners --version 0.15.1 \
 scripts/deploy-sonarqube.sh
 ```
 
-Enfin, le jeton d'analyse du projet est rangé dans **OpenBao**
-(`kv/ci/sonarqube`, [procédure](infra/openbao/README.md#jeton-sonarqube)),
-plus dans GitHub ; dans GitHub (**Settings** → **Environments** →
-`sonarqube`), seulement la variable `SONAR_HOST_URL` (adresse de
-SonarQube vue depuis le runner).
+6. **OpenBao**, le coffre-fort qui délivre les accès de la CI
+   ([procédures détaillées](infra/openbao/README.md#démarrage)) :
+   installé avec le socle (`tofu apply` dans `infra/terraform`), puis
+   initialisé une seule fois (clés et jeton racine rangés aussitôt dans
+   le gestionnaire de mots de passe de l'Ops), déverrouillé (2 clés sur
+   3, chaque matin), et configuré (`tofu apply` dans
+   `infra/openbao/config`, avec le jeton racine saisi sans écho) ; enfin,
+   le jeton d'analyse SonarQube est écrit dans OpenBao
+   ([procédure](infra/openbao/README.md#jeton-sonarqube)).
+
+7. **GitHub** (**Settings**) : variables de dépôt `KUBE_CA` et
+   `OPENBAO_CA` (certificats publics, `tofu output -raw cluster_ca` et
+   `tofu output -raw openbao_ca_cert`) ; environnements `dev`, `staging`
+   et `production` limités à `main`, approbation pour `production`,
+   contournement des administrateurs désactivé ; environnement
+   `sonarqube` (sans restriction de branche, il analyse aussi les PR)
+   avec la variable `SONAR_HOST_URL` (adresse de SonarQube vue depuis le
+   runner). **Aucun secret** à créer.
 
 ## Sauvegarder la base
 
@@ -533,6 +565,10 @@ sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.m
   conteneurs en lecture seule et sans capacité Linux, pare-feu entre pods
   (NetworkPolicy, refus par défaut) ; un compte de déploiement par
   namespace, sans droit ailleurs (OpenTofu).
+- **Secrets** : aucun dans GitHub ; la CI reçoit d'OpenBao des accès
+  courts contre le badge OIDC de chaque job ; clés du coffre dans le
+  gestionnaire de mots de passe de l'Ops ; journal d'audit d'OpenBao
+  collecté par VictoriaLogs ; alerte si le coffre reste scellé.
 - **Base de données** : l'API se connecte avec un compte limité
   (`microcrm_app`) qui ne peut que lire et écrire des lignes : une
   injection SQL ne pourrait ni supprimer une table, ni créer un compte,
@@ -566,7 +602,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Tout tourne sur une seule machine (Minikube) | Cible cloud AWS : EKS sur 2 zones, RDS Multi-AZ, S3 | [documentation CI/CD, 5.2.1](docs/03-documentation-ci-cd.md#521-schéma-dinfrastructure-cloud) |
 | Sauvegarde quotidienne complète, non chiffrée fichier par fichier sur la machine (la copie hors site, elle, est chiffrée) | Restauration à un instant donné (WAL, CloudNativePG ou RDS), sauvegarde incrémentale | [scripts](scripts/README.md#backupsh) |
 | Poste Ops : SSH accepte encore les mots de passe ; un seul poste ; rôles Ansible testés par lint et idempotence, sans machine jetable | Clé SSH seule, inventaire multi-machines, Molecule | [Ansible](infra/ansible/README.md#limites-et-évolutions) |
-| Déploiement « poussé » par la CI (jeton court délivré par OpenBao) : une modification faite à la main dans le cluster n'est pas détectée | GitOps avec Argo CD : le cluster lit lui-même Git et corrige tout écart | [CI](#déploiement-continu-ci) |
+| Déploiement « poussé » par la CI (jeton court délivré par OpenBao) ; infrastructure (OpenTofu) vérifiée et testée par la CI mais appliquée par l'Ops ; une modification faite à la main dans le cluster n'est pas détectée | **GitOps** (Flux ou Argo CD, Apache 2.0, CNCF) : le cluster lit lui-même Git, applique l'application et l'infrastructure, corrige tout écart ; la CI n'a plus aucun accès au cluster | [documentation CI/CD, 5.8](docs/03-documentation-ci-cd.md) |
 | État OpenTofu local ; coffre OpenBao sur un seul serveur, déverrouillé à la main chaque matin | État distant chiffré et verrouillé ; OpenBao à 3 serveurs, déverrouillage automatique (KMS, HSM) | [OpenTofu](infra/terraform/README.md#limites-connues-et-évolutions), [OpenBao](infra/openbao/README.md#limites) |
 | Versions de `kubectl` et `helm` (jobs du runner local) et images d'outils des workflows (Trivy, gitleaks, hadolint, ShellCheck) mises à jour à la main : Dependabot ne les suit pas (l'image ZAP, elle, est suivie via `infra/zap/Dockerfile`) | Image du runner contenant ces outils, et fichier d'images d'outils, suivis par Dependabot | [CI](#déploiement-continu-ci) |
 | Test d'intrusion limité au front : l'API ne publie pas de description OpenAPI, le scan actif n'atteint donc pas ses routes ; scan actif lancé à la main | OpenAPI (`springdoc`, équipe Dev) puis `zap-api-scan` ; scan actif planifié chaque semaine | [ZAP](#test-dintrusion-zap) |

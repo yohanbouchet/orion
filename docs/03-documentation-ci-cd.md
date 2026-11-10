@@ -198,7 +198,7 @@ manuelle ratée.
 | Type de test | Outil | Déclenchement | Couverture cible |
 | --- | --- | --- | --- |
 | Unitaires | Vitest, navigateur simulé jsdom (front, 16 tests, back simulé : chargement, création, suppression, liens entre personnes et organisations) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; au 08/11, 82,9 % de l'ensemble (lignes 87,6 %, branches 57,9 %) |
-| Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (7 tests) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle Terraform |
+| Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (12 tests : 7 du socle, 5 de la configuration d'OpenBao) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle et d'OpenBao |
 | E2E | **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | chaque déploiement (dev, staging, prod) | le parcours complet ; un échec remet la version précédente |
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
@@ -343,6 +343,7 @@ flowchart TB
         subgraph mk["Cluster Minikube « orion », Kubernetes 1.37"]
             direction LR
             arc["arc-runners<br/>runner local de la CI"]
+            bao["openbao<br/>coffre-fort, audit"]
             sq["sonarqube<br/>SonarQube + PostgreSQL"]
             envs["dev, staging, prod<br/>front → API → PostgreSQL"]
             mon["monitoring<br/>métriques, journaux,<br/>Grafana, alertes"]
@@ -350,6 +351,8 @@ flowchart TB
         bk[("Sauvegardes de la base<br/>+ copie hors site chiffrée")]
     end
     repo -->|"jobs d'analyse<br/>et de déploiement"| arc
+    arc -->|"badge OIDC du job"| bao
+    bao -->|"jeton de 15 min"| arc
     arc --> sq
     arc -->|"Helm"| envs
     ghcr -->|"images"| envs
@@ -361,8 +364,10 @@ flowchart TB
 *Description du schéma* : les développeurs proposent leurs changements
 sur GitHub. Les runners de GitHub testent, analysent et construisent les
 images, publiées sur GHCR. Dans le cluster Minikube du poste Ops, un
-runner local reçoit les jobs d'analyse (SonarQube) et de déploiement : il
-installe les images dans `dev`, `staging` et `prod` avec Helm. La
+runner local reçoit les jobs d'analyse (SonarQube) et de déploiement :
+chaque job présente à OpenBao le badge OIDC que GitHub a signé pour lui
+et reçoit un jeton de 15 min (aucun secret n'est rangé dans GitHub) ;
+il installe les images dans `dev`, `staging` et `prod` avec Helm. La
 supervision lit métriques et journaux et envoie les alertes par e-mail ;
 la base de prod est sauvegardée sur le poste, avec une copie hors site
 chiffrée.
@@ -425,7 +430,7 @@ Secrets Manager.
 | Accès par `kubectl port-forward` | ALB + WAF + certificat ACM | accès HTTPS public, filtré |
 | Secrets Kubernetes créés par script | Secrets Manager + External Secrets Operator, rotation | rotation, audit des accès |
 | Sauvegardes sur le poste + copie hors site | S3 chiffré, versionné, copie dans une autre région | durabilité, rétention par règles |
-| Jeton de déploiement de longue durée dans GitHub | fédération OIDC GitHub → AWS (jetons de quelques minutes) | aucun secret de longue durée dans la CI |
+| Accès de la CI par OpenBao (badge OIDC de GitHub → jeton Kubernetes de 15 min) ; OpenBao déverrouillé à la main | même badge OIDC, accepté par AWS (rôle IAM) et par EKS ; OpenBao en 3 serveurs, déverrouillé par AWS KMS (ou Secrets Manager seul) | aucun geste manuel ; même principe, aucun secret dans la CI |
 | État OpenTofu local | S3 chiffré par KMS, verrouillage natif | travail en équipe sans conflit |
 
 **Plan de passage** (aucune modification de l'application ni du
@@ -491,7 +496,8 @@ infra/
     main.tf           namespaces dev, staging, prod (« restricted »)
     rbac.tf           un compte deployer par namespace, droits limités
     monitoring.tf     supervision : chart Helm, tableaux de bord
-    openbao.tf        coffre-fort OpenBao : certificat TLS, chart Helm
+    openbao.tf        coffre-fort OpenBao : certificat TLS, chart Helm,
+                      droit de créer des jetons courts des deployer
     variables.tf, outputs.tf, providers.tf, versions.tf (versions figées)
     tests/            7 tests (tofu test, faux fournisseurs)
   helm/microcrm/    chart de l'application
@@ -504,6 +510,9 @@ infra/
                     sauvegardes, node_exporter, durcissement)
   monitoring/       réglages, alertes et tableaux de bord de la supervision
   openbao/          réglages et exploitation du coffre-fort OpenBao
+    config/           identité de la CI (OpenTofu, état à part) : badges
+                      OIDC de GitHub, jetons courts, jeton SonarQube ;
+                      5 tests
   postgres/, zap/, arc/   images durcies (base, test d'intrusion, runner)
   sonarqube/, k6/, systemd/   SonarQube, scénarios de charge, démarrage
 ```
@@ -513,7 +522,7 @@ en-tête de rôle dans chaque fichier ; aucun secret (valeurs sensibles
 passées hors du dépôt, sorties OpenTofu marquées sensibles) ; tout
 changement passe par une PR et les contrôles `opentofu` et `ansible`.
 OpenTofu n'est **pas appliqué par la CI** : l'Ops lance `tofu plan`,
-le relit, puis `tofu apply` (limite et recommandation, section 5.8).
+le relit, puis `tofu apply` (raisons et évolution GitOps : section 5.8).
 
 ### 5.5 Plan de conteneurs
 
@@ -611,12 +620,25 @@ validé par la direction.
   PR (namespace `pr-<n>` créé par la CI, supprimé à la fermeture).
 - **Configurations** : tout est dans Git et passe par une PR : réglages
   communs du chart (`values.yaml`) et différences par environnement
-  (`values-<env>.yaml`, quelques lignes) ; socle par Terraform ; poste par
+  (`values-<env>.yaml`, quelques lignes) ; socle par OpenTofu ; poste par
   Ansible. Un écart fait à la main dans le cluster n'est pas détecté
-  aujourd'hui : **GitOps** (Argo CD) en évolution.
-- **Gestion de l'infrastructure** : `tofu plan` relu avant chaque
-  `tofu apply` ; recommandation : plan affiché sur chaque PR et
-  application par la CI après approbation.
+  aujourd'hui (constaté le 09/11 : 2 règles réseau de SonarQube
+  modifiées hors du dépôt).
+- **Gestion de l'infrastructure** : la CI **vérifie et teste** chaque
+  modification (`tofu fmt`, `validate`, `test` sur 2 dossiers ; Ansible :
+  syntaxe et ansible-lint) ; l'Ops relit le `tofu plan`, puis lance
+  `tofu apply`. Choix du 10/11 : la CI **n'applique pas** l'infrastructure.
+  L'appliquer demanderait à la CI des droits presque administrateur sur
+  le cluster ; et OpenBao, qui délivre les accès de la CI, est lui-même
+  installé par OpenTofu : une erreur couperait la CI de son propre accès.
+- **Évolution : GitOps** (Flux ou Argo CD, Apache 2.0, projets CNCF ;
+  OpenTofu par un contrôleur dans le cluster) : le cluster lit lui-même
+  Git, applique l'application et l'infrastructure (hors socle : OpenBao
+  et namespaces, installés par l'Ops) et corrige tout écart. La CI n'a
+  alors **plus aucun accès** au cluster : elle teste, construit et
+  publie ; la fusion d'une PR suffit à déployer. Étape intermédiaire
+  écartée (CI qui applique OpenTofu) : plus de droits pour la CI, pour un
+  résultat moins sûr que GitOps.
 - **Surveillance et performance de l'infrastructure** : section 7.7 ; les
   tests de charge k6 (6 profils) et leurs résultats avant et après
   correction sont dans le rapport de performance (section 6).
@@ -653,7 +675,7 @@ GitHub) ; chaque secret est rangé au plus près de son seul utilisateur.
 | Secret | Où il est rangé | Qui y accède |
 | --- | --- | --- |
 | Accès au cluster de la CI | **aucun secret rangé** (depuis le 10/11) : jeton du compte `deployer` délivré par OpenBao contre le badge OIDC du job, 15 min (45 min pour les tests de staging) | le seul job de cet environnement, depuis `main`, dans un workflow autorisé ; la prod après approbation |
-| Clés de déverrouillage et jeton racine d'OpenBao | Bitwarden de l'Ops, jamais sur le poste ni dans le dépôt | Ops (déverrouillage du matin, configuration d'OpenBao) |
+| Clés de déverrouillage et jeton racine d'OpenBao | Bitwarden de l'Ops, jamais sur le poste ni dans le dépôt | Ops (déverrouillage du matin, configuration d'OpenBao) ; évolution : déverrouillage automatique ([comparatif](../infra/openbao/README.md#déverrouillage-automatique--comparatif) : AWS KMS, OVHcloud KMS, HSM, Transit) |
 | Jeton d'analyse SonarQube | OpenBao (`kv/ci/sonarqube`, depuis le 10/11 ; avant : environnement GitHub `sonarqube`) | le seul job `sonarqube` (main ou PR du dépôt), au vu de son badge OIDC ; jeton limité au projet ; chaque lecture tracée |
 | `GITHUB_TOKEN` | créé par GitHub pour chaque exécution | droits minimaux par job ; expire à la fin du job |
 | Mot de passe du superutilisateur de la base (`microcrm`) | Secret Kubernetes `microcrm-db`, valeur aléatoire créée par `deploy.sh`, jamais affichée | pod de la base ; pod de l'API, seulement pour Flyway et pour le conteneur d'initialisation (limite : section 6.5) |

@@ -89,6 +89,7 @@ externe : KMS d'un cloud, boîtier matériel (HSM, protocole PKCS#11 ou
 KMIP) ou un second OpenBao (*Transit*) ; les parts de Shamir deviennent
 des clés de récupération réparties entre plusieurs personnes. Écarté
 ici : la clé « statique » sur le disque du poste, posée à côté du coffre.
+Comparatif : [Déverrouillage automatique](#déverrouillage-automatique--comparatif).
 
 ### Journal d'audit
 
@@ -205,6 +206,28 @@ kubectl -n openbao exec -it openbao-0 -- sh -c \
 Rotation : nouveau jeton dans SonarQube (My Account → Security), même
 commande (nouvelle version), puis révocation de l'ancien dans SonarQube.
 
+## Déverrouillage automatique : comparatif
+
+Évolution étudiée le 10/11/2026 (documentation d'OpenBao 2.7,
+« Seals ») : remplacer le geste du matin par un service de clés
+externe. Coût en **niveaux** (pas de montant : il dépend du contrat et
+du volume) ; « testé » = cité par OpenBao dans ses modèles testés.
+
+| Solution | Principe | Avantages | Inconvénients | Coût | Origine, licence |
+| --- | --- | --- | --- | --- | --- |
+| **Manuel, Shamir** (aujourd'hui) | 2 parts de clé sur 3, saisies par l'Ops | aucune dépendance ; la clé n'est jamais à côté du coffre | geste à chaque redémarrage ; service coupé jusque-là (alerte `OpenBaoSealed`) | nul | intégré à OpenBao (MPL-2.0) |
+| **AWS KMS** | la clé du coffre est chiffrée par une clé KMS ; OpenBao s'ouvre seul, avec son rôle IAM | géré, haute disponibilité ; chaque ouverture tracée (CloudTrail) | dépend d'AWS et du réseau ; à réserver à la cible cloud | faible, à l'usage | Amazon (États-Unis), service propriétaire |
+| **OVHcloud KMS** (protocole KMIP, intégré à OpenBao, **testé**) | même principe, chez un hébergeur européen | souveraineté (hébergeur français) ; pas de matériel à gérer | dépend d'OVHcloud et du réseau | faible, à l'usage | OVHcloud (France), service propriétaire |
+| **HSM** (PKCS#11, module à installer depuis la 2.7) | boîtier matériel : la clé ne sort jamais du boîtier | le plus sûr ; souvent déjà présent (certificats, signatures) ; certifications de sécurité | achat, maintenance, au moins 2 boîtiers pour la disponibilité ; clé à créer avant l'initialisation | élevé (achat) ; partagé s'il existe déjà | **testés** : Utimaco (Allemagne), Securosys (Suisse), Nitrokey NetHSM (Allemagne, code ouvert), DuoKey ; Thales Luna (groupe français) : PKCS#11 standard, **absent de la liste testée**, à valider avant de le choisir |
+| **Transit** (second OpenBao) | un petit OpenBao, très protégé, garde la clé du premier | 100 % open source, aucun achat, tout reste sur site | un second coffre à exploiter, lui-même déverrouillé à la main (rarement : il ne redémarre presque jamais) | moyen (exploitation) | OpenBao (MPL-2.0) |
+| Clé statique (fichier ou variable) | la clé est lue sur le disque du serveur | automatique, gratuit | la clé est **à côté du coffre** : voler le disque, c'est ouvrir le coffre ; la documentation met en garde | nul | intégré à OpenBao |
+
+**Recommandation** : cible AWS → **AWS KMS** (rien à exploiter) ; sur
+site avec exigence de souveraineté → **OVHcloud KMS** (KMIP, testé) ou
+un **HSM** testé, Thales seulement après validation ; petite équipe sur
+site sans budget → **Transit**. Ici, poste unique : le manuel reste le
+bon choix, avec l'alerte.
+
 ## Sauvegarde
 
 ```shell
@@ -250,7 +273,7 @@ Certificat public de l'autorité (à donner aux clients) :
 | Limite | Évolution |
 | --- | --- |
 | Un seul serveur : s'il tombe, la CI ne peut plus se connecter (l'application, elle, continue) | 3 serveurs Raft (le chart le permet : `server.ha`) sur plusieurs nœuds |
-| Déverrouillage manuel après chaque redémarrage (rappel : alerte `OpenBaoSealed`) | déverrouillage automatique : AWS KMS dans la cible cloud ; sur site, HSM (PKCS#11, ex. Nitrokey NetHSM, testé par OpenBao) ou KMIP, ou second OpenBao (*Transit*) |
+| Déverrouillage manuel après chaque redémarrage (rappel : alerte `OpenBaoSealed`) | déverrouillage automatique ([comparatif](#déverrouillage-automatique--comparatif)) : AWS KMS dans la cible cloud ; sur site, OVHcloud KMS, HSM ou second OpenBao (*Transit*) |
 | Sortie réseau ouverte (API de Kubernetes, clés publiques de GitHub) | la limiter à ces deux adresses |
 | Les 3 parts de clé sont chez une seule personne | en équipe : une part par personne |
 | La configuration d'OpenBao est appliquée avec le jeton racine | méthode d'authentification propre à l'Ops (OIDC de l'entreprise), jeton racine révoqué |
