@@ -5,8 +5,8 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataires : Maria, CTO, et les équipes Dev et Ops) |
 | Auteur  | Yohan Bouchet |
-| Version | 1.1 (la version 1.0 datait du 07/11) |
-| Date    | 09/11/2026 : état de la production au 08/11 au soir (v1.8.1) ; mesures du 06/11 au 08/11 |
+| Version | 1.2 (1.1 du 09/11, 1.0 du 07/11) |
+| Date    | 10/11/2026 : état de la production au 10/11 (v1.9.0, en production depuis le 09/11) ; mesures du 06/11 au 10/11 |
 
 ## 1. Synthèse
 
@@ -16,18 +16,19 @@ chaîne qui contrôle chaque modification, livre en production en
 quelques minutes après une approbation humaine, et se surveille
 elle-même.
 
-| Ce qui compte pour Orion | Avant (27-28/10) | Après (06-08/11) |
+| Ce qui compte pour Orion | Avant (27-28/10) | Après (06-10/11) |
 | --- | --- | --- |
-| Failles connues dans les images livrées | 95 dans l'image back, dont 8 critiques | **0**, toutes gravités confondues (v1.8.0) |
+| Failles connues dans les images livrées | 95 dans l'image back, dont 8 critiques | **0**, toutes gravités confondues (v1.9.0) |
 | Contrôles automatiques sur chaque modification | 4 tâches (tests et construction), rien de bloquant sur la qualité ou la sécurité | **12** (tests, qualité, failles, secrets, infrastructure) |
 | Couverture du code par les tests | non mesurée | **82,9 %**, mesurée à chaque modification |
 | Compte utilisé par l'API dans la base | superutilisateur | **compte limité** à la lecture et à l'écriture des lignes |
 | Déploiement en production | manuel | **automatique après approbation**, retour arrière automatique |
-| Fréquence de livraison en production | non mesurable | **4,4 par semaine**, 0 % d'échec (19 mises en prod, dont 7 changements de l'application : voir 3.1) |
-| Délai entre un commit et la production | non mesurable | **2,5 h** (médiane ; explication en 3.1) |
+| Secrets confiés à la plateforme de CI | sans objet (aucun déploiement automatisé) | **aucun** : chaque job reçoit un accès de 15 min, délivré par un coffre-fort (OpenBao) après vérification de son identité |
+| Fréquence de livraison en production | non mesurable | **5,1 par semaine**, 0 % d'échec (22 mises en prod, dont 10 changements de l'application : voir 3.1) |
+| Délai entre un commit et la production | non mesurable | **2,9 h** (médiane ; explication en 3.1) |
 | Temps de réponse au test de rupture (p95) | 1,07 s (mesuré avant correction) | **6,5 ms**, 0 erreur |
 | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (mesurés le 08/11, avant correction) | **0** en 8 redémarrages |
-| Supervision | aucune | **3 tableaux de bord, 8 alertes** (dont 2 de sécurité) envoyées par e-mail |
+| Supervision | aucune | **3 tableaux de bord, 9 alertes** (dont 3 de sécurité) envoyées par e-mail ; journaux au format JSON, recherchés par champ |
 | Perte d'un serveur d'API en production (exercice du 07/11) | non testée | **0 erreur** pour l'utilisateur, remplacement prêt en 11 s |
 
 **Trois recommandations prioritaires** (détail en section 8.3) :
@@ -36,7 +37,8 @@ elle-même.
    des conditions du code ne sont pas testées (recommandation 2).
 2. Garder une copie des outils et des bibliothèques téléchargés par la
    chaîne : une panne extérieure a retardé une livraison de plus de 6 h
-   le 08/11 (recommandation 16, section 7.6).
+   le 08/11 (recommandation 16, en partie appliquée le 09/11,
+   section 7.6).
 3. En production cloud, séparer les machines de la CI de celles de
    l'application et ajouter la mise à l'échelle des machines : c'est la
    leçon de l'incident du 05/11 (recommandation 3, section 7.1).
@@ -44,6 +46,20 @@ elle-même.
 La première recommandation prioritaire du 07/11, la mise à jour du front
 vers Angular 22, a été appliquée le 08/11 (v1.7.1) : elle a supprimé
 les dernières failles connues du code livré au navigateur.
+
+**Depuis la version 1.1 du rapport (09-10/11)** :
+
+- la CI ne détient **plus aucun secret** : elle prouve son identité à
+  un coffre-fort, OpenBao, qui lui délivre des accès de 15 min
+  (section 5.3) ;
+- les journaux de l'application sont écrits en **JSON** et recherchés
+  par champ (section 5.2) ; une 9e alerte prévient si le coffre-fort
+  reste fermé (section 5.3) ;
+- une version n'est plus créée que pour un changement livré
+  (recommandation 21, appliquée) ;
+- les 5 rôles Ansible qui configurent le poste sont testés à chaque
+  modification sur une machine jetable (Molecule, section 4.1) ;
+- la recommandation 7 devient le passage au **GitOps** (section 8.3).
 
 ## 2. Contexte et objectifs
 
@@ -60,7 +76,7 @@ la sécurité. Le plan de mise en œuvre
 | Qualité contrôlée à chaque modification | Quality Gate sans condition | Quality Gate bloquant sur chaque PR | **oui** : 3 conditions (section 4.2) |
 | Tests mesurés | couverture non mesurée | mesurée et publiée à chaque PR | **oui** : 82,9 % (section 4.2) |
 | Pipeline plus rapide malgré plus de contrôles | 4,67 min, 4 tâches | durée suivie, gain mesuré | **oui** : 1,9 min, 12 contrôles (section 3.2) |
-| Livraison traçable | aucune image, version `0.0.1-SNAPSHOT` | chaque image liée à une version et à un commit | **oui** : 22 versions, v1.0.0 à v1.8.1 |
+| Livraison traçable | aucune image, version `0.0.1-SNAPSHOT` | chaque image liée à une version et à un commit | **oui** : 25 versions, v1.0.0 à v1.9.0 |
 | Déploiement sans action manuelle | déploiement manuel | déploiement et retour arrière automatisés | **oui**, avec approbation humaine avant la prod |
 
 ## 3. Livraison : indicateurs DORA et pipeline
@@ -75,25 +91,28 @@ production (workflow *DORA metrics*).
 
 | Indicateur | Ce qu'il mesure | Valeur (30 derniers jours) |
 | --- | --- | --- |
-| Fréquence de déploiement | combien de fois la production reçoit une nouvelle version | **4,4 par semaine** (19 déploiements du 03/11 au 08/11) |
-| Délai de mise en production (médiane) | temps entre un commit et sa mise en production | **2,5 h** (0,3 h le 06/11) |
+| Fréquence de déploiement | combien de fois la production reçoit une nouvelle version | **5,1 par semaine** (22 déploiements du 03/11 au 09/11) |
+| Délai de mise en production (médiane) | temps entre un commit et sa mise en production | **2,9 h** (0,3 h le 06/11, 2,5 h le 08/11) |
 | Taux d'échec des changements | part des déploiements qui provoquent un incident | **0 %** |
 | Temps de rétablissement (médiane) | temps pour revenir à la normale après un incident | **non mesurable** : aucun incident de production |
-| Taux de reprise | part des déploiements qui ne livrent que des correctifs | **37 %** (42 % le 06/11) |
+| Taux de reprise | part des déploiements qui ne livrent que des correctifs | **32 %** (42 % le 06/11, 37 % le 08/11) |
 
 **Lecture** :
 
 - Avant le projet, ces indicateurs n'étaient **pas mesurables** :
   aucune trace des déploiements, faits à la main.
 - Orion livre désormais plusieurs fois par semaine.
-- **Seules 7 des 19 mises en prod ont changé l'application** : le code
-  (v1.1.1, v1.2.0, v1.7.1) ou son chart Helm (v1.4.3, v1.7.0, v1.8.0,
-  v1.8.1). Les 12 autres ont redéployé à l'identique : leur version
-  avait été créée par un changement d'outillage, qui n'est pas livré
-  avec l'application (supervision : 6 ; tests de charge : 2 ; Ansible,
-  script DORA, script de déploiement, réglage du staging : 1 chacun).
-  La fréquence et le taux de reprise en sont gonflés (recommandation 21).
-- **Le délai est passé de 0,3 h à 2,5 h**, sans que la chaîne soit
+- **10 des 22 mises en prod ont changé l'application** : le code
+  (v1.1.1, v1.2.0, v1.7.1, v1.8.2, v1.8.3, v1.9.0) ou son chart Helm
+  (v1.4.3, v1.7.0, v1.8.0, v1.8.1). Les 12 autres ont redéployé à
+  l'identique : leur version avait été créée par un changement
+  d'outillage, qui n'est pas livré avec l'application (supervision : 6 ;
+  tests de charge : 2 ; Ansible, script DORA, script de déploiement,
+  réglage du staging : 1 chacun). La fréquence et le taux de reprise en
+  sont gonflés. **Corrigé le 09/11** (recommandation 21) : depuis, une
+  version n'est créée que pour un changement du back, du front ou du
+  chart ; les 3 mises en prod suivantes ont toutes changé l'application.
+- **Le délai est passé de 0,3 h à 2,5 h, puis 2,9 h**, sans que la chaîne soit
   devenue plus lente. Il est mesuré pour chaque commit, de son écriture
   à sa mise en production : un commit écrit le matin dans une PR
   fusionnée le soir compte toute sa journée d'attente. Jusqu'au 07/11
@@ -102,26 +121,41 @@ production (workflow *DORA metrics*).
   4,6 h pour v1.6.0 (6 commits), 5,5 h pour v1.7.0 (6 commits), 7,4 h
   pour v1.7.1 (13 commits, dont plus de 6 h perdues à cause d'une panne
   extérieure, section 7.6). Les deux versions suivantes, petites, ont mis
-  0,2 h. D'où la recommandation 18 : des PR petites, fusionnées dès
-  qu'elles sont prêtes.
-- Le taux de reprise baisse (42 % le 06/11, 37 % le 08/11) : les
-  corrections de la chaîne elle-même (tests de charge, supervision),
-  nombreuses au début, se font plus rares quand l'outillage se
-  stabilise.
-- **Limites** : la période est courte (19 déploiements en 6 jours,
+  0,2 h. Depuis le 09/11, un commit qui ne change pas l'application
+  (documentation, CI) ne crée plus de version : il part en prod avec
+  la version suivante, et le script compte son attente. Les 3 versions
+  du 09/11 ont ainsi livré 9 commits (v1.8.2, médiane 2,5 h), 7 (v1.8.3,
+  1,9 h) et 4 (v1.9.0, 1,5 h) ; ces 20 commits font monter la médiane
+  de l'ensemble à 2,9 h. Pour le délai d'un **changement de
+  l'application**, il faudrait ne compter que les commits livrés
+  (amélioration du script). D'où aussi la recommandation 18 : des PR
+  petites, fusionnées dès qu'elles sont prêtes.
+- Le taux de reprise baisse (42 % le 06/11, 37 % le 08/11, 32 % le
+  10/11) : les corrections de la chaîne elle-même (tests de charge,
+  supervision), nombreuses au début, se font plus rares quand
+  l'outillage se stabilise, et elles ne créent plus de version depuis
+  le 09/11.
+- **Défaut de mesure trouvé le 10/11 et corrigé** : après la
+  suppression puis la recréation des environnements GitHub (section
+  7.7), GitHub a marqué les 22 déploiements de prod « inactifs ». Le
+  script ne lisait que le dernier état de chaque déploiement : il
+  comptait **0 déploiement**. Il garde désormais le dernier état final
+  (succès ou échec) ; ce cas est ajouté à ses tests. Les valeurs
+  ci-dessus viennent du script corrigé.
+- **Limites** : la période est courte (22 déploiements en 7 jours,
   depuis la première mise en production du 03/11). La fréquence est
   calculée sur une fenêtre fixe de 30 jours (réglage `DORA_DAYS`) : tant
   que la production a moins de 30 jours, elle sous-estime le rythme
   réel. Les valeurs deviendront fiables après quelques semaines.
 
-![Résumé du workflow DORA metrics sur GitHub : tableau des 5 indicateurs de la production](rapport-performance/dora.png)
+![Résumé du workflow DORA metrics sur GitHub le 08/11 (avant les versions du 09/11) : tableau des 5 indicateurs de la production](rapport-performance/dora.png)
 
 ### 3.2 Pipeline d'intégration continue
 
 | | Avant (27/10) | Après (06/11) |
 | --- | --- | --- |
-| Contrôles sur chaque PR | 4 tâches : tests et construction | **12 tâches en parallèle** : tests back et front, SonarQube, Trivy, hadolint, ShellCheck, gitleaks, tests des scripts, Terraform, Ansible, construction des 2 images |
-| Durée | 4,67 min | **1,9 min** (médiane de 52 PR réussies) |
+| Contrôles sur chaque PR | 4 tâches : tests et construction | **12 tâches en parallèle** : tests back et front, SonarQube, Trivy, hadolint, ShellCheck, gitleaks, tests des scripts, OpenTofu (2 dossiers), Ansible (dont Molecule depuis le 10/11), construction des 2 images |
+| Durée | 4,67 min | **1,9 min** (médiane de 52 PR réussies, 06/11) ; à remesurer : depuis le 10/11, le job Ansible applique aussi Molecule |
 | Ce qui se passe après la fusion | rien | version, publication des images, déploiement dev puis staging, test d'intrusion ZAP, test de fumée k6, notification : **6,6 min** (exécution du 06/11, 17:01), puis production en 0,6 min après approbation |
 
 La durée totale affichée par GitHub sur la capture ci-dessous
@@ -137,9 +171,13 @@ chaîne contrôle **3 fois plus de choses en 2,5 fois moins de temps**.
 
 ### 3.3 Releases
 
-- **22 versions** publiées du 31/10 au 08/11 (v1.0.0 à v1.8.1). Le
+- **25 versions** publiées du 31/10 au 09/11 (v1.0.0 à v1.9.0). Le
   numéro est calculé automatiquement à partir des messages de commit
   (*Semantic Versioning*) ; chaque image porte sa version et son commit.
+  Depuis le 09/11, seul un changement du back, du front ou du chart crée
+  une version, et `helm history` affiche la version déployée (colonne
+  *APP VERSION* : `1.8.2`, `1.8.3`, `1.9.0`, au lieu de `1.1.0` pour
+  toutes).
 - **Retour arrière automatique** testé : un déploiement dont le test de
   fumée échoue revient seul à la version précédente, sans coupure (les
   anciens pods ne sont arrêtés qu'une fois les nouveaux prêts).
@@ -160,8 +198,9 @@ chaîne contrôle **3 fois plus de choses en 2,5 fois moins de temps**.
 | --- | --- | --- | --- |
 | Tests du back (JUnit) | 2 | 6 (dont l'intégration avec la base) | chaque PR |
 | Tests du front | 8 (Karma) | 16 (Vitest, depuis le 08/11) | chaque PR |
-| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 71 + 28 | chaque PR |
-| Tests de l'infrastructure (Terraform) | 0 | 6 | chaque PR |
+| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 74 + 28 | chaque PR |
+| Tests de l'infrastructure (OpenTofu) | 0 | 12 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
+| Test du poste Ops (Ansible, Molecule) | 0 | 5 rôles appliqués sur une machine jetable, rejoués sans aucun changement (idempotence), puis 6 contrôles (outils, sauvegardes planifiées, services, métriques, pare-feu, journaux Docker) | chaque PR (depuis le 10/11) |
 | Test d'intrusion (OWASP ZAP) | 0 | 0 échec ; 19 règles bloquantes | chaque déploiement de staging |
 | Test de fumée de charge (k6) | 0 | seuils respectés | chaque déploiement de staging, bloque la prod |
 | Tests de charge complets (k6) | 0 | 3 profils mesurés (section 6) | à la demande |
@@ -211,15 +250,17 @@ SonarQube, analyse du Java moins précise) est levée depuis le 08/11
 
 ### 5.1 Gains
 
-| Source | Avant (27-28/10) | Après (08/11) |
+| Source | Avant (27-28/10) | Après (08-10/11) |
 | --- | --- | --- |
-| Trivy, image back | 95 failles : 8 critiques, 33 hautes | **0**, toutes gravités confondues (v1.8.0) |
-| Trivy, image front | 10 failles : 2 hautes | **0**, toutes gravités confondues (v1.8.0) |
+| Trivy, image back | 95 failles : 8 critiques, 33 hautes | **0**, toutes gravités confondues (v1.9.0, analysée le 10/11) |
+| Trivy, image front | 10 failles : 2 hautes | **0**, toutes gravités confondues (v1.9.0, analysée le 10/11) |
 | npm audit, toutes les dépendances du front | 91 : 5 critiques, 52 hautes | **0** (56 le 07/11) |
 | npm audit, dépendances livrées au navigateur | non distingué | **0** (8 le 07/11, dont 4 hautes) |
 | Failles acceptées par exception (`.trivyignore`) | aucun contrôle | **0** (42 le 07/11 : Angular 17 et l'outil de publication des versions) |
 | Test d'intrusion ZAP | 3 règles en échec | **0 échec** ; 19 règles bloquantes, dont la bibliothèque JavaScript vulnérable (10003) et le contrôle d'intégrité (90003), bloquantes depuis le 08/11 |
 | Secrets dans le dépôt (gitleaks) | non contrôlé | contrôlé à chaque PR, aucun trouvé |
+| Secrets rangés dans GitHub | sans objet (aucun déploiement automatisé) | **0** depuis le 10/11 (3 jetons du cluster sans expiration et le jeton SonarQube jusque-là) : section 5.3 |
+| Sécurité des workflows (zizmor) | non contrôlée | **0 trouvaille** (10/11) : délai de 7 jours ajouté à Dependabot, 2 exceptions justifiées ; contrôle lancé sur le poste Ops, pas encore dans la CI (recommandation 25) |
 | Compte de l'application dans la base | superutilisateur (réglage par défaut de l'image) | **compte limité** : lire et écrire des lignes, rien d'autre (v1.8.0) |
 
 **Plus aucune faille connue ni acceptée** : la mise à jour vers
@@ -239,8 +280,9 @@ dans le pod de l'API, pour les migrations de schéma (recommandation 19).
 **Comment une faille est traitée** : Trivy bloque toute image qui
 contient une faille critique ou haute corrigeable ; une exception doit
 être écrite, justifiée et datée (expiration) ; Dependabot propose les
-mises à jour, appliquées après un délai de 7 jours (3 jusqu'au 10/11 ; protection contre
-une version piégée), selon la règle du document 2 (section 2.7).
+mises à jour après un délai de 7 jours (14 pour une version majeure ;
+protection contre une version piégée), selon la règle du document 2
+(section 2.7).
 
 ### 5.2 Supervision de la sécurité
 
@@ -250,7 +292,8 @@ alertes sont décrites en section 6.1.
 
 **Deux alertes de sécurité** (07/11, ticket #106), au titre de la
 catégorie A09 de l'OWASP Top 10 2025, « Security Logging and Alerting
-Failures » :
+Failures » (une troisième, `OpenBaoSealed`, surveille le coffre-fort
+depuis le 10/11 : section 5.3) :
 
 - `MicrocrmClientErrorSpike` : plus de 50 réponses refusées (4xx) par
   l'API de la prod en 5 min, signe d'un balayage ou d'une tentative
@@ -289,6 +332,24 @@ Disclosure », journaux de k6) ; les exclure est une amélioration simple.
 
 ![Tableau de bord Grafana Orion - Security sur le staging, 7 derniers jours, après correction : les journaux d'erreurs du test de rupture du 06/11 (délais dépassés) apparaissent, ainsi que des lignes inoffensives de ZAP](rapport-performance/grafana-security.png)
 
+**Journaux structurés (09/11, v1.9.0)** : le back (format ECS de
+Spring Boot) et le serveur web du front écrivent chaque ligne en JSON ;
+la collecte la découpe en champs. Le tableau de bord cherche désormais
+par champ (`log.level` ERROR ou WARN pour le back, `status` 4xx pour le
+front), et non plus seulement par mots dans le texte. Choix de
+sécurité, tirés de l'OWASP Logging Cheat Sheet :
+
+- le chemin demandé est écrit **sans ses paramètres** (ce qui suit
+  `?`) : une donnée passée dans l'adresse n'arrive pas dans les
+  journaux (vérifié le 09/11 par une requête de test en dev) ;
+- un client qui glisse des guillemets dans un en-tête ne peut pas
+  fabriquer un faux champ (échappement JSON, testé) ;
+- les sondes de Kubernetes ne sont plus écrites (bruit sans intérêt).
+
+**Limite** : le motif sur le texte est gardé pour les lignes d'avant le
+09/11 (7 jours de conservation) ; il remonte toujours les lignes
+inoffensives de ZAP et de k6 (recommandation 14).
+
 **Chaîne d'alerte vérifiée de bout en bout** le 07/11 par une alerte de
 test (et non un incident) : e-mail « FIRING » à 08:02, puis
 « RESOLVED » à 08:08, quand l'alerte a pris fin.
@@ -296,6 +357,54 @@ test (et non un incident) : e-mail « FIRING » à 08:02, puis
 ![E-mail d'alerte de test « FIRING », adresse du destinataire masquée](rapport-performance/alerte-email.png)
 
 ![E-mail « RESOLVED » de la même alerte de test, 6 minutes plus tard](rapport-performance/alerte-email-resolue.png)
+
+### 5.3 Secrets et identité de la CI (09-10/11)
+
+**Constat** : pour déployer, la CI utilisait jusqu'au 10/11 des jetons
+du cluster **sans date d'expiration**, un par environnement, rangés dans
+les secrets de GitHub, ainsi que le jeton d'analyse de SonarQube. Un
+jeton volé (journal mal masqué, workflow piégé, compte GitHub
+compromis) donnait un accès durable au cluster. C'est le risque
+CICD-SEC-6, « Insufficient Credential Hygiene », du Top 10 des risques
+CI/CD de l'OWASP.
+
+**Ce qui a été mis en place** (PR #130 à #138) :
+
+- **OpenBao** (licence MPL-2.0, fondation Linux, successeur open source
+  de HashiCorp Vault), installé dans le cluster par OpenTofu : un
+  serveur, données chiffrées, échanges en TLS 1.3, conteneur verrouillé,
+  pare-feu (seuls les runners de la CI l'atteignent), **journal d'audit**
+  de chaque demande envoyé dans VictoriaLogs (secrets et valeurs des
+  demandes remplacés par une empreinte) ;
+- chaque job qui touche au cluster présente son **badge OIDC**, signé par
+  GitHub (dépôt, branche, environnement, workflow), valable quelques
+  minutes ; OpenBao vérifie chaque élément, puis demande à Kubernetes un
+  jeton du compte de déploiement de **ce seul environnement**, valable
+  **15 min** (45 min pour les tests de staging) ;
+- le jeton SonarQube, qui ne peut pas être de courte durée, est rangé
+  dans OpenBao et lu par le seul job d'analyse ;
+- résultat : **plus aucun secret dans GitHub**, seulement le certificat
+  public d'OpenBao. Pour l'accès au cluster, une branche, une PR, un
+  autre workflow ou un autre dépôt sont refusés ; un job sans l'environnement `production` (donc
+  sans l'approbation) ne peut pas obtenir d'accès à la prod.
+
+**Vérifié dans le journal d'audit** (10/11, de 10:33 à 17:19) : 45
+connexions de la CI, chacune suivie d'un seul accès (8 en dev, 24 en
+staging, 13 lectures du jeton SonarQube) ; aucune en production, faute de
+nouvelle version depuis. **Limite** : le chemin de la production n'a donc
+pas encore servi ; il sera vérifié à la prochaine version.
+
+**Coût d'exploitation** : un OpenBao redémarré est **scellé** (il a ses
+données, pas la clé pour les lire) ; l'équipe Ops le déverrouille avec
+2 clés sur 3, chaque matin (le poste est éteint la nuit). Si elle
+oublie, la CI ne peut plus déployer, mais l'application continue de
+tourner. L'alerte `OpenBaoSealed` envoie un e-mail après 15 min : elle a
+été vérifiée **en réel** le 10/11 au matin, avant le déverrouillage.
+L'évolution est le déverrouillage automatique (recommandation 23).
+
+![E-mail « FIRING » de l'alerte OpenBaoSealed du 10/11 au matin (groupe orion.security) : coffre-fort scellé depuis 15 min, avec la commande de déverrouillage ; adresse du destinataire masquée](rapport-performance/alerte-openbao-email.png)
+
+![E-mail « RESOLVED » de la même alerte, après le déverrouillage](rapport-performance/alerte-openbao-email-resolue.png)
 
 ## 6. Supervision et performance
 
@@ -321,6 +430,7 @@ Choix justifié dans le document 1 (section 2.3.7).
 | BackupTooOld | dernière sauvegarde de la prod il y a plus de 26 h | données |
 | MicrocrmClientErrorSpike | plus de 50 réponses 4xx de l'API en prod en 5 min | sécurité |
 | LogIngestionStopped | aucune ligne de journal reçue depuis 15 min | sécurité |
+| OpenBaoSealed | coffre-fort scellé ou arrêté depuis 15 min : la CI ne peut plus déployer | sécurité (accès de la CI) |
 
 Chaque alerte renvoie vers une fiche de premiers gestes
 (`infra/monitoring/README.md`).
@@ -590,6 +700,47 @@ les indicateurs DORA. Heures de Paris.
   téléchargé, ou une construction qui réutilise le résultat des tests au
   lieu de tout retélécharger, rendrait la chaîne indépendante de ces
   pannes (recommandation 16).
+- **Suite (09/11, PR #123)** : l'image du back est désormais construite
+  à partir du programme déjà compilé et testé par la CI ; elle ne
+  télécharge plus Gradle. Les autres dépendances extérieures restent
+  (recommandation 16, en partie appliquée).
+
+### 7.7 09-10/11 : passage aux accès courts de la CI (incident de la CI)
+
+Incident de l'outillage, **pas de la production** : il n'entre pas dans
+les indicateurs DORA. Aucune version n'est partie en production pendant
+ces changements (la dernière, v1.9.0, date du 09/11 à 17:32).
+
+- **Symptôme** : après la fusion de la PR #133 (accès par OpenBao), le
+  déploiement de dev a échoué à chaque exécution (staging et prod ne
+  partent qu'après lui) : deux causes, dont une invisible au départ.
+- **Causes et corrections** :
+  1. la PR a été fusionnée **avant** que la variable `OPENBAO_CA`
+     (certificat public d'OpenBao) soit créée dans GitHub : la connexion
+     était refusée (erreur 77 de curl). Variable créée ; le job vérifie
+     maintenant sa présence et le dit clairement ;
+  2. OpenBao refusait le badge avec une simple « erreur 400 », sans
+     raison visible : le job affiche maintenant le message d'OpenBao
+     (jamais la réponse entière, qui contient le jeton) (PR #135) ;
+  3. ce message a montré la vraie cause : le dépôt utilise le format
+     « immuable » de GitHub pour l'identité du job (avec les numéros du
+     propriétaire et du dépôt), différent de celui de la documentation
+     générale. Règle corrigée (PR #136) : elle protège en plus contre un
+     dépôt recréé sous le même nom.
+- **Effet secondaire, le 10/11** : les environnements GitHub ont été
+  supprimés puis recréés à la main. Leurs réglages ont disparu avec
+  eux : approbation obligatoire avant la prod, branche autorisée,
+  adresse de SonarQube (l'analyse a échoué jusqu'à sa recréation). Ils
+  ont été refaits, puis **vérifiés par l'API de GitHub**. GitHub a aussi marqué tout
+  l'historique des déploiements « inactif », ce qui a mis le script
+  DORA à 0 (corrigé, section 3.1).
+- **Enseignements** :
+  - un changement d'accès se prépare **avant** la fusion (variables,
+    règles) et se vérifie sur un environnement (dev) avant les autres ;
+  - un refus doit toujours dire **pourquoi**, sans montrer de secret ;
+  - les réglages de GitHub (environnements, protections, variables) ne
+    sont pas décrits dans le code : une suppression les efface sans
+    trace. D'où la recommandation 24.
 
 ## 8. Gains obtenus et recommandations d'amélioration continue
 
@@ -597,55 +748,67 @@ les indicateurs DORA. Heures de Paris.
 
 | Domaine | Indicateur | Avant | Après | Détail |
 | --- | --- | --- | --- | --- |
-| Sécurité | Failles critiques et hautes dans les images livrées | 95 (back, dont 8 critiques) et 10 (front) | **0 et 0**, aucune faille d'aucune gravité (v1.8.0) | 5.1 |
+| Sécurité | Failles critiques et hautes dans les images livrées | 95 (back, dont 8 critiques) et 10 (front) | **0 et 0**, aucune faille d'aucune gravité (v1.9.0) | 5.1 |
 | Sécurité | En-têtes de sécurité vérifiés par le test d'intrusion | 3 règles en échec, aucun test | **0 échec** ; 19 règles bloquantes : un échec bloque la prod | 5.1 |
 | Sécurité | Secrets dans le dépôt | non contrôlés | contrôlés à chaque PR, aucun trouvé | 5.1 |
 | Sécurité | Compte utilisé par l'API dans la base | superutilisateur | **compte limité** à la lecture et à l'écriture des lignes ; refus testés | 5.1 |
+| Sécurité | Secrets confiés à GitHub ; durée de l'accès de la CI au cluster | sans objet (aucun déploiement automatisé) | **0 secret** ; accès de **15 min** par environnement, chaque demande tracée | 5.3 |
 | Qualité | Couverture des tests | non mesurée | **82,9 %** (branches : 57,9 %), mesurée à chaque PR | 4.2 |
 | Qualité | Quality Gate | sans condition | **3 conditions bloquantes** | 4.2 |
 | Qualité | Notes SonarQube (sécurité, fiabilité) | C et D | **A et A**, 0 problème ouvert | 4.2 |
 | Livraison | Contrôles automatiques sur chaque PR | 4 tâches, rien de bloquant | **12 tâches** | 3.2 |
 | Livraison | Durée de ces contrôles | 4,67 min | **1,9 min** (médiane) | 3.2 |
-| Livraison | Déploiement en production | manuel, non tracé | **automatique après approbation** : 4,4 par semaine, 0 % d'échec, 2,5 h entre un commit et la prod (médiane) | 3.1 |
-| Livraison | Versions | `0.0.1-SNAPSHOT`, aucune image | **22 versions** ; chaque image liée à sa version et à son commit | 3.3 |
+| Livraison | Déploiement en production | manuel, non tracé | **automatique après approbation** : 5,1 par semaine, 0 % d'échec, 2,9 h entre un commit et la prod (médiane) | 3.1 |
+| Livraison | Versions | `0.0.1-SNAPSHOT`, aucune image | **25 versions** ; chaque image liée à sa version et à son commit ; une version seulement pour un changement livré | 3.3 |
+| Qualité | Tests de l'infrastructure | aucun | **12 tests OpenTofu** ; poste Ops testé par Molecule (5 rôles, idempotence, 6 contrôles) | 4.1 |
 | Disponibilité | Perte d'un serveur d'API en prod | jamais testée | **0 erreur**, remplacement prêt en 11 s | 7.3 |
 | Disponibilité | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (08/11, avant correction) | **0** en 8 redémarrages | 7.5 |
 | Disponibilité | Sauvegarde de la base | aucune | quotidienne, restauration vérifiée chaque semaine | 3.3 |
 | Performance | p95 au point de rupture (1 réplique) | 1,07 s (06/11, avant correction) | **6,5 ms** | 6.3 |
-| Supervision | Tableaux de bord et alertes | aucun | **3 tableaux de bord, 8 alertes** (dont 2 de sécurité) par e-mail, chaîne vérifiée | 5.2, 6.1 |
+| Supervision | Tableaux de bord et alertes | aucun | **3 tableaux de bord, 9 alertes** (dont 3 de sécurité) par e-mail, chaîne vérifiée | 5.2, 5.3, 6.1 |
+| Supervision | Journaux | texte libre | **JSON**, recherche par champ, sans les paramètres des adresses | 5.2 |
 
 ### 8.2 Observations sur les déploiements et les releases
 
-- **13 des 22 versions sont des correctifs** (dernier chiffre du
+- **15 des 25 versions sont des correctifs** (dernier chiffre du
   numéro augmenté, comme v1.8.1) : la chaîne elle-même (tests de charge,
   supervision) a souvent été corrigée juste après sa première version.
   C'est attendu pendant la mise en place. Le taux de reprise DORA, plus
   strict, ne compte que les déploiements qui ne livrent **que** des
-  correctifs : 37 % le 08/11, contre 42 % le 06/11 (3.1).
+  correctifs : 42 % le 06/11, 37 % le 08/11, 32 % le 10/11 (3.1).
 - **Des versions ont été créées sans changer l'application** :
   semantic-release crée une version pour tout commit `feat` ou `fix`,
   quel que soit le dossier. 12 des 19 mises en prod ont ainsi reconstruit
   des images identiques et redémarré la prod, chacune avec une
-  approbation (3.1). Par ailleurs, le chart garde le même numéro
-  (`helm history` affiche `1.1.0` pour toutes les versions ; la version
-  déployée n'apparaît que dans la description). Les versions publiées ne
-  sont pas renumérotées (une version publiée ne se modifie plus) : la
-  règle est corrigée pour la suite (recommandation 21).
+  approbation (3.1). Par ailleurs, `helm history` affichait `1.1.0`
+  pour toutes les versions. Les versions publiées ne sont pas
+  renumérotées (une version publiée ne se modifie plus), mais la règle
+  est **corrigée depuis le 09/11** (recommandation 21) : depuis, 3
+  versions, toutes avec un changement livré, chacune affichée sous son
+  numéro dans `helm history`.
 - **Les PR qui regroupent plusieurs changements retardent tout le
   lot** : le délai médian entre un commit et la prod est passé de 0,3 h
-  à 2,5 h quand des PR ont réuni 6 à 13 commits (3.1).
+  à 2,5 h quand des PR ont réuni 6 à 13 commits, puis à 2,9 h (3.1).
 - **Une seule étape est manuelle : l'approbation de la prod.** Elle est
   voulue (contrôle humain avant les clients), mais elle allonge le délai
   réel : environ 5 min d'attente sur l'exécution de la section 3.2
   (12 min 33 s au total, dont 7,2 min d'étapes automatiques).
 - **Seules les versions numérotées vont en prod.** Une modification de
-  documentation ou de CI ne crée pas de version : elle s'arrête au
-  staging. La prod ne reçoit donc que des changements tracés et notés.
-- **La supervision est appliquée à la main.** Tableaux de bord et
-  alertes sont installés par Terraform, lancé par l'équipe Ops après la
-  fusion. Le 07/11, une correction de tableau de bord fusionnée (PR #101)
-  n'était toujours pas en service lors de la vérification : rien ne
-  signale cet écart.
+  documentation, de CI ou d'infrastructure ne crée pas de version : elle
+  s'arrête au staging. La prod ne reçoit donc que des changements tracés
+  et notés.
+- **L'infrastructure est appliquée à la main.** Supervision, coffre-fort
+  et réglages du cluster sont décrits en OpenTofu, vérifiés et testés
+  par la CI, puis appliqués par l'équipe Ops après la fusion (choix du
+  10/11 : documentation CI/CD, section 5.8). Le 07/11, une correction de
+  tableau de bord fusionnée (PR #101) n'était toujours pas en service
+  lors de la vérification ; le 09/11, 2 règles réseau de SonarQube
+  modifiées hors du dépôt ont été constatées : rien ne signale ces
+  écarts (recommandation 7).
+- **Les réglages de GitHub ne sont pas dans le code** : environnements,
+  approbation de la prod, variables. Leur suppression le 10/11 les a
+  effacés sans trace ; ils ont été refaits à la main (7.7,
+  recommandation 24).
 - **Les portes de qualité ont joué leur rôle** : le test d'intrusion a
   bloqué la prod tant que les en-têtes de sécurité manquaient (vérifié
   avant fusion), et un test de fumée raté remet la version précédente
@@ -659,21 +822,21 @@ les indicateurs DORA. Heures de Paris.
 
 Chaque recommandation répond à un constat de ce rapport. Les
 recommandations 1 à 15 sont classées par priorité (version du 07/11) ;
-les recommandations 16 à 21, ajoutées les 08 et 09/11, viennent
-ensuite, pour que les numéros cités dans les sections précédentes
-restent valables. Les trois priorités du moment sont rappelées dans la
-synthèse (section 1). La colonne « État » montre où en est chacune le
-08/11 : 2 sont appliquées, 3 le sont en partie.
+les recommandations 16 à 21, ajoutées les 08 et 09/11, puis 22 à 25,
+ajoutées le 10/11, viennent ensuite, pour que les numéros cités dans les
+sections précédentes restent valables. Les trois priorités du moment
+sont rappelées dans la synthèse (section 1). La colonne « État » montre
+où en est chacune le 10/11 : 3 sont appliquées, 4 le sont en partie.
 
-| # | Recommandation | Constat | Effort | Équipe | État au 08/11 |
+| # | Recommandation | Constat | Effort | Équipe | État au 10/11 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Mettre à jour le front vers Angular 22 (et passer les tests à Vitest) | 4 failles hautes dans le code livré au navigateur ; Angular 17 n'est plus maintenu | moyen | Dev | **Appliquée** (v1.7.1) : 0 faille, 0 problème SonarQube (4.2, 5.1) |
 | 2 | Augmenter la couverture des tests, en priorité les cas d'erreur, et ajouter des tests de bout en bout | branches couvertes à 17 % le 06/11, 57,9 % le 08/11 ; aucun test de bout en bout | moyen | Dev | À faire ; couverture passée de 39,7 % à 82,9 % avec Angular 22 |
-| 3 | En production cloud (ex. AWS EKS), séparer les machines de la CI de celles de l'application et activer la mise à l'échelle des machines (par Terraform) | incident du 05/11 ; autoscaling limité à 4 pods sur une seule machine | élevé | Ops | À faire (cible décrite dans la documentation CI/CD, 5.2.1) |
+| 3 | En production cloud (ex. AWS EKS), séparer les machines de la CI de celles de l'application et activer la mise à l'échelle des machines (par OpenTofu) | incident du 05/11 ; autoscaling limité à 4 pods sur une seule machine | élevé | Ops | À faire (cible décrite dans la documentation CI/CD, 5.2.1) |
 | 4 | Passer le front à 2 répliques en prod, avec un budget de perturbation (*PodDisruptionBudget*) pour le front et le back | le front est seul dans son composant : sa perte couperait l'application, alors que celle d'un pod du back passe inaperçue (7.3) | faible | Ops | **Partielle** : front à 2 répliques en prod (v1.7.0) ; budget de perturbation prévu dans la cible cloud seulement |
 | 5 | Ajouter une supervision synthétique : une sonde qui interroge l'application comme un utilisateur, en lecture **et en écriture**, toutes les quelques secondes (ex. Blackbox Exporter, open source), avec une alerte | la lenteur du relais nginx (6.3), la coupure de 11 s de l'exercice (7.3) et les enregistrements perdus aux mises à jour (7.5) étaient invisibles côté back | faible | Ops | À faire |
 | 6 | Installer Bulma avec npm, ou le charger avec un contrôle d'intégrité (SRI) | seul problème de sécurité relevé par SonarQube et par ZAP (4.2) | faible | Dev | **Appliquée** (v1.7.1) : Bulma installé par npm et servi par le site |
-| 7 | Appliquer Terraform par la CI : plan affiché sur chaque PR, application après approbation | supervision appliquée à la main ; correction fusionnée restée hors service (8.2) | moyen | Ops | À faire |
+| 7 | Passer au **GitOps** (Flux ou Argo CD, Apache 2.0, projets CNCF) : le cluster lit lui-même Git, applique l'application et l'infrastructure (OpenTofu par un contrôleur), et corrige tout écart ; la CI n'a plus aucun accès au cluster | infrastructure appliquée à la main ; correction fusionnée restée hors service, règles modifiées hors du dépôt non détectées (8.2) | moyen à élevé | Ops | À faire. Réécrite le 10/11 : l'étape intermédiaire (la CI applique OpenTofu) est écartée, car elle demande à la CI des droits presque administrateur, et OpenBao, qui délivre ses accès, est lui-même installé par OpenTofu (documentation CI/CD, 5.8) |
 | 8 | Faire suivre les images d'outils de la CI par Dependabot (fichier dédié) ; passer Trivy à 0.76.2 | mise à jour de sécurité de Trivy non proposée (8.2) | faible | Ops | **Partielle** : Trivy 0.76.2 (v1.7.0) ; images d'outils encore mises à jour à la main |
 | 9 | Garder 2 répliques minimum en prod ; pour les pics prévisibles, ajouter des pods à l'avance ; étudier une mise à l'échelle sur le nombre de requêtes (KEDA) | renfort arrivé après la fin du pic (6.3) | faible à moyen | Ops | **Partielle** : 2 répliques minimum en place ; le reste à faire |
 | 10 | Annoter automatiquement les déploiements dans Grafana | relier une dégradation à une version d'un coup d'œil | faible | Ops | À faire |
@@ -682,12 +845,16 @@ synthèse (section 1). La colonne « État » montre où en est chacune le
 | 13 | Rejouer les tests de charge sur une machine dédiée, à chaque version majeure, avec le rapport HTML de k6 | point de rupture réel non atteint sur le poste | moyen | Ops | À faire |
 | 14 | Exclure les pods de test (ZAP, k6) de la recherche des journaux d'erreurs | lignes inoffensives mêlées aux vraies erreurs (5.2) | faible | Ops | À faire |
 | 15 | Mettre la base en haute disponibilité (service managé comme RDS Multi-AZ, ou opérateur CloudNativePG), avec restauration à un instant donné | une seule instance PostgreSQL ; jusqu'à 24 h de données perdues en cas de sinistre | moyen à élevé | Ops | À faire |
-| 16 | Mettre en place un dépôt d'artefacts mandataire, qui garde une copie de Gradle, des bibliothèques et des images de base (dans la cible AWS : CodeArtifact et le cache d'images d'ECR), ou construire l'image du back à partir du résultat des tests | panne extérieure du 08/11 : livraison retardée de plus de 6 h (7.6) | moyen | Ops | À faire |
+| 16 | Mettre en place un dépôt d'artefacts mandataire, qui garde une copie de Gradle, des bibliothèques et des images de base (dans la cible AWS : CodeArtifact et le cache d'images d'ECR), ou construire l'image du back à partir du résultat des tests | panne extérieure du 08/11 : livraison retardée de plus de 6 h (7.6) | moyen | Ops | **Partielle** : image du back construite à partir du programme testé (PR #123, 09/11) ; dépôt mandataire à faire |
 | 17 | Alerter quand un conteneur dépasse 90 % de sa limite de mémoire pendant 15 min | hausse de la mémoire de SonarQube restée invisible 37 h, jusqu'à son arrêt (7.4) | faible | Ops | À faire |
 | 18 | Garder des PR petites (un seul changement), fusionnées dès qu'elles sont prêtes | délai médian de mise en production passé de 0,3 h à 2,5 h ; 4,6 h à 7,4 h pour les versions qui ont regroupé 6 à 13 commits (3.1) | faible | Dev et Ops | À faire |
 | 19 | Lancer les migrations de schéma (Flyway) dans une tâche séparée, avant le déploiement, pour que l'API n'ait plus le mot de passe du superutilisateur de la base | limite du compte limité de l'application (5.1) | moyen | Dev et Ops | À faire |
 | 20 | Sauvegarder aussi la base de SonarQube | historique de la qualité perdu si son disque est perdu ; seules les bases de MicroCRM sont sauvegardées | faible | Ops | À faire |
-| 21 | Ne créer une version que pour un changement de ce qui est livré (back, front, chart), et donner au chart déployé le numéro de cette version | 12 des 19 mises en prod sans changement de l'application ; chart toujours affiché en `1.1.0` (3.1, 8.2) | faible | Dev et Ops | À faire (constat du 09/11) |
+| 21 | Ne créer une version que pour un changement de ce qui est livré (back, front, chart), et donner au chart déployé le numéro de cette version | 12 des 19 mises en prod sans changement de l'application ; chart toujours affiché en `1.1.0` (3.1, 8.2) | faible | Dev et Ops | **Appliquée** (PR #124, v1.8.2, 09/11) |
+| 22 | Tester aussi les 3 rôles Ansible liés au cluster (Minikube, images, metrics-server) : scénario Molecule chaque semaine sur une machine virtuelle avec Minikube | Molecule ne teste que les 5 rôles du poste (4.1) | moyen | Ops | À faire |
+| 23 | Déverrouiller OpenBao automatiquement (AWS KMS dans la cible cloud ; sur site : KMS d'un hébergeur européen, boîtier HSM ou second OpenBao) et passer à 3 serveurs | geste manuel chaque matin ; tant qu'il manque, la CI ne peut plus déployer (5.3) | moyen | Ops | À faire ; comparatif des solutions (avantages, inconvénients, niveau de coût) dans `infra/openbao/README.md` |
+| 24 | Décrire les réglages du dépôt GitHub (environnements, approbations, branches autorisées, variables) en OpenTofu (fournisseur `integrations/github`) | réglages effacés sans trace par la suppression des environnements le 10/11 (7.7) | faible | Ops | À faire |
+| 25 | Lancer zizmor et actionlint (sécurité et syntaxe des workflows) dans la CI | contrôles lancés seulement sur le poste Ops (5.1) | faible | Ops | À faire |
 
 ## 9. Conclusion
 
@@ -695,8 +862,10 @@ Les six objectifs mesurables fixés au départ sont atteints : aucune
 faille connue dans les images livrées, qualité et couverture contrôlées à
 chaque modification, pipeline plus complet et plus rapide, livraisons
 versionnées, déploiement automatisé avec retour arrière. S'y ajoutent
-une supervision avec alertes et un accès à la base réduit au strict
-nécessaire.
+une supervision avec alertes, un accès à la base réduit au strict
+nécessaire et, depuis le 10/11, une CI qui ne détient plus aucun
+secret : chaque accès au cluster dure 15 min et passe par un
+coffre-fort qui trace chaque demande.
 
 Les mesures ont surtout montré leur valeur là où rien ne semblait
 anormal : le principal gain de performance (p95 divisé par 165) est venu
@@ -705,6 +874,8 @@ pendant les mises à jour a révélé des requêtes perdues, corrigées le
 jour même. Les priorités suivantes sont les tests des cas d'erreur,
 l'indépendance de la chaîne vis-à-vis des services extérieurs et, pour
 un passage dans le cloud, la séparation de la CI et de l'application.
+À plus long terme, le GitOps retirerait à la CI tout accès au cluster
+et détecterait les modifications faites hors du dépôt.
 
 ## Annexe A. Glossaire
 
@@ -720,16 +891,23 @@ un passage dans le cloud, la séparation de la CI et de l'application.
 | Moindre privilège | chaque compte ne reçoit que les droits dont il a besoin : l'API peut lire et écrire des lignes, pas modifier les tables |
 | Correctif (version « patch ») | version qui ne fait que corriger, sans nouvelle fonctionnalité : seul le dernier chiffre augmente (v1.8.0 → v1.8.1) |
 | Dépôt d'artefacts mandataire | serveur qui garde une copie de tout ce que la chaîne télécharge (outils, bibliothèques, images) et la resert si la source est en panne |
+| Coffre-fort de secrets (OpenBao) | service qui garde les secrets chiffrés, ne les délivre qu'à une identité vérifiée, et trace chaque demande |
+| Scellé, déverrouillage | un coffre-fort redémarré est scellé : il garde ses données, mais ne peut pas les lire tant qu'on ne lui a pas redonné sa clé |
+| Badge OIDC | jeton signé par GitHub qui décrit le job (dépôt, branche, environnement, workflow) ; il prouve son identité sans aucun mot de passe |
+| Journaux structurés (JSON) | chaque ligne de journal est un objet à champs nommés (niveau, code HTTP, chemin…), qu'une recherche vise directement |
+| Idempotence | rejouer une configuration déjà appliquée ne change rien |
+| GitOps | le cluster lit lui-même Git et s'aligne dessus, au lieu de recevoir les changements de la CI |
 
 ## Annexe B. Sources des mesures
 
 | Mesure | Source | Date |
 | --- | --- | --- |
 | Mesures de départ | [docs/mesures-avant/](mesures-avant/README.md) | 27-28/10/2026 |
-| DORA | `scripts/dora.py` sur l'API GitHub (déploiements de l'environnement production) ; délais par version recalculés avec git et l'historique Helm de la prod | 06/11/2026, 09/11/2026 |
+| DORA | `scripts/dora.py` sur l'API GitHub (déploiements de l'environnement production ; script corrigé le 10/11) ; délais par version recalculés avec git et l'historique Helm de la prod | 06/11/2026, 09/11/2026, 10/11/2026 |
 | Pipeline | API GitHub Actions : 100 dernières exécutions réussies du workflow CI | 06/11/2026 |
 | Qualité, couverture | API SonarQube, projet `orion` | 06/11/2026, 08/11/2026 |
-| Failles des images | Trivy (version de la CI) sur les images publiées : 0.76.1 sur v1.5.2, 0.76.2 sur v1.8.0 | 07/11/2026, 08/11/2026 |
+| Failles des images | Trivy (version de la CI) sur les images publiées : 0.76.1 sur v1.5.2, 0.76.2 sur v1.8.0 et v1.9.0 | 07/11/2026, 08/11/2026, 10/11/2026 |
+| Tests | bashunit 0.52.0 (dans un conteneur) et pytest ; `tofu test` ; Molecule (CI de la PR #141) | 10/11/2026 |
 | Dépendances du front | `npm audit`, avec et sans les outils de développement | 06/11/2026, 08/11/2026 |
 | Charge | k6 2.3.0 dans staging ; métriques VictoriaMetrics ; compteurs TCP des pods | 06/11/2026 |
 | Tableaux de bord, recherche des journaux | requêtes rejouées sur VictoriaMetrics et VictoriaLogs | 07/11/2026 |
@@ -739,3 +917,6 @@ un passage dans le cloud, la séparation de la CI et de l'application.
 | Incident SonarQube | état et événements du pod (`kubectl`), journaux du conteneur arrêté, mémoire du conteneur dans VictoriaMetrics, réglages Java par défaut lus dans l'image 26.10 | 07/11/2026 |
 | Requêtes perdues aux redémarrages | namespace de test jetable (chart v1.8.0) ; sonde Python et k6 2.3.0 (10 requêtes par seconde, codes et erreurs horodatés) pendant des `kubectl rollout restart`, avant et après la pause `preStop` | 08/11/2026 |
 | Panne extérieure de la CI | journaux des 5 exécutions de la CI de la PR #114 ; téléchargement rejoué depuis le poste ; historique Helm de la prod | 08/11/2026 |
+| Journaux JSON | requête de test en dev (chemin sans paramètres) ; recherche par champ dans VictoriaLogs | 09/11/2026 |
+| Identité de la CI | journal d'audit d'OpenBao dans VictoriaLogs (connexions et accès par chemin) ; réglages des environnements lus par l'API de GitHub | 10/11/2026 |
+| Alerte OpenBaoSealed | e-mails « FIRING » et « RESOLVED » reçus, coffre-fort scellé le matin | 10/11/2026 |

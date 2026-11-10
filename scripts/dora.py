@@ -136,11 +136,16 @@ def load_deployments(client):
     found = []
     for d in client.get(f"/deployments?environment={ENVIRONMENT}"
                         "&per_page=100"):
-        # Les états sont rendus du plus récent au plus ancien
-        statuses = client.get(f"/deployments/{d['id']}/statuses?per_page=1")
-        if statuses and statuses[0]["state"] in FINISHED_STATES:
-            found.append({"sha": d["sha"], "state": statuses[0]["state"],
-                          "time": parse_time(statuses[0]["created_at"])})
+        # États rendus du plus récent au plus ancien ; on garde le dernier
+        # état final. « inactive » est ajouté par GitHub après coup (version
+        # remplacée, environnement recréé : 22 déploiements de prod le
+        # 10/11) : ce n'est pas le résultat du déploiement, on l'ignore
+        statuses = client.get(f"/deployments/{d['id']}/statuses?per_page=20")
+        final = next((s for s in statuses or []
+                      if s["state"] in FINISHED_STATES), None)
+        if final:
+            found.append({"sha": d["sha"], "state": final["state"],
+                          "time": parse_time(final["created_at"])})
     found.sort(key=lambda d: d["time"])
     for index, current in enumerate(found):
         previous = found[index - 1] if index else None

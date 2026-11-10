@@ -128,8 +128,12 @@ def test_load_deployments_keeps_finished_ones_with_their_commits():
             {"id": 3, "sha": "c"}],
         "/deployments/1/statuses": [
             {"state": "success", "created_at": "2026-11-01T10:00:00Z"}],
+        # Marqué « inactive » plus tard (environnement recréé) : le
+        # résultat reste le succès, à l'heure du succès
         "/deployments/2/statuses": [
-            {"state": "success", "created_at": "2026-11-02T10:00:00Z"}],
+            {"state": "inactive", "created_at": "2026-11-10T10:09:00Z"},
+            {"state": "success", "created_at": "2026-11-02T10:00:00Z"},
+            {"state": "in_progress", "created_at": "2026-11-02T09:59:00Z"}],
         # En attente d'approbation : ignoré
         "/deployments/3/statuses": [
             {"state": "waiting", "created_at": "2026-11-03T10:00:00Z"}],
@@ -142,6 +146,8 @@ def test_load_deployments_keeps_finished_ones_with_their_commits():
     assert [d["sha"] for d in found] == ["a", "b"]
     assert found[0]["commits"] == []
     assert found[0]["next_time"] == found[1]["time"]
+    assert found[1]["state"] == "success"
+    assert found[1]["time"] == dora.parse_time("2026-11-02T10:00:00Z")
     assert [c["message"] for c in found[1]["commits"]] == ["fix: b"]
 
 
