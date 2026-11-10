@@ -114,11 +114,13 @@ updates:
     commit-message:
       prefix: build
       include: scope
-  # Socle du cluster et supervision (OpenTofu) : fournisseurs Kubernetes
-  # et Helm (verrouillés par .terraform.lock.hcl) ; PR testée par le job
-  # opentofu
+  # Socle du cluster, supervision et configuration d'OpenBao (OpenTofu) :
+  # fournisseurs Kubernetes, Helm, TLS et Vault (verrouillés par
+  # .terraform.lock.hcl) ; PR testée par le job opentofu
   - package-ecosystem: opentofu
-    directory: /infra/terraform
+    directories:
+      - /infra/terraform
+      - /infra/openbao/config
     schedule:
       interval: weekly
       day: monday

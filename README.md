@@ -341,13 +341,14 @@ publish ──▶ deploy-dev ──▶ deploy-staging ──▶ zap ────
 | `staging` / `staging` | `main` | automatique, après la réussite de `dev` (même image) | idem, `-n staging` | back de 1 à 4 répliques (autoscaling HPA, comme la prod mais à partir d'une), autres composants à 1 ; cible des tests ZAP et k6 : seuls ces pods peuvent joindre le front |
 | `production` / `prod` | `main` | à chaque version `vX.Y.Z`, **après approbation** | idem, `-n prod` | front à 2 répliques ; back à 2 répliques au minimum, autoscaling (HPA) ; mise à jour progressive sans coupure |
 
-Chaque environnement GitHub garde le secret `KUBE_TOKEN`, jeton du
-compte `deployer` de son namespace. `ci.yml` transmet ce seul secret à
-`deploy.yml` (pas `secrets: inherit`, qui transmettrait tous les
-secrets du dépôt, même ceux ajoutés plus tard) ; sans cette
-transmission, GitHub donne une valeur vide sans erreur : `deploy.yml`
-l'exige donc (`required: true`) et s'arrête avec un message clair si le
-jeton est vide. Chaque déploiement est tracé dans l'onglet
+**Aucun secret du cluster dans GitHub** (depuis le 10/11/2026) : chaque
+job de déploiement, de ZAP ou de test de charge présente à OpenBao son
+badge OIDC signé par GitHub (dépôt, branche `main`, environnement,
+workflow) et reçoit un jeton du compte `deployer` de son namespace,
+valable 15 min (45 min pour les tests de staging), qui expire seul
+([Identité de la CI](infra/openbao/README.md#identité-de-la-ci)). Le job
+n'a que les droits `contents: read` et `id-token: write` ; `ci.yml` ne
+lui transmet aucun secret. Chaque déploiement est tracé dans l'onglet
 **Deployments** du dépôt (environnement, commit, exécution) et dans le
 résumé de l'exécution (image déployée).
 
@@ -563,8 +564,8 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Tout tourne sur une seule machine (Minikube) | Cible cloud AWS : EKS sur 2 zones, RDS Multi-AZ, S3 | [documentation CI/CD, 5.2.1](docs/03-documentation-ci-cd.md#521-schéma-dinfrastructure-cloud) |
 | Sauvegarde quotidienne complète, non chiffrée fichier par fichier sur la machine (la copie hors site, elle, est chiffrée) | Restauration à un instant donné (WAL, CloudNativePG ou RDS), sauvegarde incrémentale | [scripts](scripts/README.md#backupsh) |
 | Poste Ops : SSH accepte encore les mots de passe ; un seul poste ; rôles Ansible testés par lint et idempotence, sans machine jetable | Clé SSH seule, inventaire multi-machines, Molecule | [Ansible](infra/ansible/README.md#limites-et-évolutions) |
-| Déploiement « poussé » par la CI : un jeton du cluster est rangé dans GitHub, une modification faite à la main dans le cluster n'est pas détectée | GitOps avec Argo CD : le cluster lit lui-même Git et corrige tout écart | [CI](#déploiement-continu-ci) |
-| Jetons de déploiement de longue durée, état OpenTofu local | Fédération OIDC GitHub → cluster (jetons de quelques minutes) ; état distant chiffré et verrouillé | [OpenTofu](infra/terraform/README.md#limites-connues-et-évolutions) |
+| Déploiement « poussé » par la CI (jeton court délivré par OpenBao) : une modification faite à la main dans le cluster n'est pas détectée | GitOps avec Argo CD : le cluster lit lui-même Git et corrige tout écart | [CI](#déploiement-continu-ci) |
+| État OpenTofu local ; coffre OpenBao sur un seul serveur, déverrouillé à la main chaque matin | État distant chiffré et verrouillé ; OpenBao à 3 serveurs, déverrouillage automatique (KMS, HSM) | [OpenTofu](infra/terraform/README.md#limites-connues-et-évolutions), [OpenBao](infra/openbao/README.md#limites) |
 | Versions de `kubectl` et `helm` (jobs du runner local) et images d'outils des workflows (Trivy, gitleaks, hadolint, ShellCheck) mises à jour à la main : Dependabot ne les suit pas (l'image ZAP, elle, est suivie via `infra/zap/Dockerfile`) | Image du runner contenant ces outils, et fichier d'images d'outils, suivis par Dependabot | [CI](#déploiement-continu-ci) |
 | Test d'intrusion limité au front : l'API ne publie pas de description OpenAPI, le scan actif n'atteint donc pas ses routes ; scan actif lancé à la main | OpenAPI (`springdoc`, équipe Dev) puis `zap-api-scan` ; scan actif planifié chaque semaine | [ZAP](#test-dintrusion-zap) |
 | Image ZAP : 421 failles hautes ou critiques sans correctif, dans le système de base de l'image officielle | Suivre les versions de ZAP ; pod éphémère, isolé par le pare-feu, sans root (risque accepté) | [ZAP](#test-dintrusion-zap) |

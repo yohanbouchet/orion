@@ -1,13 +1,14 @@
 # Fichier  : .github/workflows/deploy.yml
 # Rôle     : déploie MicroCRM dans UN environnement (dev, staging ou prod)
-#            avec scripts/deploy.sh, sur le runner local, avec le jeton du
-#            compte deployer de cet environnement ; workflow réutilisable,
-#            appelé trois fois par ci.yml (une fois par environnement)
+#            avec scripts/deploy.sh, sur le runner local, avec un jeton
+#            court du compte deployer de cet environnement (délivré par
+#            OpenBao) ; workflow réutilisable, appelé trois fois par ci.yml
+#            (une fois par environnement)
 # Utilise  : scripts/deploy.sh, infra/helm/microcrm ; action
-#            .github/actions/kube-access (kubectl, helm, kubeconfig) ;
-#            environnements GitHub dev, staging, production (secret
-#            KUBE_TOKEN, règle « main seulement », approbation pour
-#            production) ; variable de dépôt KUBE_CA
+#            .github/actions/kube-access (kubectl, helm, jeton OpenBao,
+#            kubeconfig) ; environnements GitHub dev, staging, production
+#            (règle « main seulement », approbation pour production) ;
+#            variables de dépôt KUBE_CA et OPENBAO_CA (certificats publics)
 # Utilisé par : jobs deploy-dev, deploy-staging, deploy-prod de ci.yml ;
 #               ticket #64
 
@@ -16,7 +17,8 @@ name: Deploy
 on:
   workflow_call:
     inputs:
-      # Environnement GitHub : donne le jeton et applique ses règles
+      # Environnement GitHub : applique ses règles et figure dans le badge
+      # OIDC du job (OpenBao ne rend un jeton que pour celui-là)
       environment:
         type: string
         required: true
@@ -29,12 +31,6 @@ on:
       tag:
         type: string
         default: ""
-    # Jeton du compte deployer : ci.yml doit le transmettre (sinon GitHub
-    # donne une valeur vide, sans erreur) ; required : un appel qui
-    # l'oublie échoue tout de suite
-    secrets:
-      KUBE_TOKEN:
-        required: true
 
 # Moindre privilège : lire le code, rien d'autre
 permissions:
@@ -45,9 +41,14 @@ jobs:
     # Runner local : le seul qui atteint le cluster Minikube
     runs-on: orion-local
     timeout-minutes: 15
-    # Ouvre le coffre de l'environnement (jeton) et applique ses règles :
-    # branche main seulement ; pour production, attend l'approbation
+    # Applique les règles de l'environnement : branche main seulement ;
+    # pour production, attend l'approbation
     environment: ${{ inputs.environment }}
+    # id-token : demander à GitHub le badge OIDC du job (présenté à
+    # OpenBao) ; aucun autre droit
+    permissions:
+      contents: read
+      id-token: write
     # Un seul déploiement à la fois par environnement, jamais interrompu
     concurrency:
       group: deploy-${{ inputs.namespace }}
@@ -63,9 +64,10 @@ jobs:
       - name: Kubernetes access
         uses: ./.github/actions/kube-access
         with:
+          environment: ${{ inputs.environment }}
           namespace: ${{ inputs.namespace }}
           ca: ${{ vars.KUBE_CA }}
-          token: ${{ secrets.KUBE_TOKEN }}
+          openbao-ca: ${{ vars.OPENBAO_CA }}
           helm: "true"
       # La même commande qu'en local : contrôles, helm upgrade, test de
       # fumée, retour arrière automatique s'il échoue

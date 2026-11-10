@@ -1,27 +1,35 @@
 # Fichier  : .github/actions/kube-access/action.yml
 # Rôle     : accès au cluster pour un job du runner local : installe
 #            kubectl (et helm si demandé), binaires officiels à l'empreinte
-#            vérifiée, puis écrit le fichier de connexion (kubeconfig) avec
-#            le jeton du compte deployer ; action composite, écrite une fois
-#            et utilisée par deploy.yml et zap.yml
-# Utilise  : jeton KUBE_TOKEN et certificat KUBE_CA transmis par le job
-# Utilisé par : .github/workflows/deploy.yml, .github/workflows/zap.yml ;
+#            vérifiée ; échange le badge OIDC du job (signé par GitHub)
+#            contre un jeton court du compte deployer, délivré par OpenBao ;
+#            écrit le fichier de connexion (kubeconfig) ; action composite,
+#            écrite une fois, utilisée par deploy.yml, zap.yml, load-test.yml
+# Utilise  : OpenBao (infra/openbao/config : rôles ci-<environnement>) ;
+#            certificats publics KUBE_CA et OPENBAO_CA transmis par le job ;
+#            le job doit avoir la permission id-token: write
+# Utilisé par : .github/workflows/deploy.yml, zap.yml, load-test.yml ;
 #               ticket #64
 # Le job doit supprimer "$RUNNER_TEMP/kubeconfig" à la fin (if: always()) :
 # une action composite n'a pas d'étape finale automatique
 
 name: Kubernetes access
-description: Install kubectl (and helm) and write a kubeconfig for a deployer
+description: Install kubectl (and helm) and get a short-lived deployer token from OpenBao
 
 inputs:
+  # Environnement GitHub du job (dev, staging, production) : choisit le
+  # rôle OpenBao ci-<environnement>, qui vérifie qu'il correspond au badge
+  environment:
+    description: GitHub environment of the job
+    required: true
   namespace:
     description: Kubernetes namespace of the deployer
     required: true
   ca:
     description: Public certificate (PEM) of the cluster authority
     required: true
-  token:
-    description: Token of the deployer service account
+  openbao-ca:
+    description: Public certificate (PEM) of the OpenBao authority
     required: true
   helm:
     description: Also install helm
@@ -59,23 +67,75 @@ runs:
           install -m 755 linux-amd64/helm "$bin/helm"
         fi
         echo "$bin" >> "$GITHUB_PATH"
-    # Fichier de connexion (kubeconfig) lisible par ce seul compte :
-    # adresse interne du cluster, certificat public de son autorité
-    # (vérifie qu'on parle au vrai cluster), jeton du deployer ; le
-    # jeton passe par une variable, jamais dans une commande
-    - name: Write kubeconfig
+    # Jeton court, puis fichier de connexion (kubeconfig) lisible par ce
+    # seul compte. Une seule étape : le jeton reste dans une variable du
+    # shell, jamais dans l'environnement des étapes suivantes ; chaque
+    # valeur sensible est masquée dans les journaux (add-mask) dès qu'elle
+    # existe ; en-têtes passés par fichier (invisibles dans la liste des
+    # processus)
+    - name: Get a short-lived token and write kubeconfig
       shell: bash
       env:
-        KUBE_CA: ${{ inputs.ca }}
-        KUBE_TOKEN: ${{ inputs.token }}
+        ENVIRONMENT: ${{ inputs.environment }}
         NAMESPACE: ${{ inputs.namespace }}
+        KUBE_CA: ${{ inputs.ca }}
+        OPENBAO_CA: ${{ inputs.openbao-ca }}
+        # Service d'OpenBao dans le cluster (HTTPS, nom présent dans son
+        # certificat) ; audience propre : un badge demandé pour un autre
+        # service y est refusé
+        OPENBAO_ADDR: https://openbao.openbao.svc:8200
+        AUDIENCE: openbao-orion
       run: |
-        # Jeton vide (secret absent de l'environnement) : arrêt clair
-        if [ -z "$KUBE_TOKEN" ]; then
-          echo "::error::KUBE_TOKEN is empty; set it in the environment"
+        set -euo pipefail
+        umask 077
+        if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          echo "::error::Missing id-token: write permission on the job"
           exit 1
         fi
-        umask 077
+        work="$(mktemp -d "$RUNNER_TEMP/kube-access.XXXXXX")"
+        trap 'rm -rf "${work:?}"' EXIT
+        printf '%s\n' "$OPENBAO_CA" > "$work/openbao-ca.pem"
+
+        # 1. Badge OIDC du job, signé par GitHub (dépôt, branche,
+        #    environnement, workflow), valable quelques minutes
+        printf 'Authorization: bearer %s\n' "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          > "$work/gh-header"
+        jwt="$(curl -fsS -H @"$work/gh-header" \
+          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r '.value')"
+        if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
+          echo "::error::GitHub gave no OIDC token"
+          exit 1
+        fi
+        echo "::add-mask::$jwt"
+
+        # 2. OpenBao vérifie le badge et rend un jeton limité à la règle
+        #    de cet environnement
+        bao_token="$(jq -n --arg role "ci-$ENVIRONMENT" --arg jwt "$jwt" \
+          '{role: $role, jwt: $jwt}' \
+          | curl -fsS --cacert "$work/openbao-ca.pem" --data @- \
+            "$OPENBAO_ADDR/v1/auth/jwt/login" | jq -r '.auth.client_token')"
+        if [ -z "$bao_token" ] || [ "$bao_token" = "null" ]; then
+          echo "::error::OpenBao refused the OIDC token (role ci-$ENVIRONMENT)"
+          exit 1
+        fi
+        echo "::add-mask::$bao_token"
+
+        # 3. Jeton Kubernetes du deployer de ce namespace, qui expire seul
+        #    (15 min, 45 min pour les tests de staging : rôle OpenBao)
+        printf 'X-Vault-Token: %s\n' "$bao_token" > "$work/bao-header"
+        kube_token="$(jq -n --arg ns "$NAMESPACE" \
+          '{kubernetes_namespace: $ns}' \
+          | curl -fsS --cacert "$work/openbao-ca.pem" -H @"$work/bao-header" \
+            --data @- "$OPENBAO_ADDR/v1/kubernetes/creds/$ENVIRONMENT" \
+          | jq -r '.data.service_account_token')"
+        if [ -z "$kube_token" ] || [ "$kube_token" = "null" ]; then
+          echo "::error::OpenBao gave no Kubernetes token for $NAMESPACE"
+          exit 1
+        fi
+        echo "::add-mask::$kube_token"
+
+        # 4. Fichier de connexion : adresse interne du cluster, certificat
+        #    public de son autorité (vérifie qu'on parle au vrai cluster)
         ca="$(printf '%s\n' "$KUBE_CA" | base64 -w0)"
         cat > "$RUNNER_TEMP/kubeconfig" <<EOF
         apiVersion: v1
@@ -88,7 +148,7 @@ runs:
         users:
           - name: deployer
             user:
-              token: $KUBE_TOKEN
+              token: $kube_token
         contexts:
           - name: $NAMESPACE
             context:

@@ -316,15 +316,17 @@ jobs:
       - name: Run Python script tests
         run: python -m pytest -p no:cacheprovider scripts/tests
 
-  # Socle du cluster (namespaces, comptes deployer) et supervision, en
-  # langage Terraform exécuté par OpenTofu : mise en forme, validité et
-  # tests avec de faux fournisseurs, sans cluster ni état ; ticket #64
+  # Socle du cluster (namespaces, comptes deployer, supervision, OpenBao)
+  # et configuration d'OpenBao, en langage Terraform exécuté par
+  # OpenTofu : mise en forme, validité et tests avec de faux fournisseurs,
+  # sans cluster, sans coffre ni état ; ticket #64
   opentofu:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: infra/terraform
+    # Deux dossiers, deux états : le socle du cluster et la configuration
+    # d'OpenBao (identité de la CI)
+    env:
+      TOFU_DIRS: infra/terraform infra/openbao/config
     steps:
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -338,7 +340,8 @@ jobs:
           tofu_version: 1.13.9
           tofu_wrapper: false
       - name: Check formatting
-        run: tofu fmt -check -recursive
+        run: |
+          for dir in $TOFU_DIRS; do tofu -chdir="$dir" fmt -check -recursive; done
       # Fournisseurs (environ 125 Mo) gardés en cache tant que le fichier
       # de verrouillage ne change pas : une panne du registre ou de GitHub
       # ne bloque plus ce contrôle (erreur 500 du 09/11/2026) ; chaque
@@ -347,17 +350,21 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/opentofu-plugins
-          key: tofu-providers-${{ hashFiles('infra/terraform/.terraform.lock.hcl') }}
+          key: tofu-providers-${{ hashFiles('infra/terraform/.terraform.lock.hcl', 'infra/openbao/config/.terraform.lock.hcl') }}
       # Fournisseurs vérifiés par .terraform.lock.hcl ; aucun état lu
       - name: Initialize without state
         run: |
           mkdir -p "$HOME/.cache/opentofu-plugins"
-          TF_PLUGIN_CACHE_DIR="$HOME/.cache/opentofu-plugins" \
-            tofu init -backend=false -input=false
+          for dir in $TOFU_DIRS; do
+            TF_PLUGIN_CACHE_DIR="$HOME/.cache/opentofu-plugins" \
+              tofu -chdir="$dir" init -backend=false -input=false
+          done
       - name: Validate
-        run: tofu validate
+        run: |
+          for dir in $TOFU_DIRS; do tofu -chdir="$dir" validate; done
       - name: Unit tests
-        run: tofu test
+        run: |
+          for dir in $TOFU_DIRS; do tofu -chdir="$dir" test; done
 
   # Code Ansible du poste Ops (infra/ansible) : syntaxe et bonnes pratiques
   # (ansible-lint, profil « production ») ; le playbook n'est JAMAIS lancé
@@ -635,10 +642,11 @@ jobs:
     with:
       environment: dev
       namespace: dev
-    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
-    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
-    secrets:
-      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+    # Aucun secret transmis : le job prouve son identité à OpenBao avec
+    # son badge OIDC (id-token), qui lui rend un jeton court
+    permissions:
+      contents: read
+      id-token: write
 
   deploy-staging:
     needs: deploy-dev
@@ -646,10 +654,11 @@ jobs:
     with:
       environment: staging
       namespace: staging
-    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
-    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
-    secrets:
-      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+    # Aucun secret transmis : le job prouve son identité à OpenBao avec
+    # son badge OIDC (id-token), qui lui rend un jeton court
+    permissions:
+      contents: read
+      id-token: write
 
   # Test d'intrusion passif (ZAP baseline) de staging, à chaque
   # déploiement ; une alerte réglée sur FAIL (infra/zap/rules.tsv) bloque
@@ -659,10 +668,11 @@ jobs:
     uses: ./.github/workflows/zap.yml
     with:
       mode: baseline
-    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
-    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
-    secrets:
-      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+    # Aucun secret transmis : le job prouve son identité à OpenBao avec
+    # son badge OIDC (id-token), qui lui rend un jeton court
+    permissions:
+      contents: read
+      id-token: write
 
   # Test de charge de fumée (k6, 1 utilisateur, 30 s) de staging, après
   # ZAP (jamais en même temps : les mesures seraient faussées) ; un seuil
@@ -672,10 +682,11 @@ jobs:
     uses: ./.github/workflows/load-test.yml
     with:
       profile: smoke
-    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
-    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
-    secrets:
-      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+    # Aucun secret transmis : le job prouve son identité à OpenBao avec
+    # son badge OIDC (id-token), qui lui rend un jeton court
+    permissions:
+      contents: read
+      id-token: write
 
   # Prod seulement si une version vX.Y.Z vient d'être publiée, si ZAP et le
   # test de charge n'ont rien trouvé de bloquant, et après l'approbation
@@ -688,10 +699,11 @@ jobs:
       environment: production
       namespace: prod
       tag: ${{ needs.release.outputs.version }}
-    # Seulement le jeton du deployer, pas « secrets: inherit » (tous les
-    # secrets du dépôt, même ceux ajoutés plus tard) : moindre privilège
-    secrets:
-      KUBE_TOKEN: ${{ secrets.KUBE_TOKEN }}
+    # Aucun secret transmis : le job prouve son identité à OpenBao avec
+    # son badge OIDC (id-token), qui lui rend un jeton court
+    permissions:
+      contents: read
+      id-token: write
 
   # Notification du résultat sur main (ticket de panne, e-mail par GitHub),
   # même si un job a échoué (always) ; ticket #56

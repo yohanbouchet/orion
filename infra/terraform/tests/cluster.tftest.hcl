@@ -172,6 +172,16 @@ run "openbao_is_locked_down" {
     error_message = "OpenBao must declare its audit device in the configuration."
   }
   assert {
+    condition = alltrue([
+      for r in kubernetes_role_v1.openbao_token_issuer :
+      length(r.rule) == 1
+      && toset(r.rule[0].resources) == toset(["serviceaccounts/token"])
+      && toset(r.rule[0].resource_names) == toset(["deployer"])
+      && toset(r.rule[0].verbs) == toset(["create"])
+    ])
+    error_message = "OpenBao may only create tokens of the deployer accounts."
+  }
+  assert {
     condition     = tls_private_key.openbao_ca.algorithm == "ECDSA"
     error_message = "The OpenBao CA key must be ECDSA."
   }

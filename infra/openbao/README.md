@@ -2,9 +2,10 @@
 
 OpenBao (licence MPL-2.0, fondation Linux, successeur open source de
 HashiCorp Vault) garde les secrets de la chaîne et délivre des **accès
-de courte durée**. Il servira de guichet d'identité à la CI : un badge
-OIDC de GitHub contre un jeton Kubernetes de quelques minutes, à la
-place des jetons longue durée rangés aujourd'hui dans GitHub.
+de courte durée**. Il sert de guichet d'identité à la CI (10/11/2026) :
+un badge OIDC signé par GitHub contre un jeton Kubernetes de 15 min,
+à la place des jetons longue durée rangés jusque-là dans GitHub
+([Identité de la CI](#identité-de-la-ci)).
 
 Installé le 09/11/2026 par OpenTofu
 ([`infra/terraform/openbao.tf`](../terraform/openbao.tf)), réglages du
@@ -108,6 +109,76 @@ Un changement de la configuration (ConfigMap) n'est lu qu'au
 démarrage : après le `tofu apply`, redémarrer le pod
 (`kubectl -n openbao delete pod openbao-0`), puis le déverrouiller.
 
+## Identité de la CI
+
+Plus aucun jeton du cluster n'est rangé dans GitHub. Chaque job qui
+touche au cluster (déploiement, ZAP, test de charge) **prouve qui il
+est**, et reçoit un accès qui expire seul :
+
+```text
+job GitHub (runner local, environnement dev / staging / production)
+  1. demande à GitHub son badge OIDC (jeton signé, quelques minutes) :
+     dépôt, branche, environnement, workflow ; audience « openbao-orion »
+  2. le présente à OpenBao (auth/jwt, rôle ci-<environnement>)
+       OpenBao vérifie la signature (clés publiques de GitHub) et
+       chaque condition du rôle → jeton OpenBao, règle ci-<env> seule
+  3. demande kubernetes/creds/<environnement>
+       OpenBao demande à Kubernetes (TokenRequest) un jeton du compte
+       deployer de CE namespace → 15 min (45 min pour ZAP et k6)
+  4. écrit son kubeconfig, déploie ; le jeton expire seul
+```
+
+| Condition du rôle `ci-<env>` | Ce qu'elle empêche |
+| --- | --- |
+| `repository_id` = 1436771310 | un autre dépôt, même renommé ou recréé sous le même nom |
+| `sub` = `repo:yohanbouchet/orion:environment:<env>` | un job d'un autre environnement, ou sans environnement (approbation de production contournée) |
+| `ref` = `refs/heads/main` | une branche, une PR |
+| `job_workflow_ref` : `deploy.yml` (+ `zap.yml`, `load-test.yml` en staging) | un autre workflow, même dans le dépôt |
+| audience `openbao-orion` | un badge demandé pour un autre service |
+
+Les droits ne changent pas : le compte `deployer` garde ceux de
+[`rbac.tf`](../terraform/rbac.tf) ; seule la **durée** de l'accès change.
+OpenBao n'a, dans chaque namespace, que le droit de créer un jeton de
+ce compte (rôle `openbao-token-issuer`,
+[`openbao.tf`](../terraform/openbao.tf)).
+
+Configuration écrite en OpenTofu, dans un dossier à part
+([`config/`](config/)), avec son propre état : un plan du socle n'a pas
+besoin du coffre ouvert.
+
+| Fichier | Rôle |
+| --- | --- |
+| [`config/main.tf`](config/main.tf) | méthode `jwt` (badges GitHub), rôles et règles par environnement, moteur `kubernetes` (jetons courts) |
+| [`config/variables.tf`](config/variables.tf) | dépôt autorisé, environnements, namespaces, workflows, durées (10 à 45 min, contrôlées) |
+| [`config/providers.tf`](config/providers.tf), [`config/versions.tf`](config/versions.tf) | fournisseur `hashicorp/vault` 5.13 (MPL-2.0, même API qu'OpenBao), HTTPS vérifié |
+| [`config/tests/`](config/tests/) | 4 tests (`tofu test`, faux fournisseur) : conditions des rôles, règles limitées, jetons courts, durée refusée |
+
+### Appliquer la configuration (Ops, coffre déverrouillé)
+
+Le jeton racine est saisi sans écho et n'existe que dans ce terminal :
+
+```shell
+# Terminal 1 : tunnel vers OpenBao (laisser ouvert)
+kubectl -n openbao port-forward svc/openbao 8200:8200
+
+# Terminal 2
+cd infra/openbao/config
+mkdir -p -m 700 ~/.local/state/orion-openbao
+(cd ../../terraform && tofu output -raw openbao_ca_cert) \
+  > ~/.local/state/orion-openbao/openbao-ca.pem
+tofu init -backend-config="path=$HOME/.local/state/orion-openbao/terraform.tfstate"
+printf 'Root token: '; read -rs VAULT_TOKEN; echo; export VAULT_TOKEN
+tofu plan -var="openbao_ca_file=$HOME/.local/state/orion-openbao/openbao-ca.pem" \
+  -out="$HOME/.local/state/orion-openbao/tfplan"
+tofu apply "$HOME/.local/state/orion-openbao/tfplan"
+unset VAULT_TOKEN
+find ~/.local/state/orion-openbao -maxdepth 1 -type f -exec chmod 600 {} +
+```
+
+Côté GitHub, une seule valeur, **publique** : la variable de dépôt
+`OPENBAO_CA` (certificat de l'autorité, `tofu output -raw
+openbao_ca_cert` dans `infra/terraform`).
+
 ## Sauvegarde
 
 ```shell
@@ -156,3 +227,5 @@ Certificat public de l'autorité (à donner aux clients) :
 | Déverrouillage manuel après chaque redémarrage (rappel : alerte `OpenBaoSealed`) | déverrouillage automatique : AWS KMS dans la cible cloud ; sur site, HSM (PKCS#11, ex. Nitrokey NetHSM, testé par OpenBao) ou KMIP, ou second OpenBao (*Transit*) |
 | Sortie réseau ouverte (API de Kubernetes, clés publiques de GitHub) | la limiter à ces deux adresses |
 | Les 3 parts de clé sont chez une seule personne | en équipe : une part par personne |
+| La configuration d'OpenBao est appliquée avec le jeton racine | méthode d'authentification propre à l'Ops (OIDC de l'entreprise), jeton racine révoqué |
+| Un jeton Kubernetes ne peut pas être révoqué avant sa fin (limite de Kubernetes) | durées déjà courtes (15 min ; 45 min pour les tests longs de staging) |

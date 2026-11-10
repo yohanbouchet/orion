@@ -652,7 +652,8 @@ GitHub) ; chaque secret est rangé au plus près de son seul utilisateur.
 
 | Secret | Où il est rangé | Qui y accède |
 | --- | --- | --- |
-| Jetons de déploiement (`KUBE_TOKEN`) | un par environnement GitHub (`dev`, `staging`, `production`) | le seul job de déploiement de cet environnement, depuis `main` ; la prod après approbation |
+| Accès au cluster de la CI | **aucun secret rangé** (depuis le 10/11) : jeton du compte `deployer` délivré par OpenBao contre le badge OIDC du job, 15 min (45 min pour les tests de staging) | le seul job de cet environnement, depuis `main`, dans un workflow autorisé ; la prod après approbation |
+| Clés de déverrouillage et jeton racine d'OpenBao | Bitwarden de l'Ops, jamais sur le poste ni dans le dépôt | Ops (déverrouillage du matin, configuration d'OpenBao) |
 | Jeton d'analyse SonarQube | environnement GitHub `sonarqube` | le seul job `sonarqube` ; jeton limité au projet |
 | `GITHUB_TOKEN` | créé par GitHub pour chaque exécution | droits minimaux par job ; expire à la fin du job |
 | Mot de passe du superutilisateur de la base (`microcrm`) | Secret Kubernetes `microcrm-db`, valeur aléatoire créée par `deploy.sh`, jamais affichée | pod de la base ; pod de l'API, seulement pour Flyway et pour le conteneur d'initialisation (limite : section 6.5) |
@@ -664,9 +665,12 @@ GitHub) ; chaque secret est rangé au plus près de son seul utilisateur.
 **Rotation** : un secret exposé est **révoqué et remplacé tout de
 suite** (appliqué le 28/10 : mot de passe de la base de SonarQube changé
 après son apparition sur une capture d'écran). **Limite** : pas de
-rotation périodique automatique, et les jetons de déploiement sont de
-longue durée. Évolution : fédération OIDC GitHub → cluster (jetons de
-quelques minutes) et Secrets Manager avec rotation (cible AWS).
+rotation périodique automatique des mots de passe. Les accès de la CI,
+eux, sont courts depuis le 10/11 (OpenBao, badge OIDC de GitHub :
+[Identité de la CI](../infra/openbao/README.md#identité-de-la-ci)).
+Évolution : mots de passe de la base délivrés par OpenBao (moteur
+`database`, comptes temporaires) et Secrets Manager avec rotation
+(cible AWS).
 
 ### 6.4 Processus de traitement des vulnérabilités
 

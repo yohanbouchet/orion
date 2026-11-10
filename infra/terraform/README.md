@@ -29,7 +29,7 @@ Helm (scripts/deploy.sh, avec le jeton du deployer de l'environnement)
 | `main.tf` | Un namespace par environnement, niveau Pod Security « restricted » |
 | `rbac.tf` | Un compte `deployer` par namespace, ses droits et son jeton |
 | `monitoring.tf` | Supervision : namespaces `monitoring` (« restricted ») et `monitoring-collector` (« privileged », collecteur de journaux seul), pile VictoriaMetrics + VictoriaLogs + Grafana (chart Helm figé), tableaux de bord ([détails](../monitoring/README.md)) |
-| `openbao.tf` | Coffre-fort OpenBao : namespace `openbao` (« restricted »), autorité de certification et certificat TLS, chart Helm figé ([détails](../openbao/README.md)) |
+| `openbao.tf` | Coffre-fort OpenBao : namespace `openbao` (« restricted »), autorité de certification et certificat TLS, chart Helm figé, droit d'OpenBao de créer des jetons courts des comptes `deployer` ([détails](../openbao/README.md)) |
 | `outputs.tf` | Jetons et certificat du cluster (valeurs sensibles, jamais affichées) ; certificat public de l'autorité d'OpenBao |
 | `tests/cluster.tftest.hcl` | Tests unitaires avec de faux fournisseurs (sans cluster) |
 | `.terraform.lock.hcl` | Versions et empreintes des fournisseurs (registre d'OpenTofu, signés), produit par `tofu init` |
@@ -91,11 +91,13 @@ kubectl auth can-i patch deployments -n dev --as=$SA    # yes
 kubectl auth can-i patch deployments -n prod --as=$SA   # no
 ```
 
-Chaque jeton est rangé, sans être affiché, dans le secret `KUBE_TOKEN`
-de l'environnement GitHub correspondant (`dev`, `staging`,
-`production`), et le certificat dans la variable de dépôt `KUBE_CA` ;
-le job de déploiement les lit
-([déploiement continu](../../README.md#déploiement-continu-ci)) :
+Depuis le 10/11/2026, la CI n'utilise plus ces jetons de longue durée :
+OpenBao lui délivre un jeton de 15 min du même compte, contre le badge
+OIDC du job ([Identité de la CI](../openbao/README.md#identité-de-la-ci)) ;
+OpenBao n'a que le droit d'en créer (`openbao.tf`). Les jetons de
+longue durée seront supprimés dès qu'un pipeline complet aura réussi
+sans eux. Le certificat du cluster reste dans la variable de dépôt
+`KUBE_CA` (public) :
 
 ```shell
 tofu output -json deployer_tokens | jq -r .dev   # puis clear
@@ -213,6 +215,6 @@ Le dossier garde son nom (`infra/terraform`, état dans
 
 | Limite | Évolution |
 |---|---|
-| Jetons de longue durée, rotation manuelle | Fédération d'identité OIDC entre GitHub et le cluster : jetons de quelques minutes, aucun secret stocké |
+| Jetons de longue durée encore présents dans le cluster (plus utilisés par la CI depuis le 10/11) | Suppression après un pipeline complet réussi avec OpenBao |
 | Un `deployer` peut lire les Secrets de son namespace, dont le mot de passe de la base (Helm range ses versions dans des Secrets) | Inhérent à Helm ; à compenser par un mot de passe propre à chaque environnement (déjà le cas) et la rotation |
 | État local sur une seule machine, sans verrou contre deux `apply` simultanés | État distant chiffré et verrouillé (par exemple S3 avec verrou, dans la cible cloud) |
