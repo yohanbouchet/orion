@@ -32,8 +32,8 @@ terraform {
     }
   }
 
-  # État local, rangé HORS du dépôt : il contient en clair les jetons des
-  # comptes deployer et l'adresse des alertes ; chemin donné à
-  # tofu init (-backend-config)
+  # État local, rangé HORS du dépôt : il contient en clair les clés
+  # privées du certificat d'OpenBao et l'adresse des alertes ; chemin
+  # donné à tofu init (-backend-config)
   backend "local" {}
 }
