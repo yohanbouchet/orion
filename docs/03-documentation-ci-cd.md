@@ -841,8 +841,9 @@ Rollouts dans la cible cloud.
 9. **Notification** : e-mail de GitHub à la publication de chaque
    release ; ticket et e-mail si une étape échoue.
 
-Durées mesurées : contrôles d'une PR 1,9 min (médiane) ; de la fusion à
-`staging` testé 6,6 min ; production 0,6 min après l'approbation.
+Durées mesurées : contrôles d'une PR 2,2 min (médiane du 07 au
+10/11) ; de la fusion à `staging` testé 6,6 min ; production 0,6 min
+après l'approbation.
 
 ### 7.3 Système de versioning
 

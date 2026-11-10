@@ -75,7 +75,7 @@ la sécurité. Le plan de mise en œuvre
 | Aucune faille connue livrée sans décision | 95 failles dans l'image back (8 critiques) | 0 critique ou haute corrigeable dans une image publiée | **oui** : 0 (section 5) |
 | Qualité contrôlée à chaque modification | Quality Gate sans condition | Quality Gate bloquant sur chaque PR | **oui** : 3 conditions (section 4.2) |
 | Tests mesurés | couverture non mesurée | mesurée et publiée à chaque PR | **oui** : 82,9 % (section 4.2) |
-| Pipeline plus rapide malgré plus de contrôles | 4,67 min, 4 tâches | durée suivie, gain mesuré | **oui** : 1,9 min, 12 contrôles (section 3.2) |
+| Pipeline plus rapide malgré plus de contrôles | 4,67 min, 4 tâches | durée suivie, gain mesuré | **oui** : 2,2 min, 12 contrôles (section 3.2) |
 | Livraison traçable | aucune image, version `0.0.1-SNAPSHOT` | chaque image liée à une version et à un commit | **oui** : 25 versions, v1.0.0 à v1.9.0 |
 | Déploiement sans action manuelle | déploiement manuel | déploiement et retour arrière automatisés | **oui**, avec approbation humaine avant la prod |
 
@@ -155,7 +155,7 @@ production (workflow *DORA metrics*).
 | | Avant (27/10) | Après (06/11) |
 | --- | --- | --- |
 | Contrôles sur chaque PR | 4 tâches : tests et construction | **12 tâches en parallèle** : tests back et front, SonarQube, Trivy, hadolint, ShellCheck, gitleaks, tests des scripts, OpenTofu (2 dossiers), Ansible (dont Molecule depuis le 10/11), construction des 2 images |
-| Durée | 4,67 min | **1,9 min** (médiane de 52 PR réussies, 06/11) ; à remesurer : depuis le 10/11, le job Ansible applique aussi Molecule |
+| Durée | 4,67 min | **2,2 min** (médiane de 47 PR réussies du 07 au 10/11 ; 1,9 min le 06/11) ; avec Molecule (10/11), 2,0 et 2,4 min sur les 2 premières PR : le job Ansible (1,8 à 1,9 min) est devenu le plus long |
 | Ce qui se passe après la fusion | rien | version, publication des images, déploiement dev puis staging, test d'intrusion ZAP, test de fumée k6, notification : **6,6 min** (exécution du 06/11, 17:01), puis production en 0,6 min après approbation |
 
 La durée totale affichée par GitHub sur la capture ci-dessous
@@ -165,7 +165,7 @@ production : les étapes automatiques, elles, durent 6,6 min puis 0,6 min.
 **Précaution de lecture** : la mesure « avant » a été faite sur un poste,
 cache vide ; la mesure « après » vient des runners de la CI, avec cache.
 Le gain s'explique surtout par l'exécution en parallèle et le cache : la
-chaîne contrôle **3 fois plus de choses en 2,5 fois moins de temps**.
+chaîne contrôle **3 fois plus de choses en 2 fois moins de temps**.
 
 ![Graphe d'une exécution du pipeline sur main : contrôles en parallèle, puis release, publication, déploiements dev et staging, ZAP, test de charge et production](rapport-performance/pipeline.png)
 
@@ -757,7 +757,7 @@ ces changements (la dernière, v1.9.0, date du 09/11 à 17:32).
 | Qualité | Quality Gate | sans condition | **3 conditions bloquantes** | 4.2 |
 | Qualité | Notes SonarQube (sécurité, fiabilité) | C et D | **A et A**, 0 problème ouvert | 4.2 |
 | Livraison | Contrôles automatiques sur chaque PR | 4 tâches, rien de bloquant | **12 tâches** | 3.2 |
-| Livraison | Durée de ces contrôles | 4,67 min | **1,9 min** (médiane) | 3.2 |
+| Livraison | Durée de ces contrôles | 4,67 min | **2,2 min** (médiane) | 3.2 |
 | Livraison | Déploiement en production | manuel, non tracé | **automatique après approbation** : 5,1 par semaine, 0 % d'échec, 2,9 h entre un commit et la prod (médiane) | 3.1 |
 | Livraison | Versions | `0.0.1-SNAPSHOT`, aucune image | **25 versions** ; chaque image liée à sa version et à son commit ; une version seulement pour un changement livré | 3.3 |
 | Qualité | Tests de l'infrastructure | aucun | **12 tests OpenTofu** ; poste Ops testé par Molecule (5 rôles, idempotence, 6 contrôles) | 4.1 |
@@ -904,7 +904,7 @@ et détecterait les modifications faites hors du dépôt.
 | --- | --- | --- |
 | Mesures de départ | [docs/mesures-avant/](mesures-avant/README.md) | 27-28/10/2026 |
 | DORA | `scripts/dora.py` sur l'API GitHub (déploiements de l'environnement production ; script corrigé le 10/11) ; délais par version recalculés avec git et l'historique Helm de la prod | 06/11/2026, 09/11/2026, 10/11/2026 |
-| Pipeline | API GitHub Actions : 100 dernières exécutions réussies du workflow CI | 06/11/2026 |
+| Pipeline | API GitHub Actions : exécutions réussies du workflow CI sur les PR, durée de chaque job | 06/11/2026, 10/11/2026 |
 | Qualité, couverture | API SonarQube, projet `orion` | 06/11/2026, 08/11/2026 |
 | Failles des images | Trivy (version de la CI) sur les images publiées : 0.76.1 sur v1.5.2, 0.76.2 sur v1.8.0 et v1.9.0 | 07/11/2026, 08/11/2026, 10/11/2026 |
 | Tests | bashunit 0.52.0 (dans un conteneur) et pytest ; `tofu test` ; Molecule (CI de la PR #141) | 10/11/2026 |
