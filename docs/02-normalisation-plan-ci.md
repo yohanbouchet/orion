@@ -385,7 +385,8 @@ attendus, comparés aux mesures de départ du document 1 :
 - **Description** : installer le runner auto-hébergé ARC (jetable, non
   privilégié, protégé contre les forks) ; rendre SonarQube joignable depuis
   ce runner ; créer
-  les secrets du pipeline dans GitHub.
+  les secrets du pipeline dans GitHub (remplacés le 10/11 par le coffre
+  OpenBao : plus aucun secret dans GitHub).
 - **Responsables** : équipe Ops (pilote : Nico), ingénieur DevOps.
 - **Livrables** : runner opérationnel (test de fumée réussi) ; SonarQube
   accessible depuis la CI ; secrets enregistrés hors du dépôt.
