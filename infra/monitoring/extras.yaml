@@ -152,6 +152,36 @@ extraObjects:
               annotations:
                 summary: No successful prod backup for more than 26 hours.
                 runbook: infra/monitoring/README.md#backuptooold
+            # Dernier instantané du coffre OpenBao il y a plus de 74 h
+            # (un par jour ; 3 jours + 2 h : un week-end poste éteint
+            # n'alerte pas), ou jamais vu ; le jeton de sauvegarde expire
+            # après 7 jours sans sauvegarde : 4 jours pour réagir ; métrique
+            # écrite par scripts/backup-openbao.sh, lue par node_exporter
+            - alert: OpenBaoBackupTooOld
+              expr: >-
+                (time() - openbao_backup_last_success_timestamp_seconds
+                > 74 * 3600)
+                or absent(openbao_backup_last_success_timestamp_seconds)
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: No successful OpenBao snapshot for more than 74 hours.
+                runbook: infra/monitoring/README.md#openbaobackuptooold
+            # Certificat TLS du coffre OpenBao expiré dans moins de 30
+            # jours : un certificat expiré couperait la CI du coffre ;
+            # date lue chaque jour par scripts/backup-openbao.sh
+            - alert: OpenBaoCertExpiringSoon
+              expr: >-
+                openbao_tls_cert_not_after_timestamp_seconds - time()
+                < 30 * 86400
+              for: 1h
+              labels:
+                severity: warning
+              annotations:
+                summary: >-
+                  The OpenBao TLS certificate expires in less than 30 days.
+                runbook: infra/monitoring/README.md#openbaocertexpiringsoon
 
         - name: orion.security
           rules:

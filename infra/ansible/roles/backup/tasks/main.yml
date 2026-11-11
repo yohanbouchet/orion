@@ -2,9 +2,11 @@
 # Rôle     : sauvegarde automatique de la base de prod : au démarrage du
 #            poste et chaque jour à 12 h 30, et vérification chaque
 #            vendredi qu'elle se restaure vraiment
-#            (base temporaire) ; journal dans ~/.local/state
-# Utilise  : scripts/backup.sh ; group_vars/all.yml (backup_*,
-#            node_exporter_textfile_dir : métrique de la sauvegarde)
+#            (base temporaire) ; instantané du coffre OpenBao chaque
+#            jour à 11 h 50 ; journaux dans ~/.local/state
+# Utilise  : scripts/backup.sh, scripts/backup-openbao.sh ;
+#            group_vars/all.yml (backup_*, openbao_backup_*,
+#            node_exporter_textfile_dir : métriques des sauvegardes)
 # Utilisé par : site.yml
 
 # Dossier lisible par l'Ops seul : une sauvegarde contient des données
@@ -64,3 +66,18 @@
       BACKUP_DIR={{ backup_dir }}
       {{ repo_dir }}/scripts/backup.sh verify {{ backup_env }}
       >> {{ backup_log }} 2>&1
+
+# Instantané du coffre OpenBao ; le jeton de sauvegarde (fichier en 600,
+# README d'OpenBao) est créé par l'Ops, jamais par Ansible : sans lui,
+# la tâche échoue et l'alerte OpenBaoBackupTooOld prévient
+- name: Back up the OpenBao vault every day
+  ansible.builtin.cron:
+    name: openbao backup (ansible)
+    hour: "11"
+    minute: "50"
+    job: >-
+      PATH={{ ops_home }}/.local/bin:/usr/bin:/bin
+      BACKUP_DIR={{ openbao_backup_dir }}
+      BACKUP_METRICS_DIR={{ node_exporter_textfile_dir }}
+      {{ repo_dir }}/scripts/backup-openbao.sh
+      >> {{ openbao_backup_log }} 2>&1

@@ -74,3 +74,15 @@ variable "environments" {
     error_message = "Token TTL must be between 600 and 2700 seconds."
   }
 }
+
+# Durée de vie du jeton de sauvegarde sans sauvegarde (secondes) : assez
+# pour un week-end prolongé poste éteint, pas plus de 31 jours
+variable "backup_token_period" {
+  description = "Backup token period in seconds (renewed by each backup)"
+  type        = number
+  default     = 604800
+  validation {
+    condition     = var.backup_token_period >= 86400 && var.backup_token_period <= 2678400
+    error_message = "The backup token period must be between 1 and 31 days."
+  }
+}

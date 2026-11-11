@@ -153,7 +153,8 @@ besoin du coffre ouvert.
 | [`config/variables.tf`](config/variables.tf) | dépôt autorisé, environnements, namespaces, workflows, durées (10 à 45 min, contrôlées) |
 | [`config/providers.tf`](config/providers.tf), [`config/versions.tf`](config/versions.tf) | fournisseur `hashicorp/vault` 5.13 (MPL-2.0, même API qu'OpenBao), HTTPS vérifié |
 | [`config/sonarqube.tf`](config/sonarqube.tf) | moteur `kv` (secrets statiques), rôle et règle `ci-sonarqube` (lecture du seul jeton SonarQube) |
-| [`config/tests/`](config/tests/) | 5 tests (`tofu test`, faux fournisseur) : conditions des rôles, règles limitées, jetons courts, durée refusée, rôle SonarQube |
+| [`config/backup.tf`](config/backup.tf) | règle `openbao-backup` (lecture de l'instantané seulement) et modèle du jeton de sauvegarde (7 jours, orphelin) |
+| [`config/tests/`](config/tests/) | 7 tests (`tofu test`, faux fournisseur) : conditions des rôles, règles limitées, jetons courts, durée refusée, rôle SonarQube, règle de sauvegarde limitée, durée du jeton de sauvegarde bornée |
 
 ### Appliquer la configuration (Ops, coffre déverrouillé)
 
@@ -231,25 +232,89 @@ un **HSM** testé, Thales seulement après validation ; petite équipe sur
 site sans budget → **Transit**. Ici, poste unique : le manuel reste le
 bon choix, avec l'alerte.
 
-## Sauvegarde
+## Sauvegarde planifiée
 
-```shell
-kubectl -n openbao exec -it openbao-0 -- sh -c \
-  'printf "Token: "; read -rs BAO_TOKEN; echo; export BAO_TOKEN;
-   bao operator raft snapshot save /tmp/openbao.snap'
-kubectl -n openbao cp openbao-0:/tmp/openbao.snap ./openbao.snap
-kubectl -n openbao exec openbao-0 -- rm /tmp/openbao.snap
+Chaque jour à **11 h 50**, le poste Ops prend un instantané du stockage
+Raft ([`scripts/backup-openbao.sh`](../../scripts/README.md#backup-openbaosh),
+tâche planifiée par Ansible, rôle `backup`), juste avant la copie hors
+site de midi (archive chiffrée de `~/backups`). Pas au démarrage du
+poste : le coffre est alors scellé.
+
+```text
+poste Ops (cron 11 h 50)
+  1. jeton de sauvegarde lu dans ~/.config/orion-openbao/backup-token (600)
+  2. kubectl exec openbao-0 : jeton passé par l'entrée standard,
+     prolongé de 7 jours, puis bao operator raft snapshot save
+  3. copie vers ~/backups/openbao : empreinte identique dans le pod et
+     sur le poste, archive complète (state.bin, meta.json, SHA256SUMS)
+  4. 7 instantanés gardés ; métrique lue par node_exporter
+     (alerte OpenBaoBackupTooOld après 74 h sans instantané)
 ```
 
-L'instantané reste chiffré (il faut les clés pour le relire).
+| Choix | Pourquoi | Écarté |
+| --- | --- | --- |
+| Jeton limité à **la lecture de l'instantané** (règle `openbao-backup`, [`config/backup.tf`](config/backup.tf), testée) | moindre privilège : il ne lit aucun secret, ne restaure rien, ne change rien | le jeton racine dans un fichier |
+| Jeton **périodique** de 7 jours, prolongé à chaque sauvegarde, orphelin | il vit tant qu'on s'en sert ; abandonné, il expire seul | jeton sans fin |
+| Jeton passé par l'**entrée standard** | jamais visible dans la liste des processus ni dans un journal | argument de commande ou variable de `kubectl` |
+| Tâche du **poste** (cron), comme la base de prod | même chemin que les autres sauvegardes, déjà copié hors site | tâche planifiée dans le cluster : elle demanderait une méthode d'authentification Kubernetes et le droit `auth-delegator`, écartés ([Démarrage](#démarrage)) |
 
-**Limite** : cet instantané n'est pas planifié (la base de prod, elle,
-est sauvegardée chaque jour). Sans lui, la perte du disque du coffre
-obligerait à le réinitialiser et à refaire l'identité de la CI
-(`tofu apply` dans `config/`, jeton SonarQube à réécrire). Évolution :
-instantané quotidien par une tâche planifiée du poste, avec un jeton
-limité à la seule lecture de `sys/storage/raft/snapshot`, copié hors
-site avec les sauvegardes (rapport, recommandation 26).
+L'instantané reste **chiffré** par le coffre : sans 2 des 3 clés de
+déverrouillage (Bitwarden), il est illisible.
+
+### Mettre en place (Ops, une fois, coffre déverrouillé)
+
+1. Appliquer la règle et le modèle de jeton : `tofu apply` dans
+   `config/` ([Appliquer la configuration](#appliquer-la-configuration-ops-coffre-déverrouillé)).
+2. Fabriquer le jeton de sauvegarde, écrit directement dans son fichier,
+   sans jamais s'afficher (jeton racine saisi sans écho) :
+
+   ```shell
+   (umask 077; mkdir -p ~/.config/orion-openbao
+    printf 'Root token: '; read -rs ROOT; echo
+    printf '%s\n' "$ROOT" | kubectl -n openbao exec -i openbao-0 -- sh -c \
+      'IFS= read -r BAO_TOKEN; export BAO_TOKEN;
+       bao token create -role=openbao-backup -field=token' \
+      > ~/.config/orion-openbao/backup-token
+    unset ROOT)
+   ls -l ~/.config/orion-openbao/backup-token   # -rw------- , non vide
+   ```
+
+3. Installer la tâche planifiée et la tester une fois :
+
+   ```shell
+   (cd infra/ansible && ansible-playbook site.yml -K --tags backup)
+   BACKUP_METRICS_DIR=/var/lib/node_exporter/textfile scripts/backup-openbao.sh
+   ```
+
+Jeton perdu ou expiré (7 jours sans sauvegarde) : refaire l'étape 2.
+Pour le révoquer : `bao token revoke -self` avec ce jeton.
+
+### Sauvegarder à la main (avant une opération risquée)
+
+```shell
+scripts/backup-openbao.sh   # instantané dans ~/backups/openbao
+```
+
+### Restaurer
+
+Sur un OpenBao installé de neuf (reconstruction du cluster) ou abîmé,
+avec un instantané dont l'empreinte est vérifiée :
+
+```shell
+cd ~/backups/openbao && sha256sum -c openbao-<date>.snap.sha256
+kubectl -n openbao cp openbao-<date>.snap openbao-0:/tmp/restore.snap
+# Jeton racine du coffre EN PLACE (celui d'un coffre neuf, initialisé
+# pour l'occasion) ; -force : l'instantané vient d'un autre coffre
+kubectl -n openbao exec -it openbao-0 -- sh -c \
+  'printf "Token: "; read -rs BAO_TOKEN; echo; export BAO_TOKEN;
+   bao operator raft snapshot restore -force /tmp/restore.snap'
+kubectl -n openbao exec openbao-0 -- rm /tmp/restore.snap
+# Le coffre se rescelle : le déverrouiller avec les clés D'ORIGINE
+```
+
+Après la restauration, le coffre retrouve ses données, ses règles et ses
+jetons : les clés et le jeton racine d'origine (Bitwarden) redeviennent
+les bons ; ceux du coffre neuf ne servent plus.
 
 ## Certificat
 
@@ -264,11 +329,14 @@ kubectl -n openbao delete pod openbao-0
 Certificat public de l'autorité (à donner aux clients) :
 `tofu output -raw openbao_ca_cert`.
 
-**Limite** : le certificat actuel expire le **09/11/2027** ; rien
-n'oblige à lancer `tofu plan` avant, et aucune alerte ne prévient. Un
-certificat expiré couperait la CI du coffre (déploiements bloqués, comme
-quand il est scellé). Évolution : alerte 30 jours avant (sonde de la
-supervision), ou cert-manager.
+Le certificat actuel expire le **09/11/2027**. Un certificat expiré
+couperait la CI du coffre (déploiements bloqués, comme quand il est
+scellé) : chaque jour, `backup-openbao.sh` lit sa date d'expiration
+(partie publique seulement) et l'alerte `OpenBaoCertExpiringSoon`
+prévient **30 jours avant** : lancer alors `tofu plan` puis
+`tofu apply` dans `infra/terraform`, et redémarrer le pod.
+**Limite** : le renouvellement reste un geste de l'Ops ; évolution :
+cert-manager.
 
 ## Sécurité
 
@@ -296,5 +364,5 @@ supervision), ou cert-manager.
 | La configuration d'OpenBao est appliquée avec le jeton racine | méthode d'authentification propre à l'Ops (OIDC de l'entreprise), jeton racine révoqué |
 | Un jeton Kubernetes ne peut pas être révoqué avant sa fin (limite de Kubernetes) | durées déjà courtes (15 min ; 45 min pour les tests longs de staging) |
 | Jeton SonarQube de longue durée (SonarQube ne crée pas de jetons courts), lisible par un job de PR du dépôt (comme avant dans GitHub) ; expire vers le 28/01/2027, sans rappel automatique | rotation régulière, notée dans le calendrier de l'équipe ; jeton à date d'expiration (réglage de SonarQube) |
-| Aucune sauvegarde planifiée du coffre (instantané à la main) | instantané quotidien planifié, copié hors site |
-| Certificat TLS renouvelé seulement par un `tofu plan` lancé à la main ; aucune alerte avant le 09/11/2027 | alerte 30 jours avant, ou cert-manager |
+| Instantané quotidien sur le poste et copie hors site, mais pas à la minute (coffre peu modifié : configuration et jeton SonarQube) ; jeton de sauvegarde rangé en clair sur le poste (600, disque chiffré), limité à l'instantané | 3 serveurs Raft ; dans la cible AWS, tâche planifiée dans EKS qui s'authentifie par son identité (rôle IAM, méthode `aws` d'OpenBao) et copie vers S3 versionné : aucun jeton stocké |
+| Certificat TLS renouvelé par un `tofu apply` de l'Ops (alerte `OpenBaoCertExpiringSoon` 30 jours avant le 09/11/2027) | renouvellement automatique (cert-manager) |

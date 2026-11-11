@@ -17,6 +17,7 @@ marche dans la CI, et inversement.
 | [`zap-scan.sh`](#zap-scansh) | Test d'intrusion de `staging` avec ZAP (passif ou actif) | job `zap` de la CI (`zap.yml`) ; l'opérateur |
 | [`load-test.sh`](#load-testsh) | Test de charge de `staging` avec k6 (6 profils) | job `load-test` de la CI (`load-test.yml`) ; l'opérateur |
 | [`backup.sh`](#backupsh) | Sauvegarder, vérifier et restaurer la base | l'opérateur ; tâches planifiées installées par Ansible (sauvegarde au démarrage du poste et chaque jour, vérification chaque semaine) |
+| [`backup-openbao.sh`](#backup-openbaosh) | Sauvegarder le coffre OpenBao (instantané Raft vérifié) | tâche planifiée installée par Ansible (chaque jour, 11 h 50) ; l'opérateur, avant une opération risquée |
 | [`deploy-sonarqube.sh`](#deploy-sonarqubesh) | Déployer SonarQube dans le cluster Minikube | l'opérateur, à la main |
 
 ## Règles communes
@@ -544,6 +545,53 @@ cron (environnement vide) : sauvegarde et vérification réussies.
 | Sauvegarde faite avec le superutilisateur `microcrm` (l'application, elle, utilise un compte limité) | Compte de sauvegarde en lecture seule (rôle prédéfini `pg_read_all_data`) ; la restauration garde le superutilisateur |
 | La table de liens `organization_persons` n'a pas de clé primaire : restauration par table impossible, liens en double possibles | Clé primaire `(organizations_id, persons_id)` par une migration Flyway (demande à l'équipe Dev) |
 
+## backup-openbao.sh
+
+**But** : sauvegarder chaque jour le coffre-fort OpenBao (identité de la
+CI, jeton SonarQube) pour pouvoir le reconstruire après la perte de son
+disque ou du cluster (recommandation 26 du rapport).
+
+```shell
+scripts/backup-openbao.sh   # instantané dans ~/backups/openbao
+```
+
+**Fonctionnement** : vérifie le jeton de sauvegarde (fichier présent, en
+600) et que le coffre est déverrouillé ; dans le pod, prolonge le jeton
+(7 jours) puis prend l'instantané Raft ; le copie sur le poste dans un
+fichier temporaire, gardé seulement si son empreinte est la même que
+dans le pod et si l'archive est complète et intacte (`state.bin`,
+`meta.json`, empreintes `SHA256SUMS` vérifiées) ; écrit l'empreinte
+(`.sha256`), garde les 7 plus récents, écrit la métrique de supervision ;
+efface toujours le fichier du pod, même après une erreur.
+
+**Paramètres** : `OPENBAO_BACKUP_TOKEN_FILE` (défaut
+`~/.config/orion-openbao/backup-token`), `BACKUP_DIR` (défaut
+`~/backups/openbao`), `KEEP` (défaut 7), `BACKUP_METRICS_DIR` (dossier
+lu par node_exporter ; vide : aucune métrique).
+
+**Conditions d'exécution** : poste Ops, `kubectl` relié au cluster,
+coffre déverrouillé, jeton créé par l'Ops
+([README d'OpenBao](../infra/openbao/README.md#sauvegarde-planifiée)).
+Restauration : même README, « Restaurer ».
+
+**Sécurité** : le jeton ne peut que lire l'instantané (règle
+`openbao-backup`) ; il passe par l'entrée standard, jamais en argument
+(invisible dans la liste des processus) ; fichiers en 600, dossier en
+700 ; l'instantané reste chiffré par le coffre.
+
+**Arrêts expliqués** :
+
+| Cas | Code | Correction proposée |
+|---|---|---|
+| Argument donné | 2 | syntaxe rappelée (aucun argument) |
+| `kubectl`, `sha256sum` ou `tar` absent | 127 | installer l'outil |
+| Fichier du jeton absent | 1 | le créer (README d'OpenBao) |
+| Fichier du jeton lisible par d'autres | 1 | `chmod 600` |
+| Coffre scellé | 1 | le déverrouiller |
+| Coffre injoignable | 1 | `kubectl -n openbao get pods` |
+| Instantané refusé (jeton expiré après 7 jours sans sauvegarde) | 1 | refaire le jeton |
+| Copie abîmée ou archive incomplète | 1 | aucun fichier gardé ; relancer |
+
 ## lib/common.sh
 
 Fonctions partagées, **chargées** par les scripts Bash
@@ -615,6 +663,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/install_deps_test.sh` | bashunit | usage, `package-lock.json` absent, commandes npm et Gradle, « FAILED » détecté |
 | `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Vitest lancé une fois sans navigateur, tests rouges, Gradle lancé, rapport absent |
 | `tests/backup_test.sh` | bashunit | usage, fichier privé (600/700) et empreinte, rotation, `pg_dump` en échec sans fichier partiel, `verify` (base temporaire), fichier abîmé refusé, sauvegarde de sécurité avant restauration, table : lignes absentes seulement, table sans clé refusée, nom de table piégé ; métrique de supervision écrite après une sauvegarde réussie (fichier en 640), aucune après un échec |
+| `tests/backup_openbao_test.sh` | bashunit | usage, jeton absent ou lisible par d'autres, coffre scellé, instantané privé (600/700) avec empreinte, jeton passé par l'entrée standard et jamais en argument, jeton prolongé, métrique écrite (640), échec sans fichier ni métrique, copie abîmée ou archive à l'empreinte fausse refusées, rotation, fichier du pod toujours effacé |
 | `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, chart emballé avec la version déployée (archive effacée ensuite) ou installé tel quel sans étiquette, échec de l'emballage ou de Helm, test de fumée raté → retour arrière, `rollback` |
 | `tests/load_test_test.sh` | bashunit | usage, profil inconnu, prod refusée, `PUSH_METRICS` invalide, scénario absent, fumée dans `staging` contre le front (durée limitée), envoi des mesures activable, pod sans privilège sur image figée, résumé gardé, seuil dépassé (code 1), point de rupture atteint (succès) |
 | `tests/zap_scan_test.sh` | bashunit | usage, mode inconnu, règles absentes, commandes passive et active (durée limitée), pod sans privilège ni jeton, rapport extrait du journal, échec (règle FAIL) avec rapport conservé |

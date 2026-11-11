@@ -5,7 +5,7 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataires : Maria, CTO, et les équipes Dev et Ops) |
 | Auteur  | Yohan Bouchet |
-| Version | 1.3 (recommandations 26 à 30, DORA dans Grafana, incident du 11/11 (7.8) ; 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
+| Version | 1.3 (recommandations 26 à 30, DORA dans Grafana, incident du 11/11 (7.8), sauvegarde d'OpenBao (reco 26 appliquée) ; 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
 | Date    | 11/11/2026 : état de la production au 11/11 (v1.9.1, en production depuis le 11/11) ; mesures du 06/11 au 11/11 |
 
 **Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
@@ -34,7 +34,7 @@ elle-même.
 | Délai entre un commit et la production | non mesurable | **2,9 h** (médiane ; explication en 3.1) |
 | Temps de réponse au test de rupture (p95) | 1,07 s (mesuré avant correction) | **6,5 ms**, 0 erreur |
 | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (mesurés le 08/11, avant correction) | **0** en 8 redémarrages |
-| Supervision | aucune | **4 tableaux de bord** (dont les indicateurs DORA), **9 alertes** (dont 3 de sécurité) envoyées par e-mail ; journaux au format JSON, recherchés par champ |
+| Supervision | aucune | **4 tableaux de bord** (dont les indicateurs DORA), **11 alertes** (dont 3 de sécurité) envoyées par e-mail ; journaux au format JSON, recherchés par champ |
 | Perte d'un serveur d'API en production (exercice du 07/11) | non testée | **0 erreur** pour l'utilisateur, remplacement prêt en 11 s |
 
 **Trois recommandations prioritaires** (détail en section 8.3) :
@@ -231,8 +231,8 @@ chaîne contrôle **3 fois plus de choses en 2 fois moins de temps**.
 | --- | --- | --- | --- |
 | Tests du back (JUnit) | 2 | 6 (dont l'intégration avec la base) | chaque PR |
 | Tests du front | 8 (Karma) | 16 (Vitest, depuis le 08/11) | chaque PR |
-| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 74 + 30 | chaque PR |
-| Tests de l'infrastructure (OpenTofu) | 0 | 13 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
+| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 87 + 30 | chaque PR |
+| Tests de l'infrastructure (OpenTofu) | 0 | 15 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
 | Test du poste Ops (Ansible, Molecule) | 0 | 5 rôles appliqués sur une machine jetable, rejoués sans aucun changement (idempotence), puis 6 contrôles (outils, sauvegardes planifiées, services, métriques, pare-feu, journaux Docker) | chaque PR (depuis le 10/11) |
 | Test d'intrusion (OWASP ZAP) | 0 | 0 échec ; 19 règles bloquantes | chaque déploiement de staging |
 | Test de fumée de charge (k6) | 0 | seuils respectés | chaque déploiement de staging, bloque la prod |
@@ -480,6 +480,7 @@ Choix justifié dans le document 1 (section 2.3.7).
 | Orion - Availability | MicroCRM est-il debout dans chaque environnement ? Pods prêts, redémarrages, disque, âge de la dernière sauvegarde, alertes en cours |
 | Orion - Performance | Les 4 « signaux d'or » : trafic, temps de réponse (p50, p95, p99), erreurs, saturation (processeur, mémoire, autoscaling) |
 | Orion - Security | Réponses en erreur, accès refusés, journaux d'erreurs |
+| Orion - Delivery | Les 5 indicateurs DORA de la prod et leur évolution (depuis le 11/11, section 3.1) |
 
 | Alerte | Déclenchée quand | Couvre |
 | --- | --- | --- |
@@ -489,6 +490,8 @@ Choix justifié dans le document 1 (section 2.3.7).
 | PodRestartLoop | un conteneur redémarre plus de 3 fois en 30 min | stabilité |
 | HostDiskAlmostFull | disque de la machine rempli à plus de 85 % | capacité |
 | BackupTooOld | dernière sauvegarde de la prod il y a plus de 26 h | données |
+| OpenBaoBackupTooOld | dernier instantané du coffre OpenBao il y a plus de 74 h | données (secrets de la CI) |
+| OpenBaoCertExpiringSoon | certificat TLS du coffre expiré dans moins de 30 jours | accès de la CI |
 | MicrocrmClientErrorSpike | plus de 50 réponses 4xx de l'API en prod en 5 min | sécurité |
 | LogIngestionStopped | aucune ligne de journal reçue depuis 15 min | sécurité |
 | OpenBaoSealed | coffre-fort scellé ou arrêté depuis 15 min : la CI ne peut plus déployer | sécurité (accès de la CI) |
@@ -857,12 +860,12 @@ de Paris.
 | Livraison | Durée de ces contrôles | 4,67 min | **2,2 min** (médiane) | 3.2 |
 | Livraison | Déploiement en production | manuel, non tracé | **automatique après approbation** : 5,1 par semaine, 0 % d'échec, 2,9 h entre un commit et la prod (médiane) | 3.1 |
 | Livraison | Versions | `0.0.1-SNAPSHOT`, aucune image | **25 versions** ; chaque image liée à sa version et à son commit ; une version seulement pour un changement livré | 3.3 |
-| Qualité | Tests de l'infrastructure | aucun | **13 tests OpenTofu** ; poste Ops testé par Molecule (5 rôles, idempotence, 6 contrôles) | 4.1 |
+| Qualité | Tests de l'infrastructure | aucun | **15 tests OpenTofu** ; poste Ops testé par Molecule (5 rôles, idempotence, 6 contrôles) | 4.1 |
 | Disponibilité | Perte d'un serveur d'API en prod | jamais testée | **0 erreur**, remplacement prêt en 11 s | 7.3 |
 | Disponibilité | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (08/11, avant correction) | **0** en 8 redémarrages | 7.5 |
 | Disponibilité | Sauvegarde de la base | aucune | quotidienne, restauration vérifiée chaque semaine | 3.3 |
 | Performance | p95 au point de rupture (1 réplique) | 1,07 s (06/11, avant correction) | **6,5 ms** | 6.3 |
-| Supervision | Tableaux de bord et alertes | aucun | **4 tableaux de bord, 9 alertes** (dont 3 de sécurité) par e-mail, chaîne vérifiée ; déploiements marqués sur les courbes | 5.2, 5.3, 6.1 |
+| Supervision | Tableaux de bord et alertes | aucun | **4 tableaux de bord, 11 alertes** (dont 3 de sécurité) par e-mail, chaîne vérifiée ; déploiements marqués sur les courbes | 5.2, 5.3, 6.1 |
 | Supervision | Journaux | texte libre | **JSON**, recherche par champ, sans les paramètres des adresses | 5.2 |
 
 ### 8.2 Observations sur les déploiements et les releases
@@ -933,7 +936,7 @@ ajoutées le 10/11, puis 26 à 30, ajoutées le 11/11 (relecture de
 cohérence), viennent ensuite, pour que les numéros cités dans les
 sections précédentes restent valables. Les trois priorités du moment
 sont rappelées dans la synthèse (section 1). La colonne « État » montre
-où en est chacune le 11/11 : 4 sont appliquées, 4 le sont en partie.
+où en est chacune le 11/11 : 5 sont appliquées, 4 le sont en partie.
 
 | # | Recommandation | Constat | Effort | Équipe | État au 11/11 |
 | --- | --- | --- | --- | --- | --- |
@@ -962,7 +965,7 @@ où en est chacune le 11/11 : 4 sont appliquées, 4 le sont en partie.
 | 23 | Déverrouiller OpenBao automatiquement (AWS KMS dans la cible cloud ; sur site : KMS d'un hébergeur européen, boîtier HSM ou second OpenBao) et passer à 3 serveurs | geste manuel chaque matin ; tant qu'il manque, la CI ne peut plus déployer (5.3) | moyen | Ops | À faire ; comparatif des solutions (avantages, inconvénients, niveau de coût) dans `infra/openbao/README.md` |
 | 24 | Décrire les réglages du dépôt GitHub (environnements, approbations, branches autorisées, variables) en OpenTofu (fournisseur `integrations/github`) | réglages effacés sans trace par la suppression des environnements le 10/11 (7.7) | faible | Ops | À faire |
 | 25 | Lancer zizmor et actionlint (sécurité et syntaxe des workflows) dans la CI | contrôles lancés seulement sur le poste Ops (5.1) | faible | Ops | À faire |
-| 26 | Sauvegarder le coffre OpenBao chaque jour (instantané Raft planifié, jeton limité à cette action, copie hors site) et alerter 30 jours avant l'expiration de son certificat TLS (09/11/2027) | seule la base de prod est sauvegardée ; le renouvellement du certificat dépend d'un `tofu plan` que rien n'impose (8.2) | faible | Ops | À faire |
+| 26 | Sauvegarder le coffre OpenBao chaque jour (instantané Raft planifié, jeton limité à cette action, copie hors site) et alerter 30 jours avant l'expiration de son certificat TLS (09/11/2027) | seule la base de prod est sauvegardée ; le renouvellement du certificat dépend d'un `tofu plan` que rien n'impose (8.2) | faible | Ops | **Appliquée** (11/11) : instantané chaque jour à 11 h 50 (`backup-openbao.sh`, jeton limité à l'instantané, copie hors site), alertes `OpenBaoBackupTooOld` et `OpenBaoCertExpiringSoon` |
 | 27 | Sécuriser la chaîne d'approvisionnement des images : déployer par empreinte plutôt que par étiquette, signer les images dans la CI (cosign, Sigstore) et publier leur SBOM, puis refuser dans le cluster toute image non signée ou hors GHCR (ValidatingAdmissionPolicy ou Kyverno) | une étiquette peut être réécrite sur le registre ; le cluster n'exige aucun registre de confiance (constat Trivy KSV-0125 du 09/11) | moyen | Ops | À faire |
 | 28 | Décrire le runner local (ARC) et SonarQube en OpenTofu, avec le reste du socle, et suivre le chart SonarQube (2026.5.1004 disponible, base sauvegardée avant la montée de version) | deux briques installées à la main, écarts non détectés (8.2) | faible | Ops | À faire ; le GitOps (recommandation 7) les couvrirait aussi |
 | 29 | Rejouer l'installation complète de zéro (`minikube delete`, puis le README), temps mesuré, écarts corrigés | la procédure d'installation est décrite, jamais rejouée d'un bloc : reproductibilité non prouvée | faible | Ops | À faire |
