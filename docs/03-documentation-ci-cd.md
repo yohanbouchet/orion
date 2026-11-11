@@ -112,7 +112,7 @@ de performance (document 4) :
 | 2. Qualité contrôlée à chaque modification | Quality Gate sans condition, couverture non mesurée | Quality Gate bloquant ; nouveau code couvert à 80 % | **3 conditions bloquantes** ; couverture 82,9 % |
 | 3. Livrer plus vite et de façon traçable | déploiement manuel, non tracé | chaque déploiement lié à une version, une image et un commit | **5,1 mises en prod par semaine**, 2,9 h entre un commit et la prod (médiane), 0 % d'échec |
 | 4. Revenir en arrière sans coupure | aucun retour arrière ni sauvegarde | retour arrière automatique ; sauvegarde restaurable | **testés** : retour arrière sans coupure ; restauration vérifiée chaque semaine |
-| 5. Voir et être prévenu | aucune supervision | disponibilité, performance et sécurité suivies | **3 tableaux de bord, 9 alertes**, indicateurs DORA chaque semaine |
+| 5. Voir et être prévenu | aucune supervision | disponibilité, performance et sécurité suivies | **4 tableaux de bord, 9 alertes**, indicateurs DORA chaque jour ouvré, dans Grafana |
 
 ## 3. Workflow de branches
 
@@ -203,7 +203,7 @@ manuelle ratée.
 | E2E | **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | chaque déploiement (dev, staging, prod) | le parcours complet ; un échec remet la version précédente |
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
-| Scripts d'exploitation | bashunit (74 tests), pytest (28 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
+| Scripts d'exploitation | bashunit (74 tests), pytest (30 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
 | Infrastructure | `tofu fmt`, `validate` et `test` ; `ansible-playbook --syntax-check`, ansible-lint (profil production) ; **Molecule** : 5 rôles Ansible appliqués à une machine jetable, idempotence, contrôles | chaque PR | 100 % des fichiers Terraform et Ansible ; 5 rôles sur 8 exécutés |
 
 **Limite** : pas de test de bout en bout dans un navigateur (Cypress,
@@ -980,8 +980,9 @@ hors site (rapport, recommandation 26).
 ### 7.7 Monitoring et alerting
 
 **Outils** : VictoriaMetrics (métriques), VictoriaLogs (journaux),
-Grafana (3 tableaux de bord : *Availability*, *Performance*,
-*Security*), Alertmanager (e-mails), installés par OpenTofu. Ils lisent
+Grafana (4 tableaux de bord : *Availability*, *Performance*,
+*Security*, *Delivery* ; déploiements marqués sur les courbes),
+Alertmanager (e-mails), installés par OpenTofu. Ils lisent
 l'API (Spring Boot Actuator, sur un port de gestion jamais exposé),
 Kubernetes, la machine et les journaux des conteneurs.
 
@@ -1007,9 +1008,10 @@ premiers gestes ; e-mail de fin d'alerte) :
 Chaîne vérifiée de bout en bout le 07/11 : alerte de test, puis alerte
 de sécurité déclenchée par un test réel annoncé (e-mails reçus).
 
-**Suivi des déploiements : indicateurs DORA**, calculés chaque lundi
-par `dora.py` à partir des déploiements de production (workflow
-*DORA metrics*) :
+**Suivi des déploiements : indicateurs DORA**, calculés chaque jour
+ouvré par `dora.py` à partir des déploiements de production (workflow
+*DORA metrics*), puis importés dans VictoriaMetrics et affichés dans
+le tableau de bord *Orion - Delivery* (depuis le 11/11) :
 
 | Indicateur | Signification | Valeur (10/11) |
 | --- | --- | --- |

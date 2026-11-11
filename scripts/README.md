@@ -11,7 +11,7 @@ marche dans la CI, et inversement.
 | [`install-deps.sh`](#install-depssh) | Installer (front) ou vérifier (back) les dépendances | jobs `test-front`, `test-back` |
 | [`run-tests.sh`](#run-testssh) | Lancer les tests et vérifier le rapport de couverture | jobs `test-front`, `test-back` |
 | [`notify.py`](#notifypy) | Signaler par ticket et e-mail une CI en échec sur `main` | job `notify` |
-| [`dora.py`](#dorapy) | Mesurer les 5 indicateurs DORA de la prod (livraison et stabilité) | workflow `dora.yml` (chaque lundi) ; l'opérateur |
+| [`dora.py`](#dorapy) | Mesurer les 5 indicateurs DORA de la prod (livraison et stabilité) | workflow `dora.yml` (chaque jour ouvré) ; l'opérateur |
 | [`lib/common.sh`](#libcommonsh) | Fonctions partagées : journal, arrêt, outils requis | les scripts Bash |
 | [`deploy.sh`](#deploysh) | Déployer MicroCRM, le vérifier, revenir en arrière | l'opérateur ; job de déploiement de la CI (`deploy.yml`) |
 | [`zap-scan.sh`](#zap-scansh) | Test d'intrusion de `staging` avec ZAP (passif ou actif) | job `zap` de la CI (`zap.yml`) ; l'opérateur |
@@ -166,9 +166,11 @@ outil à installer (modèle du projet Four Keys de Google).
 | Temps de rétablissement | médiane ouverture → fermeture des tickets `incident` |
 | Taux de reprise des déploiements (5e indicateur, ajouté par DORA après les 4 historiques) | déploiements qui ne livrent que des correctifs (`fix`), sur les déploiements réussis |
 
-**Lancement** : workflow **DORA metrics** chaque lundi à 8 h UTC, ou à la
-main (**Actions** → **DORA metrics** → **Run workflow**) ; le tableau
-s'affiche sur la page du run. Le lancement planifié ne part que de `main`,
+**Lancement** : workflow **DORA metrics** chaque jour ouvré à 8 h et
+15 h UTC, ou à la main (**Actions** → **DORA metrics** → **Run
+workflow**) ; le tableau s'affiche sur la page du run, et les valeurs
+sont importées dans VictoriaMetrics par un 2e job, sur le runner local
+(tableau de bord Grafana **Orion - Delivery**). Le lancement planifié ne part que de `main`,
 peut avoir quelques minutes de retard, et GitHub le désactive après 60
 jours sans activité sur un dépôt public (le réactiver dans **Actions**).
 En local, sans jeton (dépôt public) :
@@ -183,7 +185,10 @@ DORA_DAYS=7 python3 scripts/dora.py     # 7 derniers jours
 détection, et se ferme au rétablissement.
 
 **Paramètres** (variables d'environnement) : `DORA_DAYS` (30 par défaut),
-`GITHUB_TOKEN` (facultatif), et les variables standard `GITHUB_*` de
+`GITHUB_TOKEN` (facultatif), `DORA_METRICS_FILE` (facultatif : fichier
+où écrire les mêmes valeurs au format texte de Prometheus, une ligne
+`dora_*` par indicateur, sans ligne quand il n'y a pas de donnée), et
+les variables standard `GITHUB_*` de
 GitHub Actions. **Conditions d'exécution** : Python 3.14, bibliothèque
 standard seule. **Sécurité** : lecture seule (`contents`, `deployments`,
 `issues: read`), jeton temporaire du job.
@@ -614,7 +619,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/load_test_test.sh` | bashunit | usage, profil inconnu, prod refusée, `PUSH_METRICS` invalide, scénario absent, fumée dans `staging` contre le front (durée limitée), envoi des mesures activable, pod sans privilège sur image figée, résumé gardé, seuil dépassé (code 1), point de rupture atteint (succès) |
 | `tests/zap_scan_test.sh` | bashunit | usage, mode inconnu, règles absentes, commandes passive et active (durée limitée), pod sans privilège ni jeton, rapport extrait du journal, échec (règle FAIL) avec rapport conservé |
 | `tests/test_notify.py` | pytest | jobs en échec, exercice, ouverture / commentaire / fermeture, résumé, paramètres |
-| `tests/test_dora.py` | pytest | dates de l'API, période, délai médian, échec par état ou par incident, rétablissement, reprise (`fix` seuls), aucune donnée, déploiements en attente ignorés, état « inactive » ignoré au profit du dernier état final, commits de fusion exclus, paramètre invalide (code 2), API injoignable (code 1) |
+| `tests/test_dora.py` | pytest | dates de l'API, période, délai médian, échec par état ou par incident, rétablissement, reprise (`fix` seuls), aucune donnée, déploiements en attente ignorés, état « inactive » ignoré au profit du dernier état final, commits de fusion exclus, métriques au format de Prometheus (valeur absente non exportée), fichier écrit seulement sur demande, paramètre invalide (code 2), API injoignable (code 1) |
 
 Les tests Bash remplacent `npm`, `java`, `gradlew`, `helm` ou `kubectl`
 par des **doublures** (faux programmes placés en tête du `PATH`) : ils

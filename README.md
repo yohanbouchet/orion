@@ -55,11 +55,11 @@ Au 10/11/2026 :
 | Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée au démarrage du poste et chaque jour, restauration vérifiée chaque semaine, copie hors site chiffrée |
 | Socle du cluster en code : fichiers Terraform, exécutés par OpenTofu depuis le 09/11 (namespaces, comptes de déploiement aux droits limités, supervision, OpenBao) ; vérifiés et testés par la CI, appliqués par l'Ops | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) ; 5 rôles testés par Molecule à chaque PR | ✅ [`infra/ansible/`](infra/ansible/README.md) |
-| Supervision : métriques, journaux structurés en JSON, 9 alertes par e-mail, 3 tableaux de bord (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) ; journaux JSON : v1.9.0 |
+| Supervision : métriques, journaux structurés en JSON, 9 alertes par e-mail, 4 tableaux de bord dont les indicateurs DORA, déploiements marqués sur les courbes (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) ; journaux JSON : v1.9.0 |
 | Coffre-fort de secrets OpenBao (TLS, déverrouillage manuel par l'Ops, clés hors du dépôt, journal d'audit) | ✅ [`infra/openbao/`](infra/openbao/README.md) |
 | Identité de la CI : **aucun secret dans GitHub** ; chaque job reçoit d'OpenBao un accès court contre son badge OIDC ; jetons longue durée supprimés | ✅ [Identité de la CI](infra/openbao/README.md#identité-de-la-ci) |
 | Tests de charge k6 (6 profils) ; test de fumée k6 avant chaque mise en prod ; autoscaling (HPA) du back en `staging` et en `prod` | ✅ [`load-test.sh`](scripts/README.md#load-testsh) |
-| Indicateurs DORA, calculés chaque lundi et à la demande | ✅ [`dora.py`](scripts/README.md#dorapy) |
+| Indicateurs DORA, calculés chaque jour ouvré et à la demande, affichés dans Grafana | ✅ [`dora.py`](scripts/README.md#dorapy) |
 | Front mis à jour vers Angular 22, tests passés à Vitest : 0 faille connue, 0 problème SonarQube | ✅ v1.7.1 |
 | Compte limité de l'application dans la base (moindre privilège) | ✅ v1.8.0, [chart](infra/helm/microcrm/README.md#sécurité) |
 | Mises à jour sans requête perdue (pause avant l'arrêt des pods) | ✅ v1.8.1, [chart](infra/helm/microcrm/README.md#sécurité) |
@@ -131,7 +131,8 @@ orchestre la CI et héberge le registre d'images.
   workflows/deploy.yml    déploiement d'un environnement (appelé par ci.yml)
   workflows/zap.yml       test d'intrusion de staging (ci.yml ou à la main)
   workflows/load-test.yml test de charge k6 de staging (ci.yml ou à la main)
-  workflows/dora.yml      indicateurs DORA (chaque lundi ou à la main)
+  workflows/dora.yml      indicateurs DORA (jours ouvrés ou à la main),
+                          importés dans VictoriaMetrics
   workflows/runner-smoke-test.yml  test du runner local (à la main)
   actions/kube-access/    accès au cluster des jobs du runner local
                           (jeton court délivré par OpenBao)
@@ -543,9 +544,10 @@ Actuator, port de gestion 8081), de Kubernetes et de la machine
 alertes sont envoyées par e-mail : disponibilité (prod arrêtée,
 redémarrages en boucle), performance (erreurs 5xx, lenteur), machine
 (disque, sauvegarde) et sécurité (rafale de requêtes refusées, journaux
-qui n'arrivent plus, coffre-fort scellé). Trois tableaux de bord sont
-disponibles :
-disponibilité, performance, sécurité. Consommation mesurée le 07/11 :
+qui n'arrivent plus, coffre-fort scellé). Quatre tableaux de bord sont
+disponibles : disponibilité, performance, sécurité, et livraison
+(indicateurs DORA) ; chaque mise en service d'une image y est marquée
+sur les courbes. Consommation mesurée le 07/11 :
 ≈ 1,1 Gio et 0,1 cœur. Détails, premiers gestes face à une alerte,
 sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.md).
 

@@ -4,13 +4,16 @@
 #            (30 jours par défaut) à partir de l'API de GitHub :
 #            déploiements de l'environnement production, commits livrés,
 #            tickets étiquetés « incident » ; affiche un tableau Markdown
+#            et, sur demande, écrit les mêmes valeurs au format texte de
+#            Prometheus (importé dans VictoriaMetrics pour Grafana)
 # Utilise  : bibliothèque standard de Python seulement ; API REST de GitHub
 #            (lecture seule ; jeton facultatif pour un dépôt public)
-# Utilisé par : workflow dora.yml (chaque lundi) ; l'Ops en local ;
+# Utilisé par : workflow dora.yml (chaque jour ouvré) ; l'Ops en local ;
 #            tests : scripts/tests/test_dora.py
 # Paramètres (variables d'environnement) : DORA_DAYS (durée de la période,
 #            en jours), GITHUB_REPOSITORY, GITHUB_API_URL, GITHUB_TOKEN,
-#            GITHUB_STEP_SUMMARY (fournis par GitHub Actions)
+#            GITHUB_STEP_SUMMARY (fournis par GitHub Actions) ;
+#            DORA_METRICS_FILE (facultatif : fichier des métriques)
 # Codes    : 0 réussi ; 1 appel à l'API GitHub en échec ; 2 paramètre
 #            invalide
 """Calcule les indicateurs DORA de la prod à partir de l'API de GitHub."""
@@ -112,6 +115,28 @@ def format_report(metrics, days):
     return "\n".join(lines) + "\n"
 
 
+# Nom de chaque métrique exportée → clé du résultat de compute() ; une
+# valeur absente (aucune donnée) n'est pas exportée : Grafana affiche
+# « No data » plutôt qu'un faux zéro
+METRICS = (
+    ("dora_deployments", "deployments"),
+    ("dora_deployment_frequency_per_week", "deployments_per_week"),
+    ("dora_change_lead_time_hours", "lead_time_hours"),
+    ("dora_change_fail_ratio", "change_fail_rate"),
+    ("dora_recovery_time_hours", "recovery_time_hours"),
+    ("dora_rework_ratio", "rework_rate"),
+)
+
+
+def format_metrics(metrics, days):
+    """Mêmes valeurs au format texte de Prometheus (une ligne par
+    indicateur), avec l'environnement et la période en étiquettes."""
+    labels = f'environment="{ENVIRONMENT}",window_days="{days}"'
+    lines = [f"{name}{{{labels}}} {float(metrics[key]):g}"
+             for name, key in METRICS if metrics[key] is not None]
+    return "\n".join(lines) + "\n"
+
+
 class GitHubClient:
     """Lecture de l'API REST de GitHub ; jeton envoyé s'il existe."""
 
@@ -189,14 +214,19 @@ def main():
     except (urllib.error.URLError, TimeoutError) as error:
         print(f"dora.py: GitHub API call failed: {error}", file=sys.stderr)
         return 1
-    report = format_report(
-        compute(deployments, incidents, datetime.now(UTC), days), days)
+    metrics = compute(deployments, incidents, datetime.now(UTC), days)
+    report = format_report(metrics, days)
     print(report)
     # Dans GitHub Actions : le tableau s'affiche aussi sur la page du run
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as f:
             f.write(report)
+    # Fichier des métriques, envoyé ensuite à VictoriaMetrics (dora.yml)
+    metrics_file = os.environ.get("DORA_METRICS_FILE")
+    if metrics_file:
+        with open(metrics_file, "w", encoding="utf-8") as f:
+            f.write(format_metrics(metrics, days))
     return 0
 
 

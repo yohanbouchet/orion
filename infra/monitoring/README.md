@@ -51,7 +51,7 @@ nœud entier utilise alors 5,7 Gio sur 15 et 0,8 cœur sur 8.
 |---|---|
 | [`values.yaml.tftpl`](values.yaml.tftpl) | réglages de la pile ; modèle (fonction `templatefile` d'OpenTofu) : l'adresse e-mail des alertes y est insérée à l'installation, **jamais écrite dans le dépôt** |
 | [`extras.yaml`](extras.yaml) | cibles lues (API, machine), **nos alertes**, pare-feu réseau des 2 namespaces |
-| [`dashboards/`](dashboards/) | les 3 tableaux de bord (JSON), chargés dans Grafana par des ConfigMaps (OpenTofu) |
+| [`dashboards/`](dashboards/) | les 4 tableaux de bord (JSON), chargés dans Grafana par des ConfigMaps (OpenTofu) |
 
 ## Ce qui est surveillé
 
@@ -179,9 +179,23 @@ Choix de sécurité et d'exploitation :
 | **Orion - Availability** | MicroCRM est-il debout, dans chaque environnement ? Pods prêts, API lue, redémarrages, disque et mémoire de la machine, âge de la dernière sauvegarde, alertes en cours |
 | **Orion - Performance** | Les 4 signaux d'or : trafic, temps de réponse (p50/p95/p99), erreurs, saturation (CPU, mémoire, mémoire Java, autoscaling) |
 | **Orion - Security** | Réponses 4xx/5xx, requêtes refusées (401/403), redémarrages du collecteur, 4xx du front lues dans les journaux, journaux d'erreurs |
+| **Orion - Delivery** | La livraison va-t-elle bien ? Les 5 indicateurs DORA de la prod sur 30 jours et leur évolution, importés chaque jour ouvré par le workflow DORA metrics ([`dora.py`](../../scripts/README.md#dorapy)) |
 
-Un sélecteur d'environnement (`prod`, `staging`, `dev`) en haut de
-chaque tableau.
+Un sélecteur d'environnement (`prod`, `staging`, `dev`) en haut des
+trois premiers tableaux.
+
+**Déploiements marqués** : sur chaque tableau, un trait bleu indique
+qu'une nouvelle image du front ou du back a démarré dans
+l'environnement affiché ; son texte donne l'image (`…:v1.9.1`). Il
+vient de kube-state-metrics (`kube_pod_container_info`), sans aucun
+outil de plus : une dégradation se relie d'un coup d'œil à une version.
+
+**Indicateurs DORA** : la règle réseau `vmsingle-from-runner`
+([`extras.yaml`](extras.yaml)) laisse le runner local de la CI écrire
+dans VictoriaMetrics (port 8428), comme celle de k6. **Limite** :
+VictoriaMetrics n'a pas d'authentification ; tout job lancé sur ce
+runner (`main` ou PR du dépôt, jamais une copie extérieure) pourrait y
+écrire. Le workflow ne transmet que des lignes `dora_*` contrôlées.
 
 Un panneau sans donnée affiche ce que cela veut dire (`no traffic`,
 `no firing alert`) : « No data » reste réservé aux cas anormaux

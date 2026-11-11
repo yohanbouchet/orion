@@ -12,6 +12,24 @@
     "from": "now-6h",
     "to": "now"
   },
+  "annotations": {
+    "list": [
+      {
+        "name": "Deployments",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "blue",
+        "expr": "count by (image_spec) (kube_pod_container_info{namespace=\"$env\",container=~\"front|back\"}) unless count by (image_spec) (kube_pod_container_info{namespace=\"$env\",container=~\"front|back\"} offset 5m)",
+        "step": "1m",
+        "titleFormat": "Deployment",
+        "textFormat": "{{image_spec}}",
+        "tagKeys": "image_spec"
+      }
+    ]
+  },
   "editable": false,
   "panels": [
     {
