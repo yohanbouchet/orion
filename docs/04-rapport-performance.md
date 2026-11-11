@@ -34,7 +34,7 @@ elle-même.
 | Délai entre un commit et la production | non mesurable | **2,9 h** (médiane ; explication en 3.1) |
 | Temps de réponse au test de rupture (p95) | 1,07 s (mesuré avant correction) | **6,5 ms**, 0 erreur |
 | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (mesurés le 08/11, avant correction) | **0** en 8 redémarrages |
-| Supervision | aucune | **3 tableaux de bord, 9 alertes** (dont 3 de sécurité) envoyées par e-mail ; journaux au format JSON, recherchés par champ |
+| Supervision | aucune | **4 tableaux de bord** (dont les indicateurs DORA), **9 alertes** (dont 3 de sécurité) envoyées par e-mail ; journaux au format JSON, recherchés par champ |
 | Perte d'un serveur d'API en production (exercice du 07/11) | non testée | **0 erreur** pour l'utilisateur, remplacement prêt en 11 s |
 
 **Trois recommandations prioritaires** (détail en section 8.3) :
@@ -73,6 +73,9 @@ et certificat du coffre-fort, chaîne d'approvisionnement des images,
 runner local et SonarQube en OpenTofu, installation rejouée de zéro,
 analyse quotidienne des images en service (2 failles hautes apparues
 le 11/11 dans le front en prod, corrigées par la version suivante).
+Les indicateurs DORA sont désormais aussi dans Grafana (tableau de
+bord *Orion - Delivery*), et chaque déploiement est marqué sur les
+courbes (recommandation 10, appliquée ; section 3.1).
 
 ## 2. Contexte et objectifs
 
@@ -163,6 +166,16 @@ production (workflow *DORA metrics*).
 
 ![Résumé du workflow DORA metrics sur GitHub le 08/11 (avant les versions du 09/11) : tableau des 5 indicateurs de la production](rapport-performance/dora.png)
 
+**Dans Grafana depuis le 11/11** : le workflow importe aussi ces
+valeurs dans VictoriaMetrics, chaque jour ouvré ; le tableau de bord
+*Orion - Delivery* montre les 5 indicateurs et leur évolution, à côté
+de la supervision (consigne de l'énoncé : données mesurées intégrées
+à l'outil de visualisation). Le 11/11, après v1.9.1, le délai médian
+est passé à **5,3 h** (23 déploiements, 5,4 par semaine, reprise
+30 %) : v1.9.1 a livré d'un coup les commits de documentation de la
+veille au soir, ce qui illustre le constat ci-dessus et la
+recommandation 18. Les chiffres de ce rapport restent ceux du 10/11.
+
 ### 3.2 Pipeline d'intégration continue
 
 | | Avant (27/10) | Après (06/11) |
@@ -212,7 +225,7 @@ chaîne contrôle **3 fois plus de choses en 2 fois moins de temps**.
 | --- | --- | --- | --- |
 | Tests du back (JUnit) | 2 | 6 (dont l'intégration avec la base) | chaque PR |
 | Tests du front | 8 (Karma) | 16 (Vitest, depuis le 08/11) | chaque PR |
-| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 74 + 28 | chaque PR |
+| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 74 + 30 | chaque PR |
 | Tests de l'infrastructure (OpenTofu) | 0 | 13 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
 | Test du poste Ops (Ansible, Molecule) | 0 | 5 rôles appliqués sur une machine jetable, rejoués sans aucun changement (idempotence), puis 6 contrôles (outils, sauvegardes planifiées, services, métriques, pare-feu, journaux Docker) | chaque PR (depuis le 10/11) |
 | Test d'intrusion (OWASP ZAP) | 0 | 0 échec ; 19 règles bloquantes | chaque déploiement de staging |
@@ -787,7 +800,7 @@ ces changements (la dernière, v1.9.0, date du 09/11 à 17:32).
 | Disponibilité | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (08/11, avant correction) | **0** en 8 redémarrages | 7.5 |
 | Disponibilité | Sauvegarde de la base | aucune | quotidienne, restauration vérifiée chaque semaine | 3.3 |
 | Performance | p95 au point de rupture (1 réplique) | 1,07 s (06/11, avant correction) | **6,5 ms** | 6.3 |
-| Supervision | Tableaux de bord et alertes | aucun | **3 tableaux de bord, 9 alertes** (dont 3 de sécurité) par e-mail, chaîne vérifiée | 5.2, 5.3, 6.1 |
+| Supervision | Tableaux de bord et alertes | aucun | **4 tableaux de bord, 9 alertes** (dont 3 de sécurité) par e-mail, chaîne vérifiée ; déploiements marqués sur les courbes | 5.2, 5.3, 6.1 |
 | Supervision | Journaux | texte libre | **JSON**, recherche par champ, sans les paramètres des adresses | 5.2 |
 
 ### 8.2 Observations sur les déploiements et les releases
@@ -858,9 +871,9 @@ ajoutées le 10/11, puis 26 à 30, ajoutées le 11/11 (relecture de
 cohérence), viennent ensuite, pour que les numéros cités dans les
 sections précédentes restent valables. Les trois priorités du moment
 sont rappelées dans la synthèse (section 1). La colonne « État » montre
-où en est chacune le 10/11 : 3 sont appliquées, 4 le sont en partie.
+où en est chacune le 11/11 : 4 sont appliquées, 4 le sont en partie.
 
-| # | Recommandation | Constat | Effort | Équipe | État au 10/11 |
+| # | Recommandation | Constat | Effort | Équipe | État au 11/11 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Mettre à jour le front vers Angular 22 (et passer les tests à Vitest) | 4 failles hautes dans le code livré au navigateur ; Angular 17 n'est plus maintenu | moyen | Dev | **Appliquée** (v1.7.1) : 0 faille, 0 problème SonarQube (4.2, 5.1) |
 | 2 | Augmenter la couverture des tests, en priorité les cas d'erreur, et ajouter des tests de bout en bout | branches couvertes à 17 % le 06/11, 57,9 % le 08/11 ; aucun test de bout en bout | moyen | Dev | À faire ; couverture passée de 39,7 % à 82,9 % avec Angular 22 |
@@ -871,7 +884,7 @@ où en est chacune le 10/11 : 3 sont appliquées, 4 le sont en partie.
 | 7 | Passer au **GitOps** (Flux ou Argo CD, Apache 2.0, projets CNCF) : le cluster lit lui-même Git, applique l'application et l'infrastructure (OpenTofu par un contrôleur), et corrige tout écart ; la CI n'a plus aucun accès au cluster | infrastructure appliquée à la main ; correction fusionnée restée hors service, règles modifiées hors du dépôt non détectées (8.2) | moyen à élevé | Ops | À faire. Réécrite le 10/11 : l'étape intermédiaire (la CI applique OpenTofu) est écartée, car elle demande à la CI des droits presque administrateur, et OpenBao, qui délivre ses accès, est lui-même installé par OpenTofu (documentation CI/CD, 5.8) |
 | 8 | Faire suivre les images d'outils de la CI par Dependabot (fichier dédié) ; passer Trivy à 0.76.2 | mise à jour de sécurité de Trivy non proposée (8.2) | faible | Ops | **Partielle** : Trivy 0.76.2 (v1.7.0) ; images d'outils encore mises à jour à la main |
 | 9 | Garder 2 répliques minimum en prod ; pour les pics prévisibles, ajouter des pods à l'avance ; étudier une mise à l'échelle sur le nombre de requêtes (KEDA) | renfort arrivé après la fin du pic (6.3) | faible à moyen | Ops | **Partielle** : 2 répliques minimum en place ; le reste à faire |
-| 10 | Annoter automatiquement les déploiements dans Grafana | relier une dégradation à une version d'un coup d'œil | faible | Ops | À faire |
+| 10 | Annoter automatiquement les déploiements dans Grafana | relier une dégradation à une version d'un coup d'œil | faible | Ops | **Appliquée** (11/11) : chaque nouvelle image marquée sur les 4 tableaux de bord ; indicateurs DORA dans Grafana |
 | 11 | Fixer un objectif de disponibilité (ex. 99,5 %) et alerter sur son budget d'erreur ; envoyer les alertes aussi vers la messagerie d'équipe ; faire surveiller l'alerte de contrôle `Watchdog` par un service externe | alertes par e-mail seulement, pas d'objectif chiffré ; personne n'est prévenu si la supervision elle-même s'arrête | faible | Ops et direction | À faire |
 | 12 | Déclarer chaque incident de prod avec le formulaire prévu, pour mesurer le temps de rétablissement | indicateur DORA non mesurable | faible | Dev et Ops | Formulaire « Incident » prêt ; aucun incident de prod à déclarer à ce jour |
 | 13 | Rejouer les tests de charge sur une machine dédiée, à chaque version majeure, avec le rapport HTML de k6 | point de rupture réel non atteint sur le poste | moyen | Ops | À faire |
