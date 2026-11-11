@@ -26,7 +26,7 @@ Helm (scripts/deploy.sh, avec le jeton court du deployer de l'environnement)
 |---|---|
 | `versions.tf` | Versions exigées (OpenTofu 1.13, fournisseurs `hashicorp/kubernetes` 3.4.x, `hashicorp/helm` 3.3.x et `hashicorp/tls` 4.4.x) ; état local, rangé hors du dépôt |
 | `providers.tf` | Connexion au cluster : kubeconfig de l'opérateur, contexte `orion` |
-| `variables.tf` | Réglages : kubeconfig, contexte, environnements (`dev`, `staging`, `prod` seulement), adresse Gmail des alertes (`ops_email`, sensible, hors du dépôt) |
+| `variables.tf` | Réglages : kubeconfig, contexte, environnements (`dev`, `staging`, `prod` seulement), version figée des règles Pod Security (`pod_security_version`, `v1.37`, `latest` refusé), adresse Gmail des alertes (`ops_email`, sensible, hors du dépôt) |
 | `main.tf` | Un namespace par environnement, niveau Pod Security « restricted » |
 | `rbac.tf` | Un compte `deployer` par namespace et ses droits (aucun jeton rangé depuis le 10/11) |
 | `monitoring.tf` | Supervision : namespaces `monitoring` (« restricted ») et `monitoring-collector` (« privileged », collecteur de journaux seul), pile VictoriaMetrics + VictoriaLogs + Grafana (chart Helm figé), tableaux de bord ([détails](../monitoring/README.md)) |
@@ -141,14 +141,15 @@ BACKUP_METRICS_DIR=/var/lib/node_exporter/textfile scripts/backup.sh prod
 ## Tests
 
 ```shell
-tofu test     # 7 tests, faux fournisseurs : aucun cluster nécessaire
+tofu test     # 8 tests, faux fournisseurs : aucun cluster nécessaire
 ```
 
 | Test | Vérifie |
 |---|---|
-| `three_restricted_namespaces` | 3 namespaces, tous au niveau « restricted » |
+| `three_restricted_namespaces` | 3 namespaces, tous au niveau « restricted » ; version des règles Pod Security figée (`v1.37`) sur les namespaces des environnements, de la supervision et d'OpenBao |
 | `deployer_rights_stay_in_their_namespace` | aucun jeton monté dans un pod ; aucun joker `*` ; lecture de son seul namespace |
 | `unknown_environment_is_refused` | un environnement inconnu est refusé par la validation |
+| `unpinned_pod_security_is_refused` | une version de règles Pod Security non figée (`latest`) est refusée |
 | `monitoring_namespaces_security` | `monitoring` en « restricted » ; le namespace du collecteur avertit de tout écart à « restricted » |
 | `monitoring_stack_is_pinned` | chart de supervision à version figée ; un ConfigMap par tableau de bord (3) |
 | `non_gmail_alert_address_is_refused` | une adresse d'alerte non Gmail est refusée |
