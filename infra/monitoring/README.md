@@ -69,8 +69,9 @@ Alertmanager, regroupées par alerte et par namespace, rappelées toutes
 les 4 h tant qu'elles durent.
 
 Rangées par groupe dans [`extras.yaml`](extras.yaml) (disponibilité,
-performance, machine, sécurité). Les deux alertes de sécurité (ticket
-#106) répondent à la catégorie A09 de l'OWASP Top 10 2025, « Security
+performance, machine, sécurité). Les trois alertes de sécurité (ticket
+#106, puis `OpenBaoSealed` le 09/11) répondent à la catégorie A09 de
+l'OWASP Top 10 2025, « Security
 Logging and Alerting Failures » : détecter une attaque, et savoir quand
 on ne peut plus la détecter.
 
@@ -341,3 +342,4 @@ kill %1
 | Règles d'alerte testées à la main (`vmalert-tool`, 07/11), pas à chaque PR | Tests unitaires des règles dans la CI |
 | `LogIngestionStopped` jamais déclenchée pour de vrai (il faudrait couper la collecte 15 min) | Exercice planifié sur un environnement de test |
 | Pas d'objectif de disponibilité chiffré | SLO (ex. 99,5 %) et alertes sur le budget d'erreur |
+| Aucune alerte avant l'expiration d'un certificat (celui d'OpenBao expire le 09/11/2027) | Sonde Blackbox Exporter (métrique `probe_ssl_earliest_cert_expiry`) et alerte 30 jours avant |

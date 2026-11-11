@@ -5,8 +5,12 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataire : Maria, CTO)           |
 | Auteur  | Yohan Bouchet                               |
-| Version | 1.2 (07/11/2026 : renvois vers le choix révisé de la supervision, 2.3.7 ; consommation mesurée corrigée) |
+| Version | 1.3 (11/11/2026 : R5, Headlamp reporté ; 2.3.6, Docker Compose finalement inutile ; 1.2 du 07/11 : renvois vers 2.3.7, consommation corrigée) |
 | Date    | 29/10/2026                                  |
+
+**Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
+aucune information portée par la couleur seule, sigles développés à
+leur première apparition.
 
 ## 1. Introduction
 
@@ -160,8 +164,9 @@ le scan en amont qu'ils demandent est assuré par Trivy dans la CI.
 | Point d'attention | Le module ingress-nginx de Minikube n'est plus maintenu depuis mars 2026 | — |
 
 **Choix : Kubernetes**, qui automatise ce que les Ops font aujourd'hui à la
-main. Docker Compose reste réservé aux outils placés hors du cluster
-(supervision).
+main. Docker Compose était prévu pour les outils hors du cluster
+(supervision) ; finalement, la supervision a aussi été placée dans le
+cluster (2.3.7) et Docker Compose n'a pas servi.
 
 #### 2.3.7 Supervision : ELK contre Prometheus et Grafana
 
@@ -502,8 +507,9 @@ support publiées sur **endoflife.date** (maintenance).
 - **Raisonnement** : déploiement manuel, données perdues à chaque redémarrage,
   aucune procédure de retour arrière (3.3.6).
 - **Implémentation** : phases 4 et 5 ; environnements séparés par espaces de
-  noms ; conteneurs non root conformes aux Pod Security Standards ;
-  Headlamp pour visualiser le cluster.
+  noms ; conteneurs non root conformes aux Pod Security Standards.
+  Headlamp (interface web du cluster) n'a pas été installé : `kubectl`
+  et les tableaux de bord Grafana ont suffi ; reporté en évolution.
 - **Impacts** : livraisons fréquentes et sans risque ; temps de
   rétablissement mesurable.
 

@@ -31,7 +31,7 @@ Helm (scripts/deploy.sh, avec le jeton court du deployer de l'environnement)
 | `rbac.tf` | Un compte `deployer` par namespace et ses droits (aucun jeton rangé depuis le 10/11) |
 | `monitoring.tf` | Supervision : namespaces `monitoring` (« restricted ») et `monitoring-collector` (« privileged », collecteur de journaux seul), pile VictoriaMetrics + VictoriaLogs + Grafana (chart Helm figé), tableaux de bord ([détails](../monitoring/README.md)) |
 | `openbao.tf` | Coffre-fort OpenBao : namespace `openbao` (« restricted »), autorité de certification et certificat TLS, chart Helm figé, droit d'OpenBao de créer des jetons courts des comptes `deployer` ([détails](../openbao/README.md)) |
-| `outputs.tf` | Jetons et certificat du cluster (valeurs sensibles, jamais affichées) ; certificat public de l'autorité d'OpenBao |
+| `outputs.tf` | Certificats publics : celui du cluster (`cluster_ca`) et celui de l'autorité d'OpenBao (`openbao_ca_cert`), copiés dans les variables `KUBE_CA` et `OPENBAO_CA` du dépôt ; plus aucun jeton depuis le 10/11 |
 | `tests/cluster.tftest.hcl` | Tests unitaires avec de faux fournisseurs (sans cluster) |
 | `.terraform.lock.hcl` | Versions et empreintes des fournisseurs (registre d'OpenTofu, signés), produit par `tofu init` |
 
@@ -152,6 +152,7 @@ tofu test     # 7 tests, faux fournisseurs : aucun cluster nécessaire
 | `monitoring_namespaces_security` | `monitoring` en « restricted » ; le namespace du collecteur avertit de tout écart à « restricted » |
 | `monitoring_stack_is_pinned` | chart de supervision à version figée ; un ConfigMap par tableau de bord (3) |
 | `non_gmail_alert_address_is_refused` | une adresse d'alerte non Gmail est refusée |
+| `openbao_is_locked_down` | namespace `openbao` en « restricted » ; chart figé (0.30.7) ; TLS gardé, injecteur désactivé, règle réseau, système de fichiers en lecture seule ; journal d'audit déclaré ; OpenBao ne peut créer que des jetons des comptes `deployer` ; clé de l'autorité en ECDSA |
 
 Le job `opentofu` de la CI lance `tofu fmt -check`, `tofu validate` et
 ces tests à chaque PR. Les fournisseurs y sont gardés en cache tant que
@@ -220,3 +221,6 @@ Le dossier garde son nom (`infra/terraform`, état dans
 |---|---|
 | Un `deployer` peut lire les Secrets de son namespace, dont le mot de passe de la base (Helm range ses versions dans des Secrets) | Inhérent à Helm ; à compenser par un mot de passe propre à chaque environnement (déjà le cas) et la rotation |
 | État local sur une seule machine, sans verrou contre deux `apply` simultanés | État distant chiffré et verrouillé (par exemple S3 avec verrou, dans la cible cloud) |
+| Le certificat d'OpenBao (valable jusqu'au 09/11/2027) n'est renouvelé que si quelqu'un lance `tofu plan` ; aucune alerte avant l'échéance | Alerte de la supervision 30 jours avant, ou cert-manager |
+| Deux briques hors du socle : le runner local (ARC) et SonarQube sont installés à la main (README du dépôt) | Les décrire ici (`helm_release`), ou GitOps |
+| Pas de module : deux dossiers de quelques fichiers, lus tels quels | Modules (`terraform-aws-modules` : réseau, EKS) dans la cible AWS, où le code se répète |

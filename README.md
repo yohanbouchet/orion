@@ -54,7 +54,7 @@ Au 10/11/2026 :
 | Test d'intrusion automatisé (ZAP) : passif à chaque déploiement de `staging` (bloque la prod), actif à la demande | ✅ [`zap.yml`](.github/workflows/zap.yml), [règles](infra/zap/rules.tsv) |
 | Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée au démarrage du poste et chaque jour, restauration vérifiée chaque semaine, copie hors site chiffrée |
 | Socle du cluster en code : fichiers Terraform, exécutés par OpenTofu depuis le 09/11 (namespaces, comptes de déploiement aux droits limités, supervision, OpenBao) ; vérifiés et testés par la CI, appliqués par l'Ops | ✅ [`infra/terraform/`](infra/terraform/README.md) |
-| Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) | ✅ [`infra/ansible/`](infra/ansible/README.md) |
+| Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) ; 5 rôles testés par Molecule à chaque PR | ✅ [`infra/ansible/`](infra/ansible/README.md) |
 | Supervision : métriques, journaux structurés en JSON, 9 alertes par e-mail, 3 tableaux de bord (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) ; journaux JSON : v1.9.0 |
 | Coffre-fort de secrets OpenBao (TLS, déverrouillage manuel par l'Ops, clés hors du dépôt, journal d'audit) | ✅ [`infra/openbao/`](infra/openbao/README.md) |
 | Identité de la CI : **aucun secret dans GitHub** ; chaque job reçoit d'OpenBao un accès court contre son badge OIDC ; jetons longue durée supprimés | ✅ [Identité de la CI](infra/openbao/README.md#identité-de-la-ci) |
@@ -136,7 +136,8 @@ orchestre la CI et héberge le registre d'images.
   actions/kube-access/    accès au cluster des jobs du runner local
                           (jeton court délivré par OpenBao)
   actions/openbao-secret/ lecture d'un secret dans OpenBao (SonarQube)
-  zizmor.yml              réglages de l'audit des workflows
+  zizmor.yml              réglages de l'audit des workflows (zizmor)
+  actionlint.yaml         réglages d'actionlint (étiquette du runner local)
   dependabot.yml          mises à jour automatiques des dépendances
   release/                semantic-release (versions figées)
   ISSUE_TEMPLATE/         formulaires de tickets [Dev] et [Ops]
@@ -149,7 +150,8 @@ infra/
                           installation de la supervision et d'OpenBao)
   monitoring/             supervision : réglages, alertes, tableaux de bord
   openbao/                coffre-fort de secrets (réglages, exploitation)
-  ansible/                configuration et durcissement du poste Ops
+  ansible/                configuration et durcissement du poste Ops ;
+                          molecule/ : test des rôles sur une machine jetable
   zap/                    règles du test d'intrusion (bloquant ou non)
   k6/                     scénario des tests de charge
   helm/microcrm/          chart Helm de l'application
@@ -537,11 +539,12 @@ sauf Grafana en AGPL v3), installée par OpenTofu dans deux namespaces :
 `monitoring` (« restricted ») et `monitoring-collector` (collecteur de
 journaux seul, verrouillé). Elle lit les métriques de l'API (Spring Boot
 Actuator, port de gestion 8081), de Kubernetes et de la machine
-(node_exporter), et les journaux des conteneurs (gardés 7 jours). Huit
+(node_exporter), et les journaux des conteneurs (gardés 7 jours). Neuf
 alertes sont envoyées par e-mail : disponibilité (prod arrêtée,
 redémarrages en boucle), performance (erreurs 5xx, lenteur), machine
 (disque, sauvegarde) et sécurité (rafale de requêtes refusées, journaux
-qui n'arrivent plus). Trois tableaux de bord sont disponibles :
+qui n'arrivent plus, coffre-fort scellé). Trois tableaux de bord sont
+disponibles :
 disponibilité, performance, sécurité. Consommation mesurée le 07/11 :
 ≈ 1,1 Gio et 0,1 cœur. Détails, premiers gestes face à une alerte,
 sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.md).
@@ -580,8 +583,9 @@ sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.m
   `SonarSource/sonarqube-scan-action`, `opentofu/setup-opentofu`) :
   toute autre action est refusée au démarrage du pipeline ; droits
   minimaux par job ; runner local jetable et non privilégié, jamais
-  utilisé par un fork ; jetons de déploiement rangés dans les
-  environnements GitHub (`main` seulement, approbation pour la prod).
+  utilisé par un fork ; aucun secret dans GitHub : chaque job reçoit
+  d'OpenBao un accès au cluster de 15 min contre son badge OIDC (règle
+  « `main` seulement », approbation pour la prod).
 - **Test d'intrusion** : ZAP passif sur `staging` à chaque déploiement,
   actif à la demande ; les alertes réglées sur FAIL bloquent la prod
   ([détails](#test-dintrusion-zap)).
@@ -618,6 +622,11 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Réglage par défaut de Spring Boot `spring.jpa.open-in-view` actif (avertissement au démarrage du back) : chaque requête garde sa connexion à la base jusqu'à la fin de sa réponse ; sous forte charge, la réserve de connexions s'épuise plus vite | Le désactiver, après les tests du back et un test de charge avant et après (équipe Dev) | [réglages du back](back/src/main/resources/application.properties) |
 | Après une création, l'API renvoie l'adresse du nouvel élément (en-tête `Location`) sans le préfixe `/api` ni le port : le relais du front ne transmet pas l'adresse d'origine ; le front ne se sert pas de cet en-tête | Relais qui transmet le préfixe et l'hôte d'origine (`X-Forwarded-Prefix`, `X-Forwarded-Host`), lus par Spring Boot (`server.forward-headers-strategy=framework`) | [chart](infra/helm/microcrm/README.md#limites-connues) |
 | Base de SonarQube non sauvegardée : l'historique de la qualité serait perdu avec son disque | La sauvegarder comme les bases de MicroCRM | [rapport, recommandation 20](docs/04-rapport-performance.md#83-recommandations) |
+| Coffre OpenBao : instantané Raft à la main seulement, aucune sauvegarde planifiée (la base de prod, elle, l'est) ; certificat TLS valable jusqu'au 09/11/2027, renouvelé seulement si quelqu'un lance `tofu plan`, sans alerte avant l'échéance | Instantané quotidien planifié (jeton limité à cette seule action), copié hors site avec les sauvegardes ; alerte 30 jours avant l'expiration du certificat, ou cert-manager | [OpenBao](infra/openbao/README.md#limites), [rapport, recommandation 26](docs/04-rapport-performance.md#83-recommandations) |
+| Runner local (ARC) et SonarQube installés à la main (`helm install`, `deploy-sonarqube.sh`), hors du socle OpenTofu : un écart entre le cluster et le dépôt n'y est pas détecté (constaté le 09/11 sur 2 règles réseau de SonarQube) ; chart et image de SonarQube mis à jour à la main | Les décrire en OpenTofu avec le reste du socle (ou GitOps) ; suivre le chart SonarQube (2026.5.1004 disponible ; la version suivante passe de StatefulSet à Deployment : migration à préparer, base sauvegardée avant) | [rapport, recommandation 28](docs/04-rapport-performance.md#83-recommandations) |
+| Images déployées par étiquette (`vX.Y.Z`, `sha-…`), réinscriptible sur le registre, et non par empreinte ; images non signées, sans SBOM publié ; le cluster n'exige aucun registre de confiance (Trivy, KSV-0125) | Déployer par empreinte (`image@sha256:…`), signer les images dans la CI (cosign, Sigstore) et publier leur SBOM ; politique d'admission (ValidatingAdmissionPolicy de Kubernetes ou Kyverno) qui refuse toute image non signée ou hors GHCR | [rapport, recommandation 27](docs/04-rapport-performance.md#83-recommandations) |
+| Installation jamais rejouée de zéro depuis ce README : la reproductibilité est décrite, pas prouvée | Exercice planifié : `minikube delete`, puis réinstallation complète en suivant ce document, temps mesuré, écarts corrigés | [rapport, recommandation 29](docs/04-rapport-performance.md#83-recommandations) |
+| Logique shell des deux actions composites de la CI (`kube-access`, `openbao-secret`) sans test automatique, contrairement aux scripts | La déplacer dans `scripts/` et la couvrir par bashunit | [scripts](scripts/README.md#tests-des-scripts) |
 
 ## Contribuer
 
@@ -646,15 +655,16 @@ Règles complètes : [normalisation](docs/02-normalisation-plan-ci.md#2-normes-e
 | [Rapport de performance](docs/04-rapport-performance.md) | Mesures avant/après (DORA, tests, sécurité, charge), incidents, recommandations |
 | [Chart Helm](infra/helm/microcrm/README.md) | Déploiement Kubernetes, environnements, sécurité, limites |
 | [OpenTofu](infra/terraform/README.md) | Socle du cluster, comptes de déploiement, installation de la supervision et d'OpenBao |
-| [OpenBao](infra/openbao/README.md) | Coffre-fort : installation, initialisation, déverrouillage du matin, sauvegarde |
-| [Ansible](infra/ansible/README.md) | Configuration et durcissement du poste Ops |
+| [OpenBao](infra/openbao/README.md) | Coffre-fort : installation, initialisation, déverrouillage du matin, identité de la CI, sauvegarde, certificat |
+| [Ansible](infra/ansible/README.md) | Configuration et durcissement du poste Ops ; tests des rôles (Molecule) |
 | [Supervision](infra/monitoring/README.md) | Métriques, journaux, alertes, tableaux de bord, premiers gestes |
 | [Démarrage de Minikube](infra/systemd/README.md) | Service systemd du cluster |
 
 ## Versions des outils
 
-Vérifiées le 07/11/2026 (dernière version publiée et fin de support sur
-[endoflife.date](https://endoflife.date)) :
+Vérifiées le 07/11/2026, complétées le 11/11 (OpenBao, Molecule, fournisseurs
+TLS et Vault) ; dernière version publiée et fin de support sur
+[endoflife.date](https://endoflife.date) :
 
 | Outil | Version |
 |---|---|
@@ -664,8 +674,9 @@ Vérifiées le 07/11/2026 (dernière version publiée et fin de support sur
 | Kubernetes (Minikube 1.39.0) | 1.37.0 (correctif 1.37.2 disponible) |
 | Helm / kubectl (jobs du runner local) | 4.3.1 / 1.37.2 |
 | ZAP (test d'intrusion) | 2.17.0 |
-| OpenTofu / fournisseurs Kubernetes et Helm | 1.13.9 (poste et CI) / 3.4.0 et 3.3.0 |
-| Ansible (ansible-core / ansible-lint / community.general) | 2.21 (2.21.6 dans la CI) / 26.10.1 / 14.0.0 |
+| OpenTofu / fournisseurs Kubernetes, Helm, TLS et Vault | 1.13.9 (poste et CI) / 3.4.0, 3.3.0, 4.4.2 et 5.13.0 |
+| OpenBao / chart Helm | 2.7.2 / 0.30.7 |
+| Ansible (ansible-core / ansible-lint / Molecule / community.general) | 2.21 (2.21.6 dans la CI) / 26.10.1 / 26.11.0 / 14.0.0 |
 | metrics-server / node_exporter | 0.9.1 / 1.12.1 |
 | ARC (runner local) | 0.15.1, runner 2.338.2 |
 | SonarQube Community Build | 26.10 |

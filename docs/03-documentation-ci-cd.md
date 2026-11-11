@@ -5,8 +5,8 @@
 | Projet | Démarche DevOps pour l'application MicroCRM |
 | Client | Orion (destinataire : Maria, CTO) |
 | Auteur | Yohan Bouchet, ingénieur DevOps |
-| Version | 1.0 |
-| Date | 07/11/2026 (configuration vérifiée ce jour) |
+| Version | 1.1 (11/11 : coffre-fort OpenBao et accès courts de la CI, OpenTofu, Molecule ; chiffres du 10/11) |
+| Date | 07/11/2026, mis à jour le 11/11/2026 (configuration vérifiée ce jour) |
 | Dépôt | [github.com/yohanbouchet/orion](https://github.com/yohanbouchet/orion) (public) |
 
 ## Sommaire
@@ -35,7 +35,7 @@ d'intégration et de déploiement continus (**CI/CD**) mise en place pour
 elle : comment le code est testé, analysé, versionné, déployé, surveillé,
 et comment revenir en arrière.
 
-Il décrit la configuration **réelle**, vérifiée le 07/11/2026, et renvoie
+Il décrit la configuration **réelle**, vérifiée le 11/11/2026, et renvoie
 aux fichiers du dépôt pour le détail. Rédigé avec l'assistance de l'IA
 (Claude, Anthropic) à partir de la configuration vérifiée, puis relu et
 validé par l'ingénieur DevOps. Il suit le modèle de documentation
@@ -62,10 +62,11 @@ apparition et dans le glossaire ([annexe A](#annexe-a-glossaire)).
 | Versions | **semantic-release** | calcule le numéro de version (SemVer) à partir des messages de commit, crée l'étiquette et la release |
 | Qualité | **SonarQube** Community Build 26.10 | analyse statique, couverture, Quality Gate bloquant |
 | Sécurité | **Trivy** 0.76.2, **gitleaks** 8.30.1, **hadolint** 2.15.1, **ShellCheck** 0.11.0, **OWASP ZAP** 2.17.0, **Dependabot** | failles des dépendances et des images, secrets, bonnes pratiques, test d'intrusion, mises à jour |
-| Tests | **Vitest** 5 (front), JUnit 5 + JaCoCo, bashunit, pytest, **k6** 2.3.0 | tests du front, du back, des scripts ; tests de charge |
+| Secrets | **OpenBao** 2.7.2 (coffre-fort, MPL-2.0 ; chart 0.30.7) | délivre à chaque job de la CI un accès court au cluster contre son badge OIDC de GitHub, garde le jeton SonarQube, trace chaque demande : **aucun secret dans GitHub** |
+| Tests | **Vitest** 5 (front), JUnit 5 + JaCoCo, bashunit, pytest, `tofu test`, **Molecule** 26.11, **k6** 2.3.0 | tests du front, du back, des scripts, de l'infrastructure et du poste Ops ; tests de charge |
 | Conteneurs | **Docker** (images durcies ; celle du back emballe le jar testé par la CI), **GHCR** (registre de GitHub) | images de l'application, versionnées et publiées |
 | Orchestration | **Kubernetes** 1.37 (Minikube 1.39.0), **Helm** 4 | trois environnements, déploiement progressif, autoscaling |
-| IaC | **OpenTofu** 1.13 (fichiers Terraform), **Ansible** 2.21 | socle du cluster et supervision ; configuration du poste Ops |
+| IaC | **OpenTofu** 1.13 (fichiers Terraform), **Ansible** 2.21 | socle du cluster, supervision, OpenBao et identité de la CI ; configuration du poste Ops |
 | Supervision | **VictoriaMetrics** 1.155, **VictoriaLogs** 1.53, **Grafana** 13.2.5, **Alertmanager** 0.34.2 | métriques, journaux, tableaux de bord, alertes par e-mail |
 | Cloud | **AWS** (cible proposée, [section 5.2.1](#521-schéma-dinfrastructure-cloud)) | aujourd'hui, tout tourne en local sur le poste Ops : l'offre gratuite d'AWS ne suffit pas à faire tourner la chaîne en continu (section 5.1) ; choix validé avec le mentor |
 | Application | Angular 22.2, Spring Boot 4.1.2 (Java 17), PostgreSQL 18.6 | code de l'équipe Dev |
@@ -105,11 +106,11 @@ Bash, Ansible et Docker. Leurs sondages et l'audit du 29/10 ont relevé :
 Fixés par le plan de mise en œuvre (document 2), mesurés par le rapport
 de performance (document 4) :
 
-| Objectif | Avant | Cible | Résultat au 08/11 |
+| Objectif | Avant | Cible | Résultat au 10/11 |
 | --- | --- | --- | --- |
-| 1. Aucune faille connue livrée sans décision | 95 failles dans l'image back, dont 8 critiques | 0 critique ou haute corrigeable dans une image publiée | **0**, toutes gravités confondues (images v1.8.0, Trivy de la CI) |
+| 1. Aucune faille connue livrée sans décision | 95 failles dans l'image back, dont 8 critiques | 0 critique ou haute corrigeable dans une image publiée | **0**, toutes gravités confondues (images v1.9.0, Trivy 0.76.2) |
 | 2. Qualité contrôlée à chaque modification | Quality Gate sans condition, couverture non mesurée | Quality Gate bloquant ; nouveau code couvert à 80 % | **3 conditions bloquantes** ; couverture 82,9 % |
-| 3. Livrer plus vite et de façon traçable | déploiement manuel, non tracé | chaque déploiement lié à une version, une image et un commit | **4,4 mises en prod par semaine**, 2,5 h entre un commit et la prod (médiane), 0 % d'échec |
+| 3. Livrer plus vite et de façon traçable | déploiement manuel, non tracé | chaque déploiement lié à une version, une image et un commit | **5,1 mises en prod par semaine**, 2,9 h entre un commit et la prod (médiane), 0 % d'échec |
 | 4. Revenir en arrière sans coupure | aucun retour arrière ni sauvegarde | retour arrière automatique ; sauvegarde restaurable | **testés** : retour arrière sans coupure ; restauration vérifiée chaque semaine |
 | 5. Voir et être prévenu | aucune supervision | disponibilité, performance et sécurité suivies | **3 tableaux de bord, 9 alertes**, indicateurs DORA chaque semaine |
 
@@ -208,6 +209,10 @@ manuelle ratée.
 **Limite** : pas de test de bout en bout dans un navigateur (Cypress,
 Playwright) ; le test de fumée couvre le chemin technique, pas les
 écrans. C'est une recommandation à l'équipe Dev (rapport, section 8.3).
+La logique shell des deux actions composites de la CI (`kube-access`,
+`openbao-secret`) n'a pas non plus de test automatique : elle est relue
+par zizmor et actionlint, et exercée à chaque déploiement ; évolution :
+la déplacer dans `scripts/` et la tester avec bashunit.
 
 ### 4.2 Intégration dans le pipeline GitHub Actions
 
@@ -485,8 +490,8 @@ cas d'échec sur `main`, un ticket est ouvert et un e-mail envoyé.
 
 Chaque environnement a son **namespace** Kubernetes (niveau Pod Security
 « restricted ») et son **compte de déploiement**, qui n'a de droits que
-dans ce namespace ; son jeton est rangé dans l'environnement GitHub du
-même nom (section 6.3).
+dans ce namespace ; aucun jeton n'est rangé : OpenBao en délivre un de
+15 min au job de l'environnement GitHub du même nom (section 6.3).
 
 ### 5.4 Structure du code IaC
 
@@ -524,6 +529,17 @@ changement passe par une PR et les contrôles `opentofu` et `ansible`.
 OpenTofu n'est **pas appliqué par la CI** : l'Ops lance `tofu plan`,
 le relit, puis `tofu apply` (raisons et évolution GitOps : section 5.8).
 
+**Pas de module OpenTofu** : deux dossiers de quelques fichiers (socle,
+configuration d'OpenBao) se lisent tels quels, et un module n'a de sens
+que pour du code réutilisé plusieurs fois ; la cible AWS (5.2.1) en
+utilisera (modules officiels `terraform-aws-modules` pour le réseau et
+EKS). **Limite** : deux briques restent hors d'OpenTofu, installées à la
+main depuis le README du dépôt : le runner local (ARC, `helm install`)
+et SonarQube (`deploy-sonarqube.sh`) ; leurs écarts ne sont pas détectés
+(5.8 : les 2 règles réseau modifiées hors du dépôt le 09/11 étaient
+celles de SonarQube). Évolution : les décrire ici, ou GitOps (rapport,
+recommandation 28).
+
 ### 5.5 Plan de conteneurs
 
 **Pertinence de la conteneurisation**
@@ -555,7 +571,8 @@ le relit, puis `tofu apply` (raisons et évolution GitOps : section 5.8).
 | 6. Cible cloud | EKS, RDS, S3, OIDC (section 5.2.1) | Ops, avec la direction (budget) | Terraform AWS, bascule de `staging` puis de `prod` | à planifier |
 
 **Outils** : Docker, hadolint, Trivy, Helm, Kubernetes (Minikube),
-Terraform, Ansible. **Ressources** : l'équipe Ops (2 personnes) ; un
+OpenTofu (fichiers Terraform), Ansible, OpenBao. **Ressources** :
+l'équipe Ops (2 personnes) ; un
 poste Ubuntu (cluster de 4 cœurs et 10 Gio) ; les services gratuits de
 GitHub pour un dépôt public ; pour l'étape 6, un compte AWS et un budget
 validé par la direction.
@@ -691,6 +708,9 @@ après son apparition sur une capture d'écran). **Limite** : pas de
 rotation périodique automatique des mots de passe. Les accès de la CI,
 eux, sont courts depuis le 10/11 (OpenBao, badge OIDC de GitHub :
 [Identité de la CI](../infra/openbao/README.md#identité-de-la-ci)).
+Le jeton d'analyse SonarQube, de longue durée, expire vers le
+28/01/2027 : à renouveler avant, sans rappel automatique (limite ;
+[procédure](../infra/openbao/README.md#jeton-sonarqube)).
 Évolution : mots de passe de la base délivrés par OpenBao (moteur
 `database`, comptes temporaires) et Secrets Manager avec rotation
 (cible AWS).
@@ -767,7 +787,9 @@ signalé l'absence d'en-tête CSP : corrigé avant la prod, puis la règle a
 
 - En transit : HTTPS vers GitHub et GHCR ; API du cluster en TLS, avec
   vérification de son certificat ; e-mails d'alerte en TLS obligatoire.
-  **Limite** : trafic en clair entre pods, à l'intérieur du cluster.
+  **Limite** : trafic en clair entre pods, à l'intérieur du cluster,
+  sauf vers OpenBao (TLS 1.3 au minimum, certificat de sa propre
+  autorité).
 - Au repos : disque du poste chiffré ; copie hors site des sauvegardes
   chiffrée (GPG). **Limite** : Secrets Kubernetes non chiffrés dans la
   base du cluster Minikube ; cible AWS : chiffrement par KMS.
@@ -930,8 +952,9 @@ d'arrêt) et testé à chaque PR (bashunit, pytest).
 | --- | --- | --- | --- | --- |
 | Base de prod | `backup.sh` : `pg_dump` lancé dans le pod de la base, empreinte SHA-256, contenu relu | au démarrage du poste et chaque jour à 12 h 30 (Ansible) | 7 sauvegardes | poste Ops (fichiers en 600), puis copie hors site chiffrée (GPG) |
 | Vérification | restauration dans une base temporaire, lignes comptées | chaque vendredi | — | — |
-| Code, configuration, infrastructure | Git (tout est décrit en code : chart, Terraform, Ansible, supervision) | à chaque PR | historique complet | GitHub |
+| Code, configuration, infrastructure | Git (tout est décrit en code : chart, fichiers Terraform pour OpenTofu, Ansible, supervision) | à chaque PR | historique complet | GitHub |
 | Images | GHCR, une image par version et par commit | à chaque fusion | toutes les versions | GHCR |
+| Coffre OpenBao | instantané Raft chiffré (`bao operator raft snapshot`) | **à la main seulement** (limite) | — | poste Ops |
 
 **Objectifs** : **RPO** (perte de données maximale) de **24 h**, avec
 une sauvegarde par jour ; **RTO** (temps de restauration) mesuré à
@@ -939,7 +962,11 @@ une sauvegarde par jour ; **RTO** (temps de restauration) mesuré à
 réelles. Une alerte (`BackupTooOld`) prévient si la dernière sauvegarde
 réussie de la prod a plus de 26 h. **Limites** : sauvegarde complète
 quotidienne, sans restauration à un instant donné ; évolution : journaux
-de transactions (WAL), CloudNativePG ou RDS (cible AWS).
+de transactions (WAL), CloudNativePG ou RDS (cible AWS). Le coffre
+OpenBao n'est pas sauvegardé automatiquement : sans instantané, la
+perte de son disque obligerait à le réinitialiser et à refaire
+l'identité de la CI ; évolution : instantané quotidien planifié, copié
+hors site (rapport, recommandation 26).
 
 ### 7.7 Monitoring et alerting
 
@@ -975,15 +1002,15 @@ de sécurité déclenchée par un test réel annoncé (e-mails reçus).
 par `dora.py` à partir des déploiements de production (workflow
 *DORA metrics*) :
 
-| Indicateur | Signification | Valeur (09/11) |
+| Indicateur | Signification | Valeur (10/11) |
 | --- | --- | --- |
-| Fréquence de déploiement | nombre de mises en production par semaine | 4,4 |
-| Délai de mise en production | temps entre un commit et sa mise en production (médiane) | 2,5 h |
+| Fréquence de déploiement | nombre de mises en production par semaine | 5,1 |
+| Délai de mise en production | temps entre un commit et sa mise en production (médiane) | 2,9 h |
 | Taux d'échec des changements | part des mises en production qui provoquent un incident | 0 % |
 | Temps de rétablissement | temps pour revenir à la normale après un incident | non mesurable : aucun incident déclaré |
-| Taux de reprise | part des mises en production qui ne livrent que des correctifs | 37 % |
+| Taux de reprise | part des mises en production qui ne livrent que des correctifs | 32 % |
 
-Sur ces 19 mises en prod, 7 ont changé l'application ; les autres
+Sur ces 22 mises en prod, 10 ont changé l'application ; les autres
 venaient de versions créées par des changements d'outillage (rapport,
 section 3.1). Détail, captures et analyse :
 [rapport de performance](04-rapport-performance.md) (sections 3, 5.2

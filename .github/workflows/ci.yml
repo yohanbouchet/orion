@@ -5,8 +5,9 @@
 #            SonarQube et son Quality Gate sur le runner local ; en
 #            parallèle, les scans de sécurité (gitleaks, hadolint,
 #            ShellCheck, Trivy), les tests des scripts (bashunit, pytest),
-#            les contrôles du socle OpenTofu (fmt, validate, test) et du
-#            code Ansible (syntaxe, ansible-lint), et la construction des
+#            les contrôles OpenTofu (fmt, validate, test : socle du cluster
+#            et configuration d'OpenBao) et du code Ansible (syntaxe,
+#            ansible-lint, Molecule), et la construction des
 #            images Docker analysées ; après une fusion sur main,
 #            si tout est vert, numéro de version (semantic-release :
 #            étiquette vX.Y.Z et Release GitHub) puis publication des images
@@ -15,15 +16,18 @@
 #            fumée (load-test.yml) de staging, et dans prod après
 #            approbation si une version vient d'être publiée ;
 #            enfin, sur main, notification du résultat (notify).
-# Utilise  : actions officielles de GitHub et de SonarSource, figées par SHA
-#            de commit ; images officielles des outils de sécurité, figées
-#            par digest ; sonar-project.properties ; environnement sonarqube ;
+# Utilise  : actions officielles de GitHub, de SonarSource et d'OpenTofu,
+#            figées par SHA de commit ; images officielles des outils
+#            de sécurité, figées par digest ; sonar-project.properties ;
+#            environnement sonarqube ;
 #            .trivyignore (failles acceptées et datées) ; front/Dockerfile,
 #            back/Dockerfile ; .github/release/ (semantic-release) ;
 #            scripts/ (install-deps.sh, run-tests.sh, notify.py, tests) ;
 #            workflows réutilisables deploy.yml (environnements dev,
-#            staging, production), zap.yml et load-test.yml ; jeton
-#            automatique GITHUB_TOKEN (version, publication, notification)
+#            staging, production), zap.yml et load-test.yml ; action
+#            .github/actions/openbao-secret (jeton SonarQube lu dans
+#            OpenBao contre le badge OIDC du job) ; jeton automatique
+#            GITHUB_TOKEN (version, publication, notification)
 # Utilisé par : GitHub Actions (PR, fusions sur main, lancement manuel)
 
 name: CI
@@ -172,8 +176,8 @@ jobs:
     # Attend les deux tests : il a besoin de leurs rapports
     needs: [test-front, test-back]
     # Jamais pour une PR venant d'un fork : son code ne doit pas tourner
-    # sur notre runner (OWASP CICD-SEC-4) ; ni pour Dependabot, qui n'a pas
-    # accès aux secrets et ne change que des versions, pas le code analysé
+    # sur notre runner (OWASP CICD-SEC-4) ; ni pour Dependabot, qui ne change
+    # que des versions, pas le code analysé : l'analyse n'apporterait rien
     # (un job sauté compte comme réussi pour la protection de main) ; #49
     if: >-
       github.actor != 'dependabot[bot]' && (
@@ -631,7 +635,8 @@ jobs:
           echo "$GHCR_TOKEN" |
           docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
       # Étiquette du commit (sha-xxxxxxx) ; l'empreinte publiée est écrite
-      # dans le résumé du run (traçabilité, réutilisée par Helm)
+      # dans le résumé du run (traçabilité : Helm déploie par étiquette ;
+      # l'empreinte permet de vérifier l'image réellement lancée)
       - name: Push image
         run: |
           registry="ghcr.io/$GITHUB_REPOSITORY_OWNER"

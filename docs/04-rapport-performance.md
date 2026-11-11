@@ -5,8 +5,14 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataires : Maria, CTO, et les équipes Dev et Ops) |
 | Auteur  | Yohan Bouchet |
-| Version | 1.2 (1.1 du 09/11, 1.0 du 07/11) |
-| Date    | 10/11/2026 : état de la production au 10/11 (v1.9.0, en production depuis le 09/11) ; mesures du 06/11 au 10/11 |
+| Version | 1.3 (recommandations 26 à 29 ; 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
+| Date    | 11/11/2026 : état de la production au 10/11 (v1.9.0, en production depuis le 09/11) ; mesures du 06/11 au 10/11 |
+
+**Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
+chaque capture d'écran munie d'un texte de remplacement qui décrit ce
+qu'elle montre, aucune information portée par la couleur seule, sigles
+développés à leur première apparition et dans le glossaire
+([annexe A](#annexe-a-glossaire)).
 
 ## 1. Synthèse
 
@@ -60,6 +66,11 @@ les dernières failles connues du code livré au navigateur.
 - les 5 rôles Ansible qui configurent le poste sont testés à chaque
   modification sur une machine jetable (Molecule, section 4.1) ;
 - la recommandation 7 devient le passage au **GitOps** (section 8.3).
+
+**Depuis la version 1.2 (11/11)** : relecture de cohérence de tout le
+dépôt ; 4 recommandations ajoutées (26 à 29, section 8.3) : sauvegarde
+et certificat du coffre-fort, chaîne d'approvisionnement des images,
+runner local et SonarQube en OpenTofu, installation rejouée de zéro.
 
 ## 2. Contexte et objectifs
 
@@ -809,6 +820,14 @@ ces changements (la dernière, v1.9.0, date du 09/11 à 17:32).
   approbation de la prod, variables. Leur suppression le 10/11 les a
   effacés sans trace ; ils ont été refaits à la main (7.7,
   recommandation 24).
+- **Deux briques restent hors du code d'infrastructure** : le runner
+  local (ARC) et SonarQube sont installés à la main (`helm install`,
+  `deploy-sonarqube.sh`), pas par OpenTofu ; les 2 règles réseau
+  modifiées hors du dépôt le 09/11 étaient celles de SonarQube
+  (recommandation 28). Le coffre OpenBao, lui, est dans OpenTofu, mais
+  il n'est pas sauvegardé automatiquement, et son certificat (1 an)
+  n'est renouvelé que si quelqu'un lance `tofu plan`
+  (recommandation 26).
 - **Les portes de qualité ont joué leur rôle** : le test d'intrusion a
   bloqué la prod tant que les en-têtes de sécurité manquaient (vérifié
   avant fusion), et un test de fumée raté remet la version précédente
@@ -822,8 +841,9 @@ ces changements (la dernière, v1.9.0, date du 09/11 à 17:32).
 
 Chaque recommandation répond à un constat de ce rapport. Les
 recommandations 1 à 15 sont classées par priorité (version du 07/11) ;
-les recommandations 16 à 21, ajoutées les 08 et 09/11, puis 22 à 25,
-ajoutées le 10/11, viennent ensuite, pour que les numéros cités dans les
+les recommandations 16 à 21, ajoutées les 08 et 09/11, 22 à 25,
+ajoutées le 10/11, puis 26 à 29, ajoutées le 11/11 (relecture de
+cohérence), viennent ensuite, pour que les numéros cités dans les
 sections précédentes restent valables. Les trois priorités du moment
 sont rappelées dans la synthèse (section 1). La colonne « État » montre
 où en est chacune le 10/11 : 3 sont appliquées, 4 le sont en partie.
@@ -855,6 +875,10 @@ où en est chacune le 10/11 : 3 sont appliquées, 4 le sont en partie.
 | 23 | Déverrouiller OpenBao automatiquement (AWS KMS dans la cible cloud ; sur site : KMS d'un hébergeur européen, boîtier HSM ou second OpenBao) et passer à 3 serveurs | geste manuel chaque matin ; tant qu'il manque, la CI ne peut plus déployer (5.3) | moyen | Ops | À faire ; comparatif des solutions (avantages, inconvénients, niveau de coût) dans `infra/openbao/README.md` |
 | 24 | Décrire les réglages du dépôt GitHub (environnements, approbations, branches autorisées, variables) en OpenTofu (fournisseur `integrations/github`) | réglages effacés sans trace par la suppression des environnements le 10/11 (7.7) | faible | Ops | À faire |
 | 25 | Lancer zizmor et actionlint (sécurité et syntaxe des workflows) dans la CI | contrôles lancés seulement sur le poste Ops (5.1) | faible | Ops | À faire |
+| 26 | Sauvegarder le coffre OpenBao chaque jour (instantané Raft planifié, jeton limité à cette action, copie hors site) et alerter 30 jours avant l'expiration de son certificat TLS (09/11/2027) | seule la base de prod est sauvegardée ; le renouvellement du certificat dépend d'un `tofu plan` que rien n'impose (8.2) | faible | Ops | À faire |
+| 27 | Sécuriser la chaîne d'approvisionnement des images : déployer par empreinte plutôt que par étiquette, signer les images dans la CI (cosign, Sigstore) et publier leur SBOM, puis refuser dans le cluster toute image non signée ou hors GHCR (ValidatingAdmissionPolicy ou Kyverno) | une étiquette peut être réécrite sur le registre ; le cluster n'exige aucun registre de confiance (constat Trivy KSV-0125 du 09/11) | moyen | Ops | À faire |
+| 28 | Décrire le runner local (ARC) et SonarQube en OpenTofu, avec le reste du socle, et suivre le chart SonarQube (2026.5.1004 disponible, base sauvegardée avant la montée de version) | deux briques installées à la main, écarts non détectés (8.2) | faible | Ops | À faire ; le GitOps (recommandation 7) les couvrirait aussi |
+| 29 | Rejouer l'installation complète de zéro (`minikube delete`, puis le README), temps mesuré, écarts corrigés | la procédure d'installation est décrite, jamais rejouée d'un bloc : reproductibilité non prouvée | faible | Ops | À faire |
 
 ## 9. Conclusion
 

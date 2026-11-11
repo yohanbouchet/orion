@@ -5,8 +5,13 @@
 | Projet    | Démarche DevOps pour l'application MicroCRM      |
 | Client    | Orion (destinataire : Maria, CTO)                |
 | Auteur    | Yohan Bouchet                                    |
-| Version   | 1.2 (Vitest et Angular 22 le 08/11)             |
-| Date      | 29/10/2026, mis à jour le 08/11/2026             |
+| Version   | 1.3 (OpenBao et accès courts de la CI le 10/11) |
+| Date      | 29/10/2026, mis à jour le 11/11/2026             |
+
+**Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
+chaque schéma suivi de sa description en texte, aucune information
+portée par la couleur seule, sigles développés à leur première
+apparition.
 
 ## 1. Introduction
 
@@ -299,11 +304,12 @@ Règles :
   bloquée par la CI, puis fermée et reprise dans R4. Ces règles ont été
   ajustées après la première exécution de Dependabot (ticket #49), qui
   proposait notamment Java 24, hors support.
-- **PR de Dependabot** : GitHub ne leur donne aucun secret ; l'analyse
-  SonarQube (qui a besoin de son jeton) est donc sautée pour elles, sans
-  ajouter de secret : Dependabot ne modifie que des numéros de version, pas
-  le code analysé. Tests, Trivy et construction des images s'appliquent
-  comme pour toute PR. L'image du runner local (ghcr.io) n'est pas suivie
+- **PR de Dependabot** : l'analyse SonarQube est sautée pour elles
+  (règle gardée après le passage au coffre OpenBao le 10/11) : Dependabot
+  ne modifie que des numéros de version, pas le code analysé, et son
+  jeton GitHub est en lecture seule. Tests, Trivy et construction des
+  images s'appliquent comme pour toute PR. L'image du runner local
+  (ghcr.io) n'est pas suivie
   par Dependabot (accès au registre refusé sans jeton) : elle est mise à
   jour avec les versions du runner GitHub, suivies par abonnement aux
   publications du dépôt `actions/runner`.
