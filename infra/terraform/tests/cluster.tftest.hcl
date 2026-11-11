@@ -42,6 +42,16 @@ run "three_restricted_namespaces" {
     ])
     error_message = "Every namespace must enforce Pod Security restricted."
   }
+  assert {
+    condition = alltrue([
+      for ns in concat(values(kubernetes_namespace_v1.env), [
+        kubernetes_namespace_v1.monitoring, kubernetes_namespace_v1.openbao,
+      ]) :
+      ns.metadata[0].labels["pod-security.kubernetes.io/enforce-version"]
+      == "v1.37"
+    ])
+    error_message = "The Pod Security version must be pinned on every namespace."
+  }
 }
 
 run "deployer_rights_stay_in_their_namespace" {
@@ -91,6 +101,16 @@ run "unknown_environment_is_refused" {
     environments = ["dev", "demo"]
   }
   expect_failures = [var.environments]
+}
+
+# Une version de règles non figée est refusée
+run "unpinned_pod_security_is_refused" {
+  command = plan
+
+  variables {
+    pod_security_version = "latest"
+  }
+  expect_failures = [var.pod_security_version]
 }
 
 # Supervision : seul le namespace du collecteur assouplit la sécurité, et

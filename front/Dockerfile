@@ -13,8 +13,11 @@ FROM node:24.22.2-alpine3.24@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf57
 WORKDIR /src
 # Liste des dépendances d'abord : couche réutilisée tant qu'elle ne change pas
 COPY package.json package-lock.json ./
-# Versions exactes de package-lock.json, sans rapport ni message de don
-RUN npm ci --no-audit --no-fund
+# Versions exactes de package-lock.json, sans rapport ni message de don ;
+# --ignore-scripts : aucun script d'installation d'un paquet n'est exécuté
+# (vecteur classique d'attaque de la chaîne d'approvisionnement), comme
+# dans scripts/install-deps.sh ; la construction n'en a pas besoin
+RUN npm ci --no-audit --no-fund --ignore-scripts
 # Puis le code, et construction des fichiers optimisés (dist/microcrm/browser)
 COPY . .
 RUN npx ng build --configuration production

@@ -5,7 +5,7 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataires : Maria, CTO, et les équipes Dev et Ops) |
 | Auteur  | Yohan Bouchet |
-| Version | 1.3 (recommandations 26 à 29 ; 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
+| Version | 1.3 (recommandations 26 à 30 ; 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
 | Date    | 11/11/2026 : état de la production au 10/11 (v1.9.0, en production depuis le 09/11) ; mesures du 06/11 au 10/11 |
 
 **Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
@@ -68,9 +68,11 @@ les dernières failles connues du code livré au navigateur.
 - la recommandation 7 devient le passage au **GitOps** (section 8.3).
 
 **Depuis la version 1.2 (11/11)** : relecture de cohérence de tout le
-dépôt ; 4 recommandations ajoutées (26 à 29, section 8.3) : sauvegarde
+dépôt ; 5 recommandations ajoutées (26 à 30, section 8.3) : sauvegarde
 et certificat du coffre-fort, chaîne d'approvisionnement des images,
-runner local et SonarQube en OpenTofu, installation rejouée de zéro.
+runner local et SonarQube en OpenTofu, installation rejouée de zéro,
+analyse quotidienne des images en service (2 failles hautes apparues
+le 11/11 dans le front en prod, corrigées par la version suivante).
 
 ## 2. Contexte et objectifs
 
@@ -210,7 +212,7 @@ chaîne contrôle **3 fois plus de choses en 2 fois moins de temps**.
 | Tests du back (JUnit) | 2 | 6 (dont l'intégration avec la base) | chaque PR |
 | Tests du front | 8 (Karma) | 16 (Vitest, depuis le 08/11) | chaque PR |
 | Tests des scripts d'exploitation (bashunit, pytest) | 0 | 74 + 28 | chaque PR |
-| Tests de l'infrastructure (OpenTofu) | 0 | 12 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
+| Tests de l'infrastructure (OpenTofu) | 0 | 13 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
 | Test du poste Ops (Ansible, Molecule) | 0 | 5 rôles appliqués sur une machine jetable, rejoués sans aucun changement (idempotence), puis 6 contrôles (outils, sauvegardes planifiées, services, métriques, pare-feu, journaux Docker) | chaque PR (depuis le 10/11) |
 | Test d'intrusion (OWASP ZAP) | 0 | 0 échec ; 19 règles bloquantes | chaque déploiement de staging |
 | Test de fumée de charge (k6) | 0 | seuils respectés | chaque déploiement de staging, bloque la prod |
@@ -771,7 +773,7 @@ ces changements (la dernière, v1.9.0, date du 09/11 à 17:32).
 | Livraison | Durée de ces contrôles | 4,67 min | **2,2 min** (médiane) | 3.2 |
 | Livraison | Déploiement en production | manuel, non tracé | **automatique après approbation** : 5,1 par semaine, 0 % d'échec, 2,9 h entre un commit et la prod (médiane) | 3.1 |
 | Livraison | Versions | `0.0.1-SNAPSHOT`, aucune image | **25 versions** ; chaque image liée à sa version et à son commit ; une version seulement pour un changement livré | 3.3 |
-| Qualité | Tests de l'infrastructure | aucun | **12 tests OpenTofu** ; poste Ops testé par Molecule (5 rôles, idempotence, 6 contrôles) | 4.1 |
+| Qualité | Tests de l'infrastructure | aucun | **13 tests OpenTofu** ; poste Ops testé par Molecule (5 rôles, idempotence, 6 contrôles) | 4.1 |
 | Disponibilité | Perte d'un serveur d'API en prod | jamais testée | **0 erreur**, remplacement prêt en 11 s | 7.3 |
 | Disponibilité | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (08/11, avant correction) | **0** en 8 redémarrages | 7.5 |
 | Disponibilité | Sauvegarde de la base | aucune | quotidienne, restauration vérifiée chaque semaine | 3.3 |
@@ -842,7 +844,7 @@ ces changements (la dernière, v1.9.0, date du 09/11 à 17:32).
 Chaque recommandation répond à un constat de ce rapport. Les
 recommandations 1 à 15 sont classées par priorité (version du 07/11) ;
 les recommandations 16 à 21, ajoutées les 08 et 09/11, 22 à 25,
-ajoutées le 10/11, puis 26 à 29, ajoutées le 11/11 (relecture de
+ajoutées le 10/11, puis 26 à 30, ajoutées le 11/11 (relecture de
 cohérence), viennent ensuite, pour que les numéros cités dans les
 sections précédentes restent valables. Les trois priorités du moment
 sont rappelées dans la synthèse (section 1). La colonne « État » montre
@@ -879,6 +881,7 @@ où en est chacune le 10/11 : 3 sont appliquées, 4 le sont en partie.
 | 27 | Sécuriser la chaîne d'approvisionnement des images : déployer par empreinte plutôt que par étiquette, signer les images dans la CI (cosign, Sigstore) et publier leur SBOM, puis refuser dans le cluster toute image non signée ou hors GHCR (ValidatingAdmissionPolicy ou Kyverno) | une étiquette peut être réécrite sur le registre ; le cluster n'exige aucun registre de confiance (constat Trivy KSV-0125 du 09/11) | moyen | Ops | À faire |
 | 28 | Décrire le runner local (ARC) et SonarQube en OpenTofu, avec le reste du socle, et suivre le chart SonarQube (2026.5.1004 disponible, base sauvegardée avant la montée de version) | deux briques installées à la main, écarts non détectés (8.2) | faible | Ops | À faire ; le GitOps (recommandation 7) les couvrirait aussi |
 | 29 | Rejouer l'installation complète de zéro (`minikube delete`, puis le README), temps mesuré, écarts corrigés | la procédure d'installation est décrite, jamais rejouée d'un bloc : reproductibilité non prouvée | faible | Ops | À faire |
+| 30 | Analyser chaque jour les images en service (workflow planifié ou Trivy Operator), avec un ticket ouvert d'office | le 11/11, le front v1.9.0 en prod avait 2 failles hautes (libxslt), publiées après sa construction et trouvées à la main | faible | Ops | À faire |
 
 ## 9. Conclusion
 

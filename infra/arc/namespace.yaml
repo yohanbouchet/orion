@@ -16,6 +16,7 @@ metadata:
     pod-security.kubernetes.io/enforce: restricted
     # Règles figées sur la version 1.37 : une montée de version de
     # Kubernetes ne peut pas changer le règlement par surprise
+    # (même version que pod_security_version, infra/terraform/variables.tf)
     pod-security.kubernetes.io/enforce-version: v1.37
     # Affiche aussi un avertissement à l'auteur et l'écrit dans le
     # journal d'audit du cluster
