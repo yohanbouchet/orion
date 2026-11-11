@@ -5,7 +5,7 @@
 | Projet | Démarche DevOps pour l'application MicroCRM |
 | Client | Orion (destinataire : Maria, CTO) |
 | Auteur | Yohan Bouchet, ingénieur DevOps |
-| Version | 1.1 (11/11 : coffre-fort OpenBao et accès courts de la CI, OpenTofu, Molecule ; chiffres du 10/11) |
+| Version | 1.1 (11/11 : coffre-fort OpenBao et accès courts de la CI, OpenTofu, Molecule, DORA dans Grafana, dépendance aux services extérieurs, essai de la cible AWS avec floci ; chiffres du 10/11) |
 | Date | 07/11/2026, mis à jour le 11/11/2026 (configuration vérifiée ce jour) |
 | Dépôt | [github.com/yohanbouchet/orion](https://github.com/yohanbouchet/orion) (public) |
 
@@ -444,7 +444,13 @@ réseau et EKS par OpenTofu (modules officiels de la communauté
 `terraform-aws-modules`) ; RDS et S3 ; secrets et accès OIDC ;
 supervision ; bascule de `staging`, puis de `prod` après un test de
 charge sur la nouvelle infrastructure. Le coût est à chiffrer avec l'AWS
-Pricing Calculator avant décision.
+Pricing Calculator avant décision. Le code OpenTofu de la cible peut
+d'abord être essayé sans compte AWS ni frais avec **floci**, émulateur
+local d'AWS (licence MIT, version 2.4.0 du 31/10/2026 ; son README cite
+EKS, RDS, S3, IAM, KMS et Secrets Manager), qui remplace LocalStack,
+dont l'édition gratuite exige désormais un compte. Un émulateur ne
+garantit pas un comportement identique : `tofu plan` sur le vrai compte
+reste la dernière vérification.
 
 #### 5.2.2 Schéma du pipeline CI/CD
 
@@ -791,6 +797,12 @@ un ticket ouvert d'office (rapport, recommandation 30).
   « restricted » ; il ne reçoit jamais les PR d'une copie extérieure du
   dépôt (risque OWASP CICD-SEC-4).
 - `kubectl` et `helm` des jobs vérifiés par empreinte SHA-256 avant usage.
+- Services extérieurs (GitHub, registres npm, Maven et d'images,
+  miroirs Ubuntu) : versions figées et empreintes vérifiées, donc une
+  source modifiée est refusée ; mais une source en panne bloque la
+  chaîne (cas réels : [rapport, sections 7.6 et 7.8](04-rapport-performance.md#76-0811--panne-extérieure-construction-bloquée-incident-de-la-ci)).
+  **Limite** : aucune copie locale ; évolution : dépôt d'artefacts
+  mandataire et délais courts (recommandation 16 du rapport).
 
 **Chiffrement**
 
@@ -814,7 +826,7 @@ par environnement ; aucune donnée réelle dans les tests.
 Chaque exécution, chaque déploiement (onglet *Deployments* : version,
 commit, exécution) et chaque version (release, historique `helm history`)
 est tracé ; un échec sur `main` ouvre un ticket ; les indicateurs DORA
-sont calculés chaque semaine.
+sont calculés chaque jour ouvré et affichés dans Grafana (section 7.7).
 
 **Réponse aux incidents**
 

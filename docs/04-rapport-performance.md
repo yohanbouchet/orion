@@ -5,7 +5,7 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataires : Maria, CTO, et les équipes Dev et Ops) |
 | Auteur  | Yohan Bouchet |
-| Version | 1.3 (recommandations 26 à 30 ; 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
+| Version | 1.3 (recommandations 26 à 30, DORA dans Grafana, incident du 11/11 (7.8) ; 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
 | Date    | 11/11/2026 : état de la production au 11/11 (v1.9.1, en production depuis le 11/11) ; mesures du 06/11 au 11/11 |
 
 **Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
@@ -803,6 +803,42 @@ ces changements (la dernière, v1.9.0, date du 09/11 à 17:32).
     sont pas décrits dans le code : une suppression les efface sans
     trace. D'où la recommandation 24.
 
+### 7.8 11/11 : miroirs Ubuntu introuvables, fusion bloquée (incident de la CI)
+
+Incident de l'outillage, **pas de la production** : il n'entre pas dans
+les indicateurs DORA (la PR concernée ne créait pas de version). Heures
+de Paris.
+
+- **Symptôme** : de 16:06 à 17:44, trois essais de la CI de la PR #147
+  (indicateurs DORA dans Grafana) ont échoué au même contrôle, le test
+  des rôles Ansible (Molecule). La tâche qui installe les outils de
+  sécurité (rôle `hardening`) n'arrivait pas à mettre à jour la liste
+  des paquets : 5 tentatives d'environ 3 min 30 chacune, soit 17 min
+  avant l'échec, au lieu d'une minute en temps normal.
+- **Diagnostic** : la PR ne modifiait aucun fichier Ansible, et le même
+  test passait sur `main` à 11:40. Les 5 outils téléchargés par les
+  rôles ont été retéléchargés depuis le poste de l'équipe Ops, empreintes
+  SHA-256 comprises : tous corrects. Les miroirs Ubuntu répondaient
+  depuis ce poste en moins d'une demi-seconde.
+- **Cause** : une panne des machines de GitHub. Depuis 15:00 environ,
+  elles ne trouvaient plus les miroirs Ubuntu par leur nom (DNS), sur
+  Ubuntu 22.04, 24.04 et 26.04. D'autres projets l'ont signalée
+  (tickets 15296 et 15297 du dépôt `actions/runner-images`, avec les
+  mêmes 3 min 30 par tentative). La page d'état de GitHub n'annonçait
+  rien.
+- **Rétablissement** : le 4e essai, à 17:45, a réussi ; la PR a été
+  fusionnée à 19:21. Le contrôle étant obligatoire, aucune fusion n'a eu
+  lieu sans lui.
+- **Enseignements** :
+  - deuxième panne extérieure en 4 jours (7.6) : la chaîne dépend
+    aussi des paquets du système, pas seulement de Gradle, npm et des
+    images. D'où l'élargissement de la recommandation 16 ;
+  - une panne de ce genre doit **échouer vite** : un délai court sur
+    la mise à jour des paquets aurait signalé le problème en une minute
+    au lieu de 17 ;
+  - un contrôle obligatoire qui bloque est le comportement attendu : il
+    vaut mieux attendre que fusionner sans vérification.
+
 ## 8. Gains obtenus et recommandations d'amélioration continue
 
 ### 8.1 Gains obtenus
@@ -916,7 +952,7 @@ où en est chacune le 11/11 : 4 sont appliquées, 4 le sont en partie.
 | 13 | Rejouer les tests de charge sur une machine dédiée, à chaque version majeure, avec le rapport HTML de k6 | point de rupture réel non atteint sur le poste | moyen | Ops | À faire |
 | 14 | Exclure les pods de test (ZAP, k6) de la recherche des journaux d'erreurs | lignes inoffensives mêlées aux vraies erreurs (5.2) | faible | Ops | À faire |
 | 15 | Mettre la base en haute disponibilité (service managé comme RDS Multi-AZ, ou opérateur CloudNativePG), avec restauration à un instant donné | une seule instance PostgreSQL ; jusqu'à 24 h de données perdues en cas de sinistre | moyen à élevé | Ops | À faire |
-| 16 | Mettre en place un dépôt d'artefacts mandataire, qui garde une copie de Gradle, des bibliothèques et des images de base (dans la cible AWS : CodeArtifact et le cache d'images d'ECR), ou construire l'image du back à partir du résultat des tests | panne extérieure du 08/11 : livraison retardée de plus de 6 h (7.6) | moyen | Ops | **Partielle** : image du back construite à partir du programme testé (PR #123, 09/11) ; dépôt mandataire à faire |
+| 16 | Mettre en place un dépôt d'artefacts mandataire, qui garde une copie de Gradle, des bibliothèques, des paquets du système et des images de base (Harbor en cache d'images, Apache 2.0, déjà envisagé ; Pulp, GPL, pour les paquets apt, npm et Maven ; dans la cible AWS : CodeArtifact et le cache d'images d'ECR), ou construire l'image du back à partir du résultat des tests ; donner un délai court aux téléchargements pour qu'une panne échoue vite | pannes extérieures du 08/11 (livraison retardée de plus de 6 h, 7.6) et du 11/11 (fusion bloquée près de 2 h, 7.8) | moyen | Ops | **Partielle** : image du back construite à partir du programme testé (PR #123, 09/11) ; dépôt mandataire à faire |
 | 17 | Alerter quand un conteneur dépasse 90 % de sa limite de mémoire pendant 15 min | hausse de la mémoire de SonarQube restée invisible 37 h, jusqu'à son arrêt (7.4) | faible | Ops | À faire |
 | 18 | Garder des PR petites (un seul changement), fusionnées dès qu'elles sont prêtes | délai médian de mise en production passé de 0,3 h à 2,5 h ; 4,6 h à 7,4 h pour les versions qui ont regroupé 6 à 13 commits (3.1) | faible | Dev et Ops | À faire |
 | 19 | Lancer les migrations de schéma (Flyway) dans une tâche séparée, avant le déploiement, pour que l'API n'ait plus le mot de passe du superutilisateur de la base | limite du compte limité de l'application (5.1) | moyen | Dev et Ops | À faire |
@@ -993,6 +1029,7 @@ et détecterait les modifications faites hors du dépôt.
 | Incident SonarQube | état et événements du pod (`kubectl`), journaux du conteneur arrêté, mémoire du conteneur dans VictoriaMetrics, réglages Java par défaut lus dans l'image 26.10 | 07/11/2026 |
 | Requêtes perdues aux redémarrages | namespace de test jetable (chart v1.8.0) ; sonde Python et k6 2.3.0 (10 requêtes par seconde, codes et erreurs horodatés) pendant des `kubectl rollout restart`, avant et après la pause `preStop` | 08/11/2026 |
 | Panne extérieure de la CI | journaux des 5 exécutions de la CI de la PR #114 ; téléchargement rejoué depuis le poste ; historique Helm de la prod | 08/11/2026 |
+| Miroirs Ubuntu introuvables | journaux des 4 essais de la CI de la PR #147 (API de GitHub) ; 5 téléchargements et empreintes rejoués depuis le poste ; tickets 15296 et 15297 de `actions/runner-images` | 11/11/2026 |
 | Journaux JSON | requête de test en dev (chemin sans paramètres) ; recherche par champ dans VictoriaLogs | 09/11/2026 |
 | Identité de la CI | journal d'audit d'OpenBao dans VictoriaLogs (connexions et accès par chemin) ; réglages des environnements lus par l'API de GitHub | 10/11/2026 |
 | Alerte OpenBaoSealed | e-mails « FIRING » et « RESOLVED » reçus, coffre-fort scellé le matin | 10/11/2026 |
