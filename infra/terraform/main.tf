@@ -13,7 +13,7 @@ resource "kubernetes_namespace_v1" "env" {
     name = each.key
     labels = {
       "pod-security.kubernetes.io/enforce"         = "restricted"
-      "pod-security.kubernetes.io/enforce-version" = "latest"
+      "pod-security.kubernetes.io/enforce-version" = var.pod_security_version
       "app.kubernetes.io/part-of"                  = "microcrm"
       "app.kubernetes.io/managed-by"               = "opentofu"
     }

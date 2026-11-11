@@ -17,7 +17,7 @@ resource "kubernetes_namespace_v1" "monitoring" {
     name = "monitoring"
     labels = {
       "pod-security.kubernetes.io/enforce"         = "restricted"
-      "pod-security.kubernetes.io/enforce-version" = "latest"
+      "pod-security.kubernetes.io/enforce-version" = var.pod_security_version
       "app.kubernetes.io/part-of"                  = "monitoring"
       "app.kubernetes.io/managed-by"               = "opentofu"
     }
