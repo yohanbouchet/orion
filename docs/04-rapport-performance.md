@@ -6,7 +6,7 @@
 | Client  | Orion (destinataires : Maria, CTO, et les équipes Dev et Ops) |
 | Auteur  | Yohan Bouchet |
 | Version | 1.3 (recommandations 26 à 30 ; 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
-| Date    | 11/11/2026 : état de la production au 10/11 (v1.9.0, en production depuis le 09/11) ; mesures du 06/11 au 10/11 |
+| Date    | 11/11/2026 : état de la production au 11/11 (v1.9.1, en production depuis le 11/11) ; mesures du 06/11 au 11/11 |
 
 **Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
 chaque capture d'écran munie d'un texte de remplacement qui décrit ce
@@ -24,7 +24,7 @@ elle-même.
 
 | Ce qui compte pour Orion | Avant (27-28/10) | Après (06-10/11) |
 | --- | --- | --- |
-| Failles connues dans les images livrées | 95 dans l'image back, dont 8 critiques | **0**, toutes gravités confondues (v1.9.0) |
+| Failles connues dans les images livrées | 95 dans l'image back, dont 8 critiques | **0**, toutes gravités confondues (v1.9.1, analysée le 11/11 ; voir 5.1) |
 | Contrôles automatiques sur chaque modification | 4 tâches (tests et construction), rien de bloquant sur la qualité ou la sécurité | **12** (tests, qualité, failles, secrets, infrastructure) |
 | Couverture du code par les tests | non mesurée | **82,9 %**, mesurée à chaque modification |
 | Compte utilisé par l'API dans la base | superutilisateur | **compte limité** à la lecture et à l'écriture des lignes |
@@ -169,18 +169,19 @@ production (workflow *DORA metrics*).
 | --- | --- | --- |
 | Contrôles sur chaque PR | 4 tâches : tests et construction | **12 tâches en parallèle** : tests back et front, SonarQube, Trivy, hadolint, ShellCheck, gitleaks, tests des scripts, OpenTofu (2 dossiers), Ansible (dont Molecule depuis le 10/11), construction des 2 images |
 | Durée | 4,67 min | **2,2 min** (médiane de 47 PR réussies du 07 au 10/11 ; 1,9 min le 06/11) ; avec Molecule (10/11), 2,0 et 2,4 min sur les 2 premières PR : le job Ansible (1,8 à 1,9 min) est devenu le plus long |
-| Ce qui se passe après la fusion | rien | version, publication des images, déploiement dev puis staging, test d'intrusion ZAP, test de fumée k6, notification : **6,6 min** (exécution du 06/11, 17:01), puis production en 0,6 min après approbation |
+| Ce qui se passe après la fusion | rien | version, publication des images, déploiement dev puis staging, test d'intrusion ZAP, test de fumée k6, notification : **6,7 min** (v1.9.1, 11/11 ; 6,6 min le 06/11), puis production en 0,8 min après approbation, par un accès court d'OpenBao |
 
 La durée totale affichée par GitHub sur la capture ci-dessous
-(12 min 33 s) comprend l'attente de l'approbation humaine avant la
-production : les étapes automatiques, elles, durent 6,6 min puis 0,6 min.
+(8 min 25 s, version v1.9.1 du 11/11) comprend 0,8 min d'attente de
+l'approbation humaine avant la production : les étapes automatiques,
+elles, durent 6,7 min puis 0,8 min.
 
 **Précaution de lecture** : la mesure « avant » a été faite sur un poste,
 cache vide ; la mesure « après » vient des runners de la CI, avec cache.
 Le gain s'explique surtout par l'exécution en parallèle et le cache : la
 chaîne contrôle **3 fois plus de choses en 2 fois moins de temps**.
 
-![Graphe d'une exécution du pipeline sur main : contrôles en parallèle, puis release, publication, déploiements dev et staging, ZAP, test de charge et production](rapport-performance/pipeline.png)
+![Graphe de l'exécution du pipeline sur main qui a livré v1.9.1 le 11/11, toutes les étapes réussies en 8 min 25 s : 9 contrôles en parallèle, construction des 2 images, SonarQube, release, publication des 2 images, déploiements dev et staging, ZAP, test de charge, production après approbation, notification](rapport-performance/pipeline.png)
 
 ### 3.3 Releases
 
@@ -263,10 +264,10 @@ SonarQube, analyse du Java moins précise) est levée depuis le 08/11
 
 ### 5.1 Gains
 
-| Source | Avant (27-28/10) | Après (08-10/11) |
+| Source | Avant (27-28/10) | Après (08-11/11) |
 | --- | --- | --- |
 | Trivy, image back | 95 failles : 8 critiques, 33 hautes | **0**, toutes gravités confondues (v1.9.0, analysée le 10/11) |
-| Trivy, image front | 10 failles : 2 hautes | **0**, toutes gravités confondues (v1.9.0, analysée le 10/11) |
+| Trivy, image front | 10 failles : 2 hautes | **0**, toutes gravités confondues (v1.9.0, analysée le 10/11 ; le 11/11, 2 hautes publiées depuis dans libxslt, corrigées par v1.9.1, 0 faille) |
 | npm audit, toutes les dépendances du front | 91 : 5 critiques, 52 hautes | **0** (56 le 07/11) |
 | npm audit, dépendances livrées au navigateur | non distingué | **0** (8 le 07/11, dont 4 hautes) |
 | Failles acceptées par exception (`.trivyignore`) | aucun contrôle | **0** (42 le 07/11 : Angular 17 et l'outil de publication des versions) |
@@ -281,6 +282,14 @@ Angular 22 (08/11, PR #114) a supprimé toutes les failles de
 `npm audit`, y compris dans les outils de construction, et une version
 corrigée de l'outil de publication a permis de retirer les 42 exceptions
 de `.trivyignore`.
+
+**Une image saine ne le reste pas** : le 11/11, l'image du front en
+production (v1.9.0, 0 faille le 10/11) avait 2 failles hautes dans
+libxslt, publiées et corrigées par Alpine entre-temps. Un scan fait à
+la main l'a montré ; la version v1.9.1, reconstruite le jour même,
+est en production avec 0 faille (front et back). Rien ne l'aurait
+signalé automatiquement : Trivy n'analyse une image qu'à sa
+construction (recommandation 30).
 
 **Moindre privilège dans la base** (08/11, PR #115) : l'API ne se
 connecte plus avec le superutilisateur créé par l'image officielle, mais
@@ -761,7 +770,7 @@ ces changements (la dernière, v1.9.0, date du 09/11 à 17:32).
 
 | Domaine | Indicateur | Avant | Après | Détail |
 | --- | --- | --- | --- | --- |
-| Sécurité | Failles critiques et hautes dans les images livrées | 95 (back, dont 8 critiques) et 10 (front) | **0 et 0**, aucune faille d'aucune gravité (v1.9.0) | 5.1 |
+| Sécurité | Failles critiques et hautes dans les images livrées | 95 (back, dont 8 critiques) et 10 (front) | **0 et 0**, aucune faille d'aucune gravité (v1.9.1, 11/11) | 5.1 |
 | Sécurité | En-têtes de sécurité vérifiés par le test d'intrusion | 3 règles en échec, aucun test | **0 échec** ; 19 règles bloquantes : un échec bloque la prod | 5.1 |
 | Sécurité | Secrets dans le dépôt | non contrôlés | contrôlés à chaque PR, aucun trouvé | 5.1 |
 | Sécurité | Compte utilisé par l'API dans la base | superutilisateur | **compte limité** à la lecture et à l'écriture des lignes ; refus testés | 5.1 |
@@ -804,8 +813,9 @@ ces changements (la dernière, v1.9.0, date du 09/11 à 17:32).
   à 2,5 h quand des PR ont réuni 6 à 13 commits, puis à 2,9 h (3.1).
 - **Une seule étape est manuelle : l'approbation de la prod.** Elle est
   voulue (contrôle humain avant les clients), mais elle allonge le délai
-  réel : environ 5 min d'attente sur l'exécution de la section 3.2
-  (12 min 33 s au total, dont 7,2 min d'étapes automatiques).
+  réel : 0,8 min d'attente sur l'exécution de la section 3.2 (8 min
+  25 s au total, dont 7,5 min d'étapes automatiques), environ 5 min le
+  06/11.
 - **Seules les versions numérotées vont en prod.** Une modification de
   documentation, de CI ou d'infrastructure ne crée pas de version : elle
   s'arrête au staging. La prod ne reçoit donc que des changements tracés
@@ -931,9 +941,9 @@ et détecterait les modifications faites hors du dépôt.
 | --- | --- | --- |
 | Mesures de départ | [docs/mesures-avant/](mesures-avant/README.md) | 27-28/10/2026 |
 | DORA | `scripts/dora.py` sur l'API GitHub (déploiements de l'environnement production ; script corrigé le 10/11) ; délais par version recalculés avec git et l'historique Helm de la prod | 06/11/2026, 09/11/2026, 10/11/2026 |
-| Pipeline | API GitHub Actions : exécutions réussies du workflow CI sur les PR, durée de chaque job | 06/11/2026, 10/11/2026 |
+| Pipeline | API GitHub Actions : exécutions réussies du workflow CI sur les PR, durée de chaque job ; exécution complète de v1.9.1 jusqu'à la prod | 06/11/2026, 10/11/2026, 11/11/2026 |
 | Qualité, couverture | API SonarQube, projet `orion` | 06/11/2026, 08/11/2026 |
-| Failles des images | Trivy (version de la CI) sur les images publiées : 0.76.1 sur v1.5.2, 0.76.2 sur v1.8.0 et v1.9.0 | 07/11/2026, 08/11/2026, 10/11/2026 |
+| Failles des images | Trivy (version de la CI) sur les images publiées : 0.76.1 sur v1.5.2, 0.76.2 sur v1.8.0, v1.9.0 et v1.9.1 | 07/11/2026, 08/11/2026, 10/11/2026, 11/11/2026 |
 | Tests | bashunit 0.52.0 (dans un conteneur) et pytest ; `tofu test` ; Molecule (CI de la PR #141) | 10/11/2026 |
 | Dépendances du front | `npm audit`, avec et sans les outils de développement | 06/11/2026, 08/11/2026 |
 | Charge | k6 2.3.0 dans staging ; métriques VictoriaMetrics ; compteurs TCP des pods | 06/11/2026 |
