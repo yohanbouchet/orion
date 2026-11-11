@@ -177,3 +177,32 @@ def test_api_failure_stops_with_code_1(monkeypatch):
     monkeypatch.setenv("DORA_DAYS", "30")
     monkeypatch.setattr(dora.GitHubClient, "get", fail)
     assert dora.main() == 1
+
+
+def test_metrics_use_prometheus_text_format_with_labels():
+    metrics = {"deployments": 22, "first_deployment": NOW,
+               "deployments_per_week": 5.133, "lead_time_hours": 2.9,
+               "change_fail_rate": 0.0, "recovery_time_hours": None,
+               "rework_rate": 0.32}
+    text = dora.format_metrics(metrics, 30)
+    labels = '{environment="production",window_days="30"}'
+    assert f"dora_deployments{labels} 22\n" in text
+    assert f"dora_deployment_frequency_per_week{labels} 5.133\n" in text
+    assert f"dora_change_fail_ratio{labels} 0\n" in text
+    # Aucune donnée : pas de ligne (Grafana affiche « No data »)
+    assert "dora_recovery_time_hours" not in text
+    assert len(text.splitlines()) == 5
+
+
+def test_metrics_file_written_only_when_asked(monkeypatch, tmp_path):
+    monkeypatch.setenv("DORA_DAYS", "30")
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    monkeypatch.setattr(dora, "load_deployments", lambda client: [])
+    monkeypatch.setattr(dora, "load_incidents", lambda client: [])
+    monkeypatch.delenv("DORA_METRICS_FILE", raising=False)
+    assert dora.main() == 0
+    assert list(tmp_path.iterdir()) == []
+    target = tmp_path / "dora.prom"
+    monkeypatch.setenv("DORA_METRICS_FILE", str(target))
+    assert dora.main() == 0
+    assert target.read_text().startswith("dora_deployments{")
