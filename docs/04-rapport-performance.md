@@ -176,6 +176,12 @@ est passé à **5,3 h** (23 déploiements, 5,4 par semaine, reprise
 veille au soir, ce qui illustre le constat ci-dessus et la
 recommandation 18. Les chiffres de ce rapport restent ceux du 10/11.
 
+![Tableau de bord Grafana Orion - Delivery le 11/11, 30 derniers jours : 5,4 déploiements par semaine, délai médian de 5,3 h, 0 % d'échec, « No incident » pour le temps de rétablissement, 30 % de reprise, 23 déploiements comptés ; traits bleus verticaux : chaque mise en production d'une nouvelle image depuis le 06/11](rapport-performance/grafana-delivery.png)
+
+Les courbes ne comptent qu'un point par indicateur : l'import a
+commencé le 11/11. Elles se rempliront à chaque exécution du workflow
+(deux par jour ouvré).
+
 ### 3.2 Pipeline d'intégration continue
 
 | | Avant (27/10) | Après (06/11) |
@@ -267,7 +273,27 @@ La limite relevée le 07/11 (bibliothèques du back non fournies à
 SonarQube, analyse du Java moins précise) est levée depuis le 08/11
 (PR #112).
 
-![Tableau de bord SonarQube du projet orion (dernière analyse le 08/11) : Quality Gate réussi, 0 problème ouvert, 82,9 % de couverture, 0 % de duplication](rapport-performance/sonarqube-08-11.png)
+**État au 11/11** : inchangé depuis le 08/11. Les 5 analyses du 11/11
+réussissent la Quality Gate sans nouveau problème. La courbe de
+l'historique montre la baisse : 37 problèmes à la première analyse,
+30 après les premières corrections, 0 depuis le 08/11. Les vues par
+qualité indiquent, sur 30 jours, le nombre de problèmes fermés et le
+délai moyen de correction (MTTR, *Mean Time To Repair*) : 3 jours pour
+la sécurité, 8,6 jours pour la fiabilité, 7 jours pour la
+maintenabilité. Un même problème peut relever de plusieurs qualités :
+ces nombres ne s'additionnent pas.
+
+![Tableau de bord SonarQube du projet orion le 11/11, vue Overall Code : Quality Gate réussi, 0 problème ouvert en sécurité, fiabilité et maintenabilité (notes A), 82,9 % de couverture, 0 % de duplication](rapport-performance/sonarqube-11-11.png)
+
+![Même tableau de bord, vue New Code (code modifié depuis la photo avant) : 0 nouveau problème, 90,9 % de couverture pour 80 % exigés, 0 % de duplication pour 3 % au plus](rapport-performance/sonarqube-11-11-nouveau-code.png)
+
+![Historique SonarQube du nombre de problèmes jusqu'au 11/11 : 37, puis 30, puis 0 à partir du 08/11 ; les 5 analyses du 11/11 réussissent la Quality Gate sans nouveau problème](rapport-performance/sonarqube-historique.png)
+
+![Vue sécurité de SonarQube, 30 derniers jours : 0 problème ouvert, 4 fermés, délai moyen de correction de 3 jours](rapport-performance/sonarqube-securite-30-jours.png)
+
+![Vue fiabilité de SonarQube, 30 derniers jours : 0 problème ouvert, 41 fermés, délai moyen de correction de 8,6 jours ; pic de corrections vers le 8 novembre](rapport-performance/sonarqube-fiabilite-30-jours.png)
+
+![Vue maintenabilité de SonarQube, 30 derniers jours : 0 problème ouvert, 7 fermés, délai moyen de correction de 7 jours](rapport-performance/sonarqube-maintenabilite-30-jours.png)
 
 ![Le même tableau de bord le 07/11, avant la mise à jour Angular 22 : 30 problèmes ouverts, 39,7 % de couverture, 1 problème de sécurité de gravité faible](rapport-performance/sonarqube.png)
 
