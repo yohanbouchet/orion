@@ -36,8 +36,12 @@ ensure_secret() {
   if kubectl -n "$NAMESPACE" get secret "$name" >/dev/null 2>&1; then
     log "Secret ${name} already exists, kept"
   else
-    kubectl -n "$NAMESPACE" create secret generic "$name" \
-      --from-literal="${key}=$(openssl rand -hex 32)" >/dev/null
+    # Valeur passée par un tube : elle n'apparaît jamais dans la ligne de
+    # commande (lisible par tout compte de la machine dans ps), comme dans
+    # deploy.sh
+    openssl rand -hex 32 | tr -d '\n' |
+      kubectl -n "$NAMESPACE" create secret generic "$name" \
+        --from-file="${key}"=/dev/stdin >/dev/null
     log "Secret ${name} created"
   fi
 }
