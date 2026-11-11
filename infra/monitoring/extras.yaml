@@ -261,6 +261,26 @@ extraObjects:
           ports:
             - port: 8428
 
+  # Indicateurs DORA : le runner local de la CI (workflow dora.yml) les
+  # importe dans VictoriaMetrics ; aucun autre accès au namespace
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: vmsingle-from-runner
+      namespace: monitoring
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: vmsingle
+      policyTypes: ["Ingress"]
+      ingress:
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: arc-runners
+          ports:
+            - port: 8428
+
   # monitoring-collector : le collecteur ne reçoit que vmagent (lecture
   # de ses métriques) ; il n'envoie qu'à VictoriaLogs, au DNS et à l'API
   # de Kubernetes (noms des pods)

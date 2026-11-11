@@ -143,8 +143,8 @@ run "monitoring_stack_is_pinned" {
     error_message = "The monitoring chart version must be pinned."
   }
   assert {
-    condition     = length(kubernetes_config_map_v1.dashboard) == 3
-    error_message = "Three dashboards are expected."
+    condition     = length(kubernetes_config_map_v1.dashboard) == 4
+    error_message = "Four dashboards are expected."
   }
 }
 
