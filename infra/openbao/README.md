@@ -206,6 +206,9 @@ kubectl -n openbao exec -it openbao-0 -- sh -c \
 Rotation : nouveau jeton dans SonarQube (My Account → Security), même
 commande (nouvelle version), puis révocation de l'ancien dans SonarQube.
 
+Le jeton actuel expire vers le **28/01/2027** : le renouveler avant, sans
+rappel automatique (limite ci-dessous).
+
 ## Déverrouillage automatique : comparatif
 
 Évolution étudiée le 10/11/2026 (documentation d'OpenBao 2.7,
@@ -240,6 +243,14 @@ kubectl -n openbao exec openbao-0 -- rm /tmp/openbao.snap
 
 L'instantané reste chiffré (il faut les clés pour le relire).
 
+**Limite** : cet instantané n'est pas planifié (la base de prod, elle,
+est sauvegardée chaque jour). Sans lui, la perte du disque du coffre
+obligerait à le réinitialiser et à refaire l'identité de la CI
+(`tofu apply` dans `config/`, jeton SonarQube à réécrire). Évolution :
+instantané quotidien par une tâche planifiée du poste, avec un jeton
+limité à la seule lecture de `sys/storage/raft/snapshot`, copié hors
+site avec les sauvegardes (rapport, recommandation 26).
+
 ## Certificat
 
 Valable 1 an. `tofu plan` propose de le renouveler 30 jours avant la
@@ -252,6 +263,12 @@ kubectl -n openbao delete pod openbao-0
 
 Certificat public de l'autorité (à donner aux clients) :
 `tofu output -raw openbao_ca_cert`.
+
+**Limite** : le certificat actuel expire le **09/11/2027** ; rien
+n'oblige à lancer `tofu plan` avant, et aucune alerte ne prévient. Un
+certificat expiré couperait la CI du coffre (déploiements bloqués, comme
+quand il est scellé). Évolution : alerte 30 jours avant (sonde de la
+supervision), ou cert-manager.
 
 ## Sécurité
 
@@ -278,4 +295,6 @@ Certificat public de l'autorité (à donner aux clients) :
 | Les 3 parts de clé sont chez une seule personne | en équipe : une part par personne |
 | La configuration d'OpenBao est appliquée avec le jeton racine | méthode d'authentification propre à l'Ops (OIDC de l'entreprise), jeton racine révoqué |
 | Un jeton Kubernetes ne peut pas être révoqué avant sa fin (limite de Kubernetes) | durées déjà courtes (15 min ; 45 min pour les tests longs de staging) |
-| Jeton SonarQube de longue durée (SonarQube ne crée pas de jetons courts), lisible par un job de PR du dépôt (comme avant dans GitHub) | rotation régulière ; jeton à date d'expiration (réglage de SonarQube) |
+| Jeton SonarQube de longue durée (SonarQube ne crée pas de jetons courts), lisible par un job de PR du dépôt (comme avant dans GitHub) ; expire vers le 28/01/2027, sans rappel automatique | rotation régulière, notée dans le calendrier de l'équipe ; jeton à date d'expiration (réglage de SonarQube) |
+| Aucune sauvegarde planifiée du coffre (instantané à la main) | instantané quotidien planifié, copié hors site |
+| Certificat TLS renouvelé seulement par un `tofu plan` lancé à la main ; aucune alerte avant le 09/11/2027 | alerte 30 jours avant, ou cert-manager |

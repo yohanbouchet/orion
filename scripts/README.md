@@ -199,6 +199,10 @@ invalide.
   sa cause est ailleurs (ex. la machine) ;
 - « reprise » = commits `fix` seulement : un correctif planifié compte
   comme une reprise ;
+- l'état d'un déploiement est son dernier état final (`success`,
+  `failure`, `error`) : l'état « inactive », que GitHub ajoute quand une
+  version est remplacée ou un environnement recréé, est ignoré (corrigé
+  le 10/11 : il masquait les 22 déploiements de prod) ;
 - le 1er déploiement n'a pas de délai (aucun déploiement précédent pour
   savoir quels commits il livre) ; 100 déploiements et 100 tickets au
   plus par appel (pas de pagination).
@@ -571,7 +575,10 @@ argument.
 ([service de démarrage automatique](../infra/systemd/README.md)).
 
 Ce script est antérieur à `lib/common.sh` : il a son propre journal et
-`set -euo pipefail`. Il sera aligné sur les règles communes en phase 5.
+`set -euo pipefail`, et il n'a pas de test bashunit (**limite** : outil
+d'installation lancé rarement, à la main). Évolution : l'aligner et le
+tester comme les autres scripts, ou décrire SonarQube en OpenTofu avec
+le reste du socle (rapport, recommandation 28).
 
 ## Tests des scripts
 
@@ -607,7 +614,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/load_test_test.sh` | bashunit | usage, profil inconnu, prod refusée, `PUSH_METRICS` invalide, scénario absent, fumée dans `staging` contre le front (durée limitée), envoi des mesures activable, pod sans privilège sur image figée, résumé gardé, seuil dépassé (code 1), point de rupture atteint (succès) |
 | `tests/zap_scan_test.sh` | bashunit | usage, mode inconnu, règles absentes, commandes passive et active (durée limitée), pod sans privilège ni jeton, rapport extrait du journal, échec (règle FAIL) avec rapport conservé |
 | `tests/test_notify.py` | pytest | jobs en échec, exercice, ouverture / commentaire / fermeture, résumé, paramètres |
-| `tests/test_dora.py` | pytest | dates de l'API, période, délai médian, échec par état ou par incident, rétablissement, reprise (`fix` seuls), aucune donnée, déploiements en attente ignorés, commits de fusion exclus, paramètre invalide (code 2), API injoignable (code 1) |
+| `tests/test_dora.py` | pytest | dates de l'API, période, délai médian, échec par état ou par incident, rétablissement, reprise (`fix` seuls), aucune donnée, déploiements en attente ignorés, état « inactive » ignoré au profit du dernier état final, commits de fusion exclus, paramètre invalide (code 2), API injoignable (code 1) |
 
 Les tests Bash remplacent `npm`, `java`, `gradlew`, `helm` ou `kubectl`
 par des **doublures** (faux programmes placés en tête du `PATH`) : ils
@@ -618,3 +625,11 @@ Versions des outils de test : bashunit est téléchargé dans la CI avec
 vérification de son empreinte SHA-256 ; pytest et ses dépendances sont
 figés avec empreintes dans `tests/requirements.txt`, mis à jour par
 Dependabot.
+
+**Non testé** : la logique shell des deux actions composites de la CI
+([`kube-access`](../.github/actions/kube-access/action.yml),
+[`openbao-secret`](../.github/actions/openbao-secret/action.yml) :
+demande du badge OIDC, appel d'OpenBao, kubeconfig) n'a pas de test
+automatique ; elle est relue par zizmor et actionlint, et exercée à
+chaque déploiement. Évolution : la déplacer dans `scripts/` et la
+couvrir par bashunit, comme les autres scripts.

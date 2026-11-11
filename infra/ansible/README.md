@@ -56,6 +56,15 @@ redémarrage de Docker.
   durcissement. La CI **vérifie** le code (job `ansible` : syntaxe,
   ansible-lint profil « production ») et **teste** les rôles avec
   Molecule (ci-dessous) ; l'opérateur **l'exécute** sur le poste.
+- **Pas de root par défaut** : seules les tâches qui en ont besoin
+  demandent sudo (`become`) ; le playbook refuse d'être lancé en root.
+- **Tout est figé et vérifié** : binaires par empreinte SHA-256, image de
+  metrics-server par empreinte, collection `community.general` 14.0.0,
+  outils de la CI par `pip --require-hashes`.
+- **Pare-feu** : SSH est autorisé **avant** l'activation, pour ne pas couper
+  la session en cours.
+- **Sauvegardes** : dossier en 700, fichiers en 600 ; copie hors site par
+  la sauvegarde chiffrée de la machine (GPG AES-256, puis Google Drive).
 
 ## Tests des rôles (Molecule)
 
@@ -76,15 +85,6 @@ Non testés par Molecule (ils demandent le cluster) : `minikube_service`,
 désactive la relance du cluster après le redémarrage de Docker
 (`docker_hygiene_restart_minikube: false`, vraie par défaut sur le poste). **Ne jamais lancer `molecule test`
 sur le poste Ops** : il appliquerait les rôles à la machine elle-même.
-- **Pas de root par défaut** : seules les tâches qui en ont besoin
-  demandent sudo (`become`) ; le playbook refuse d'être lancé en root.
-- **Tout est figé et vérifié** : binaires par empreinte SHA-256, image de
-  metrics-server par empreinte, collection `community.general` 14.0.0,
-  outils de la CI par `pip --require-hashes`.
-- **Pare-feu** : SSH est autorisé **avant** l'activation, pour ne pas couper
-  la session en cours.
-- **Sauvegardes** : dossier en 700, fichiers en 600 ; copie hors site par
-  la sauvegarde chiffrée de la machine (GPG AES-256, puis Google Drive).
 
 ## Limites et évolutions
 
@@ -98,6 +98,7 @@ sur le poste Ops** : il appliquerait les rôles à la machine elle-même.
 | Collections et versions des outils mises à jour à la main (Dependabot ne suit ni Galaxy ni ces binaires) | Renovate, qui sait les suivre |
 | Molecule teste 5 rôles sur la machine du job (Ubuntu 24.04, le poste est en 26.04) ; les rôles liés au cluster ne sont pas testés | machine virtuelle Ubuntu 26.04 avec Minikube pour tous les rôles |
 | L'image ZAP est reconstruite avec le cache : un correctif Debian récent n'est pris qu'en reconstruisant sans cache | reconstruction planifiée sans cache |
+| cron ne rattrape pas une tâche manquée (poste éteint à l'heure prévue) : compensé pour la sauvegarde par la sauvegarde au démarrage, pas pour la vérification du vendredi 13 h | minuteurs systemd `Persistent=true` (ou anacron) à la place de cron |
 
 Fichiers : [`site.yml`](site.yml) (le playbook),
 [`group_vars/all.yml`](group_vars/all.yml) (versions, empreintes,
