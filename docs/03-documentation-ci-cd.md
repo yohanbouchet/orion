@@ -873,8 +873,8 @@ Rollouts dans la cible cloud.
    release ; ticket et e-mail si une étape échoue.
 
 Durées mesurées : contrôles d'une PR 2,2 min (médiane du 07 au
-10/11) ; de la fusion à `staging` testé 6,6 min ; production 0,6 min
-après l'approbation.
+10/11) ; de la fusion à `staging` testé 6,7 min ; production 0,8 min
+après l'approbation (v1.9.1, 11/11).
 
 ### 7.3 Système de versioning
 
