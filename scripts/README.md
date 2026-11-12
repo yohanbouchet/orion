@@ -18,6 +18,7 @@ marche dans la CI, et inversement.
 | [`load-test.sh`](#load-testsh) | Test de charge de `staging` avec k6 (6 profils) | job `load-test` de la CI (`load-test.yml`) ; l'opérateur |
 | [`backup.sh`](#backupsh) | Sauvegarder, vérifier et restaurer la base | l'opérateur ; tâches planifiées installées par Ansible (sauvegarde au démarrage du poste et chaque jour, vérification chaque semaine) |
 | [`backup-openbao.sh`](#backup-openbaosh) | Sauvegarder le coffre OpenBao (instantané Raft vérifié) | tâche planifiée installée par Ansible (chaque jour, 11 h 50) ; l'opérateur, avant une opération risquée |
+| [`e2e.sh`](#e2esh) | Tests de bout en bout : MicroCRM jetable, parcours dans un vrai navigateur | job `e2e` de la CI ; l'opérateur |
 | [`deploy-sonarqube.sh`](#deploy-sonarqubesh) | Déployer SonarQube dans le cluster Minikube | l'opérateur, à la main |
 
 ## Règles communes
@@ -592,6 +593,54 @@ Restauration : même README, « Restaurer ».
 | Instantané refusé (jeton expiré après 7 jours sans sauvegarde) | 1 | refaire le jeton |
 | Copie abîmée ou archive incomplète | 1 | aucun fichier gardé ; relancer |
 
+## e2e.sh
+
+**But** : vérifier les écrans de MicroCRM comme un utilisateur, avec un
+vrai navigateur, avant la publication des images (recommandation 2 du
+rapport).
+
+```shell
+scripts/e2e.sh FRONT_IMAGE BACK_IMAGE
+# ex. images publiées d'un commit
+scripts/e2e.sh ghcr.io/yohanbouchet/orion-front:sha-394d8fe \
+  ghcr.io/yohanbouchet/orion-back:sha-394d8fe
+```
+
+**Fonctionnement** : tire un mot de passe de base au hasard ; démarre
+avec Docker Compose ([`e2e/compose.yaml`](../e2e/compose.yaml)) une base
+PostgreSQL en mémoire, le back et le front (même relais `/api` que le
+chart Helm, disques système en lecture seule) ; attend que les trois
+soient prêts (sondes de santé) ; lance Playwright (image officielle,
+navigateurs inclus, sans root) qui joue les parcours de
+[`e2e/tests/`](../e2e/tests/microcrm.spec.ts) ; garde les journaux du
+back et du front, puis supprime tout, même après un échec.
+
+**Parcours** : page d'accueil (listes des personnes et des
+organisations) ; création d'une organisation, visible sur l'accueil ;
+création d'une personne, rattachement à une organisation, personne
+visible sur l'accueil. Chaque élément est trouvé par son rôle et son
+nom lisible (comme un lecteur d'écran), jamais par une classe CSS.
+
+**Résultats** : `e2e/playwright-report/` (rapport HTML) ;
+`e2e/test-results/` (trace pas à pas, capture et vidéo de chaque échec,
+journaux `stack.log`) ; gardés 7 jours par la CI en cas d'échec.
+
+**Conditions d'exécution** : Docker avec Compose, `openssl` ; aucun
+port publié sur la machine (réseau privé du projet).
+
+**Vérifié le 12/11/2026** : 3 parcours réussis en 27 s (images déjà
+téléchargées) ; contre-épreuve : relais `/api` cassé exprès, 2 parcours
+en échec et code 1.
+
+**Arrêts expliqués** :
+
+| Cas | Code | Correction proposée |
+|---|---|---|
+| Pas exactement 2 images | 2 | syntaxe rappelée |
+| `docker` ou `openssl` absent | 127 | installer l'outil |
+| Base, back ou front pas prêts en 3 min | 1 | lire `e2e/test-results/stack.log` |
+| Parcours en échec | 1 | ouvrir `e2e/playwright-report/index.html` |
+
 ## lib/common.sh
 
 Fonctions partagées, **chargées** par les scripts Bash
@@ -664,6 +713,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Vitest lancé une fois sans navigateur, tests rouges, Gradle lancé, rapport absent |
 | `tests/backup_test.sh` | bashunit | usage, fichier privé (600/700) et empreinte, rotation, `pg_dump` en échec sans fichier partiel, `verify` (base temporaire), fichier abîmé refusé, sauvegarde de sécurité avant restauration, table : lignes absentes seulement, table sans clé refusée, nom de table piégé ; métrique de supervision écrite après une sauvegarde réussie (fichier en 640), aucune après un échec |
 | `tests/backup_openbao_test.sh` | bashunit | usage, jeton absent ou lisible par d'autres, coffre scellé, instantané privé (600/700) avec empreinte, jeton passé par l'entrée standard et jamais en argument, jeton prolongé, métrique écrite (640), échec sans fichier ni métrique, copie abîmée ou archive à l'empreinte fausse refusées, rotation, fichier du pod toujours effacé |
+| `tests/e2e_test.sh` | bashunit | usage, pile démarrée avec attente des sondes puis parcours lancés, images et mot de passe aléatoire transmis à compose, tout supprimé après un succès ou un échec, pile qui ne démarre pas (parcours non lancés, journaux gardés), parcours en échec (code 1), mot de passe jamais dans une commande |
 | `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, chart emballé avec la version déployée (archive effacée ensuite) ou installé tel quel sans étiquette, échec de l'emballage ou de Helm, test de fumée raté → retour arrière, `rollback` |
 | `tests/load_test_test.sh` | bashunit | usage, profil inconnu, prod refusée, `PUSH_METRICS` invalide, scénario absent, fumée dans `staging` contre le front (durée limitée), envoi des mesures activable, pod sans privilège sur image figée, résumé gardé, seuil dépassé (code 1), point de rupture atteint (succès) |
 | `tests/zap_scan_test.sh` | bashunit | usage, mode inconnu, règles absentes, commandes passive et active (durée limitée), pod sans privilège ni jeton, rapport extrait du journal, échec (règle FAIL) avec rapport conservé |

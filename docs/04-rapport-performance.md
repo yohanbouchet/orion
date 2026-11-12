@@ -39,8 +39,9 @@ elle-même.
 
 **Trois recommandations prioritaires** (détail en section 8.3) :
 
-1. Tester les cas d'erreur et ajouter des tests de bout en bout : 42 %
-   des conditions du code ne sont pas testées (recommandation 2).
+1. Tester les cas d'erreur : 42 % des conditions du code ne sont pas
+   testées ; les tests de bout en bout couvrent les parcours principaux
+   depuis le 12/11, pas encore les erreurs (recommandation 2).
 2. Garder une copie des outils et des bibliothèques téléchargés par la
    chaîne : une panne extérieure a retardé une livraison de plus de 6 h
    le 08/11 (recommandation 16, en partie appliquée le 09/11,
@@ -231,7 +232,8 @@ chaîne contrôle **3 fois plus de choses en 2 fois moins de temps**.
 | --- | --- | --- | --- |
 | Tests du back (JUnit) | 2 | 6 (dont l'intégration avec la base) | chaque PR |
 | Tests du front | 8 (Karma) | 16 (Vitest, depuis le 08/11) | chaque PR |
-| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 87 + 30 | chaque PR |
+| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 93 + 30 | chaque PR |
+| Tests de bout en bout (Playwright, vrai navigateur) | 0 | 3 parcours : accueil, création d'une organisation, d'une personne rattachée (depuis le 12/11) | chaque PR, sur les images construites |
 | Tests de l'infrastructure (OpenTofu) | 0 | 15 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
 | Test du poste Ops (Ansible, Molecule) | 0 | 5 rôles appliqués sur une machine jetable, rejoués sans aucun changement (idempotence), puis 6 contrôles (outils, sauvegardes planifiées, services, métriques, pare-feu, journaux Docker) | chaque PR (depuis le 10/11) |
 | Test d'intrusion (OWASP ZAP) | 0 | 0 échec ; 19 règles bloquantes | chaque déploiement de staging |
@@ -936,12 +938,12 @@ ajoutées le 10/11, puis 26 à 30, ajoutées le 11/11 (relecture de
 cohérence), viennent ensuite, pour que les numéros cités dans les
 sections précédentes restent valables. Les trois priorités du moment
 sont rappelées dans la synthèse (section 1). La colonne « État » montre
-où en est chacune le 12/11 : 7 sont appliquées, 5 le sont en partie.
+où en est chacune le 12/11 : 7 sont appliquées, 6 le sont en partie.
 
 | # | Recommandation | Constat | Effort | Équipe | État au 11/11 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Mettre à jour le front vers Angular 22 (et passer les tests à Vitest) | 4 failles hautes dans le code livré au navigateur ; Angular 17 n'est plus maintenu | moyen | Dev | **Appliquée** (v1.7.1) : 0 faille, 0 problème SonarQube (4.2, 5.1) |
-| 2 | Augmenter la couverture des tests, en priorité les cas d'erreur, et ajouter des tests de bout en bout | branches couvertes à 17 % le 06/11, 57,9 % le 08/11 ; aucun test de bout en bout | moyen | Dev | À faire ; couverture passée de 39,7 % à 82,9 % avec Angular 22 |
+| 2 | Augmenter la couverture des tests, en priorité les cas d'erreur, et ajouter des tests de bout en bout | branches couvertes à 17 % le 06/11, 57,9 % le 08/11 ; aucun test de bout en bout | moyen | Dev | **Partielle** : couverture passée de 39,7 % à 82,9 % avec Angular 22 ; 3 parcours de bout en bout (Playwright, 12/11) ; reste : cas d'erreur, branches (57,9 %) |
 | 3 | En production cloud (ex. AWS EKS), séparer les machines de la CI de celles de l'application et activer la mise à l'échelle des machines (par OpenTofu) | incident du 05/11 ; autoscaling limité à 4 pods sur une seule machine | élevé | Ops | À faire (cible décrite dans la documentation CI/CD, 5.2.1) |
 | 4 | Passer le front à 2 répliques en prod, avec un budget de perturbation (*PodDisruptionBudget*) pour le front et le back | le front est seul dans son composant : sa perte couperait l'application, alors que celle d'un pod du back passe inaperçue (7.3) | faible | Ops | **Partielle** : front à 2 répliques en prod (v1.7.0) ; budget de perturbation prévu dans la cible cloud seulement |
 | 5 | Ajouter une supervision synthétique : une sonde qui interroge l'application comme un utilisateur, en lecture **et en écriture**, toutes les quelques secondes (ex. Blackbox Exporter, open source), avec une alerte | la lenteur du relais nginx (6.3), la coupure de 11 s de l'exercice (7.3) et les enregistrements perdus aux mises à jour (7.5) étaient invisibles côté back | faible | Ops | À faire |

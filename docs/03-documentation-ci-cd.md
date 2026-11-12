@@ -161,7 +161,7 @@ administrateurs) :
 
 - passage obligatoire par une PR : pas de poussée directe, ni de
   réécriture de l'historique, ni de suppression de `main` ;
-- **13 contrôles obligatoires** au vert (section 4.2), et PR **à jour
+- **14 contrôles obligatoires** au vert (section 4.2), et PR **à jour
   avec `main`** : le code testé est le code fusionné ;
 - toutes les discussions de la PR résolues ; fusion par commit de fusion
   (historique lisible, PR retrouvable) ;
@@ -200,15 +200,16 @@ manuelle ratée.
 | --- | --- | --- | --- |
 | Unitaires | Vitest, navigateur simulé jsdom (front, 16 tests, back simulé : chargement, création, suppression, liens entre personnes et organisations) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; au 08/11, 82,9 % de l'ensemble (lignes 87,6 %, branches 57,9 %) |
 | Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (15 tests : 8 du socle, 7 de la configuration d'OpenBao) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle et d'OpenBao |
-| E2E | **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | chaque déploiement (dev, staging, prod) | le parcours complet ; un échec remet la version précédente |
+| E2E | **Playwright** (vrai navigateur Chromium, 3 parcours : accueil, création d'une organisation, création d'une personne rattachée à l'organisation) sur les images construites, avec une base jetable (`scripts/e2e.sh`, `e2e/`) ; **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | Playwright : chaque PR et chaque fusion (job `e2e`) ; fumée : chaque déploiement (dev, staging, prod) | les écrans principaux, de l'interface à la base ; un échec de la fumée remet la version précédente |
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
-| Scripts d'exploitation | bashunit (87 tests), pytest (30 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
+| Scripts d'exploitation | bashunit (93 tests), pytest (30 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
 | Infrastructure | `tofu fmt`, `validate` et `test` ; `ansible-playbook --syntax-check`, ansible-lint (profil production) ; **Molecule** : 5 rôles Ansible appliqués à une machine jetable, idempotence, contrôles | chaque PR | 100 % des fichiers Terraform et Ansible ; 5 rôles sur 8 exécutés |
 
-**Limite** : pas de test de bout en bout dans un navigateur (Cypress,
-Playwright) ; le test de fumée couvre le chemin technique, pas les
-écrans. C'est une recommandation à l'équipe Dev (rapport, section 8.3).
+**Limite** : les 3 parcours Playwright (depuis le 12/11) couvrent les
+écrans principaux, pas les cas d'erreur (champ obligatoire vide, API en
+panne) ni la suppression ; à étendre par l'équipe Dev (rapport,
+recommandation 2).
 La logique shell des deux actions composites de la CI (`kube-access`,
 `openbao-secret`) n'a pas non plus de test automatique : elle est relue
 par zizmor et actionlint, et exercée à chaque déploiement ; évolution :
@@ -222,7 +223,7 @@ vers `main`, chaque fusion sur `main`, et à la main (onglet Actions).
 
 | Étape | Jobs | Quand | Bloquant |
 | --- | --- | --- | --- |
-| Contrôles (en parallèle, machines jetables de GitHub) | `test-front`, `test-back`, `gitleaks`, `hadolint`, `shellcheck`, `script-tests`, `opentofu`, `ansible`, `trivy`, `workflows`, `images (front)`, `images (back)` ; les images attendent `test-back`, qui fournit le jar du back | chaque PR et chaque fusion | oui : contrôles obligatoires de `main` |
+| Contrôles (en parallèle, machines jetables de GitHub) | `test-front`, `test-back`, `gitleaks`, `hadolint`, `shellcheck`, `script-tests`, `opentofu`, `ansible`, `trivy`, `workflows`, `images (front)`, `images (back)`, `e2e` ; les images attendent `test-back`, qui fournit le jar du back, et `e2e` attend les images | chaque PR et chaque fusion | oui : contrôles obligatoires de `main` |
 | Analyse de qualité (runner local) | `sonarqube`, après les deux jobs de tests (il lit leurs rapports de couverture) | chaque PR et chaque fusion ; sautée pour les PR de Dependabot (aucun secret, versions seulement) | oui |
 | Version et publication | `release`, `publish` | fusion sur `main`, si tout est vert | — |
 | Déploiement et tests en fonctionnement | `deploy-dev`, `deploy-staging`, `zap`, `load-test` | fusion sur `main` | oui : un échec arrête la chaîne avant la prod |
@@ -457,7 +458,7 @@ reste la dernière vérification.
 ```mermaid
 flowchart TB
     pr["PR vers main, ou fusion"] --> checks
-    checks["1. Sur chaque PR et chaque fusion :<br/>13 contrôles obligatoires en parallèle<br/>tests, qualité, sécurité,<br/>images (après test-back, qui fournit le jar),<br/>outillage (section 4.2)"]
+    checks["1. Sur chaque PR et chaque fusion :<br/>14 contrôles obligatoires en parallèle<br/>tests, qualité, sécurité,<br/>images (après test-back, qui fournit le jar),<br/>outillage (section 4.2)"]
     checks -->|"tout vert : PR fusionnable ;<br/>sur main, la chaîne continue"| rel
     subgraph liv["2. Après une fusion sur main : livraison"]
         direction LR
@@ -474,7 +475,7 @@ flowchart TB
     pre -.->|"échec"| notify
 ```
 
-*Description du schéma* : à chaque PR et à chaque fusion, 13 contrôles
+*Description du schéma* : à chaque PR et à chaque fusion, 14 contrôles
 tournent en parallèle (l'analyse SonarQube attend les tests, dont elle
 lit la couverture ; les images attendent `test-back`, qui leur fournit
 le jar testé du back). Sur une PR, ils décident si la fusion est permise.
@@ -874,8 +875,8 @@ Rollouts dans la cible cloud.
 
 ### 7.2 Pipeline de release
 
-1. **Fusion** d'une PR sur `main`, après ses 13 contrôles.
-2. Les 13 contrôles **repassent** sur `main`.
+1. **Fusion** d'une PR sur `main`, après ses 14 contrôles.
+2. Les 14 contrôles **repassent** sur `main`.
 3. **`release`** : semantic-release lit les messages de commit, calcule
    la version, crée l'étiquette `vX.Y.Z` et la release GitHub avec ses
    notes (aucun commit poussé sur `main`).

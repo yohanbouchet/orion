@@ -572,15 +572,57 @@ jobs:
             "$TRIVY_IMAGE" image --input /image.tar --scanners vuln \
             --cache-dir /cache --no-progress \
             --severity HIGH,CRITICAL --exit-code 1
-      # Sur main seulement : l'image analysée est gardée 1 jour pour publish
+      # Image analysée gardée 1 jour : testée par e2e (PR et main), puis
+      # publiée par publish (main)
       - name: Keep image for publication
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image-${{ matrix.component }}
           path: ${{ runner.temp }}/image.tar
           retention-days: 1
           if-no-files-found: error
+
+  # Tests de bout en bout : les 2 images construites (celles qui seront
+  # publiées) démarrées avec une base jetable, puis 3 parcours joués par
+  # un vrai navigateur (Playwright) ; scripts/e2e.sh, e2e/ ; rapport et
+  # preuves (traces, captures, vidéos) gardés 7 jours en cas d'échec
+  e2e:
+    needs: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download front image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-front
+          path: ${{ runner.temp }}/front
+      - name: Download back image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-back
+          path: ${{ runner.temp }}/back
+      - name: Load images
+        run: |
+          docker load -i "$RUNNER_TEMP/front/image.tar"
+          docker load -i "$RUNNER_TEMP/back/image.tar"
+      - name: Run end-to-end tests
+        run: >-
+          scripts/e2e.sh "orion-front:$GITHUB_SHA" "orion-back:$GITHUB_SHA"
+      - name: Keep the test report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
 
   # Version vX.Y.Z calculée par semantic-release à partir des commits
   # conventionnels : étiquette Git + Release GitHub, aucun commit poussé
@@ -594,6 +636,7 @@ jobs:
       - hadolint
       - shellcheck
       - workflows
+      - e2e
       - script-tests
       - opentofu
       - ansible
@@ -650,6 +693,7 @@ jobs:
       - hadolint
       - shellcheck
       - workflows
+      - e2e
       - script-tests
       - opentofu
       - ansible
@@ -829,6 +873,7 @@ jobs:
       - hadolint
       - shellcheck
       - workflows
+      - e2e
       - script-tests
       - opentofu
       - ansible
