@@ -472,7 +472,9 @@ scripts/backup.sh restore dev <fichier> --table person
   dans une base temporaire `microcrm_verify`, ses lignes sont comptées,
   puis la base est supprimée. La vraie base n'est pas touchée ;
 - **restore** : contrôles d'abord (nom de table, clé primaire, empreinte
-  du fichier), puis **sauvegarde de sécurité** de l'état actuel, puis :
+  du fichier), puis **sauvegarde de sécurité** de l'état actuel (une
+  sauvegarde de plus est alors gardée : la rotation ne supprime jamais
+  le fichier en cours de restauration), puis :
   - toute la base : `pg_restore --clean --single-transaction`, tout ou
     rien. Les droits du compte limité de l'application font partie de la
     sauvegarde ; une sauvegarde qui ne les contient pas (faite avant ce

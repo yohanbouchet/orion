@@ -159,6 +159,18 @@ function test_restore_is_refused_while_sonarqube_runs() {
   assert_not_contains "--clean" "$(calls)"
 }
 
+# Avec KEEP sauvegardes déjà présentes, la sauvegarde de sécurité ne doit
+# pas faire supprimer par la rotation le fichier qu'on restaure
+function test_restoring_the_oldest_backup_does_not_delete_it() {
+  make_backup_file sonarqube-20260101T000000Z.dump
+  make_backup_file sonarqube-20260102T000000Z.dump
+  KEEP=2 run_backup restore \
+    "$BACKUP_DIR/sonarqube-20260101T000000Z.dump" >/dev/null
+  assert_successful_code
+  assert_file_exists "$BACKUP_DIR/sonarqube-20260101T000000Z.dump"
+  assert_contains "--clean --if-exists" "$(calls)"
+}
+
 function test_restore_takes_a_safety_backup_then_clears_the_index() {
   make_backup_file sonarqube-20260101T000000Z.dump
   run_backup restore "$BACKUP_DIR/sonarqube-20260101T000000Z.dump" \

@@ -204,7 +204,7 @@ manuelle ratée.
 | E2E | **Playwright** (vrai navigateur Chromium, 3 parcours : accueil, création d'une organisation, création d'une personne rattachée à l'organisation) sur les images construites, avec une base jetable (`scripts/e2e.sh`, `e2e/`) ; **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | Playwright : chaque PR et chaque fusion (job `e2e`) ; fumée : chaque déploiement (dev, staging, prod) | les écrans principaux, de l'interface à la base ; un échec de la fumée remet la version précédente |
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
-| Scripts d'exploitation | bashunit (104 tests), pytest (30 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
+| Scripts d'exploitation | bashunit (106 tests), pytest (30 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
 | Infrastructure | `tofu fmt`, `validate` et `test` ; `ansible-playbook --syntax-check`, ansible-lint (profil production) ; **Molecule** : 5 rôles Ansible appliqués à une machine jetable, idempotence, contrôles | chaque PR | 100 % des fichiers Terraform et Ansible ; 5 rôles sur 8 exécutés |
 
 **Limite** : les 3 parcours Playwright (depuis le 12/11) couvrent les

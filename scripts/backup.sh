@@ -218,6 +218,10 @@ restore() {
       "fix: restore the whole database (without --table)"
   fi
   check_file "$file"
+  # La sauvegarde de sécurité ne doit pas faire supprimer par la rotation
+  # le fichier qu'on restaure (s'il est le plus ancien des KEEP gardés) :
+  # une de plus est gardée, le temps de cette restauration
+  KEEP=$((KEEP + 1))
   log INFO "safety backup of the current state first"
   backup
   if [[ -n "$table" ]]; then
