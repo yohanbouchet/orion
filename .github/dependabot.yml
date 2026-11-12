@@ -4,7 +4,8 @@
 #            GitHub, images Docker ; chaque lundi, après un délai de
 #            refroidissement. Les mises à jour de SÉCURITÉ ne dépendent pas
 #            de ce fichier : elles arrivent tout de suite (docs/02, 2.7).
-# Utilise  : front/, .github/release/, scripts/tests/, infra/ansible/,
+# Utilise  : front/, .github/release/, e2e/, scripts/tests/,
+#            infra/ansible/,
 #            back/, .github/workflows/, Dockerfiles du front, du back, de
 #            infra/postgres et de infra/zap
 # Utilisé par : GitHub Dependabot ; tickets #38 et #56
@@ -92,9 +93,6 @@ updates:
       prefix: build
       prefix-development: build
       include: scope
-  # Outils Python de la CI, empreintes comprises : pytest
-  # (scripts/tests/requirements.txt), ansible-core et ansible-lint
-  # (infra/ansible/requirements-ci.txt)
   # Tests de bout en bout (Playwright, e2e/) : même rythme ; la version de
   # l'image mcr.microsoft.com/playwright de e2e/compose.yaml doit suivre
   # celle du paquet (sinon le job e2e échoue : navigateurs introuvables),
@@ -109,7 +107,14 @@ updates:
     cooldown:
       default-days: 7
       semver-major-days: 14
-
+    # Outil de test, jamais livré : build(deps): …, pas de version
+    commit-message:
+      prefix: build
+      prefix-development: build
+      include: scope
+  # Outils Python de la CI, empreintes comprises : pytest
+  # (scripts/tests/requirements.txt), ansible-core et ansible-lint
+  # (infra/ansible/requirements-ci.txt)
   - package-ecosystem: pip
     directories:
       - /scripts/tests

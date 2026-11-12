@@ -4,11 +4,13 @@
 #            parallèle sur les runners hébergés par GitHub, puis l'analyse
 #            SonarQube et son Quality Gate sur le runner local ; en
 #            parallèle, les scans de sécurité (gitleaks, hadolint,
-#            ShellCheck, Trivy, actionlint et zizmor pour les workflows), les tests des scripts (bashunit, pytest),
+#            ShellCheck, Trivy, actionlint et zizmor pour les
+#            workflows), les tests des scripts (bashunit, pytest),
 #            les contrôles OpenTofu (fmt, validate, test : socle du cluster
 #            et configuration d'OpenBao) et du code Ansible (syntaxe,
 #            ansible-lint, Molecule), et la construction des
-#            images Docker analysées ; après une fusion sur main,
+#            images Docker analysées, puis testées de bout en bout
+#            (Playwright, scripts/e2e.sh) ; après une fusion sur main,
 #            si tout est vert, numéro de version (semantic-release :
 #            étiquette vX.Y.Z et Release GitHub) puis publication des images
 #            sur GHCR, signées (cosign) avec leur SBOM ; déploiement

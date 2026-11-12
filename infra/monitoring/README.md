@@ -78,7 +78,7 @@ on ne peut plus la détecter.
 | Alerte | Domaine | Condition | Gravité |
 |---|---|---|---|
 | <a id="microcrmproddown"></a>`MicrocrmProdDown` | disponibilité | aucun pod prêt pour le back ou le front de la prod pendant 2 min | critique |
-| <a id="podrestartloop"></a>`PodRestartLoop` | disponibilité | un conteneur redémarre plus de 3 fois en 30 min | avertissement |
+| <a id="podrestartloop"></a>`PodRestartLoop` | disponibilité | un conteneur redémarre plus de 3 fois en 30 min (namespaces `prod`, `staging`, `monitoring` et `monitoring-collector`) | avertissement |
 | <a id="microcrmhigherrorrate"></a>`MicrocrmHighErrorRate` | performance | plus de 5 % de réponses 5xx en prod pendant 5 min | critique |
 | <a id="microcrmslowresponses"></a>`MicrocrmSlowResponses` | performance | p95 au-dessus de 500 ms pendant 10 min (sous charge k6, le 03/11 : p95 = 401 ms) | avertissement |
 | <a id="hostdiskalmostfull"></a>`HostDiskAlmostFull` | machine | disque de la machine rempli à plus de 85 % | avertissement |

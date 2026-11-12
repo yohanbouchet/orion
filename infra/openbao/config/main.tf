@@ -4,7 +4,7 @@
 #            du compte deployer de SON environnement ; plus aucun jeton
 #            longue durée rangé dans GitHub
 # Utilise  : variables.tf ; droits donnés à OpenBao dans
-#            infra/terraform/rbac.tf (créer des jetons des deployer)
+#            infra/terraform/openbao.tf (créer des jetons des deployer)
 # Utilisé par : .github/actions/kube-access (connexion et jeton)
 
 locals {

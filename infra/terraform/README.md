@@ -49,7 +49,7 @@ besoin :
 | Lire `pods`, `pods/log`, `events`, `persistentvolumeclaims`, `replicasets` | Attente des pods (`helm --wait`), diagnostic |
 | Créer `pods/exec` | Test de fumée de `deploy.sh` |
 | Lire **son** namespace (rôle de cluster limité à ce seul nom) | `deploy.sh` vérifie le niveau « restricted » |
-| Gérer `jobs` (**`staging` seulement**) | Test d'intrusion ZAP (`scripts/zap-scan.sh`) |
+| Gérer `jobs` (**`staging` seulement**) | Test d'intrusion ZAP (`scripts/zap-scan.sh`) et test de charge k6 (`scripts/load-test.sh`) |
 
 Il ne peut pas : agir dans un autre namespace, créer des rôles ou des
 comptes, lire les autres namespaces. Aucun joker `*`, droit `jobs`
