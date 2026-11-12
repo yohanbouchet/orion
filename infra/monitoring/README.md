@@ -379,4 +379,6 @@ kill %1
 | Règles d'alerte testées à la main (`vmalert-tool`, 07/11), pas à chaque PR | Tests unitaires des règles dans la CI |
 | `LogIngestionStopped` jamais déclenchée pour de vrai (il faudrait couper la collecte 15 min) | Exercice planifié sur un environnement de test |
 | Pas d'objectif de disponibilité chiffré | SLO (ex. 99,5 %) et alertes sur le budget d'erreur |
-| Aucune alerte avant l'expiration d'un certificat (celui d'OpenBao expire le 09/11/2027) | Sonde Blackbox Exporter (métrique `probe_ssl_earliest_cert_expiry`) et alerte 30 jours avant |
+| Seul le certificat d'OpenBao est surveillé (alerte `OpenBaoCertExpiringSoon`, 30 jours avant le 09/11/2027) | Sonde Blackbox Exporter (métrique `probe_ssl_earliest_cert_expiry`) pour tout certificat |
+| Supervision dans le cluster qu'elle surveille, historique non sauvegardé : pendant la perte du cluster (exercice du 12/11), aucune alerte n'est partie, et les courbes sont reparties de zéro | Surveillance externe de `Watchdog` (ci-dessus) ; sauvegarde des métriques (`vmbackup`) vers un stockage objet |
+| Adresses du réseau Minikube écrites en dur dans `extras.yaml` (machine hôte, API du nœud) : le réseau est fixé par `--subnet` à la création du cluster | Les passer en variables OpenTofu, lues sur le cluster |

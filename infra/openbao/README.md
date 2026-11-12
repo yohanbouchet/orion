@@ -309,12 +309,18 @@ kubectl -n openbao exec -it openbao-0 -- sh -c \
   'printf "Token: "; read -rs BAO_TOKEN; echo; export BAO_TOKEN;
    bao operator raft snapshot restore -force /tmp/restore.snap'
 kubectl -n openbao exec openbao-0 -- rm /tmp/restore.snap
-# Le coffre se rescelle : le déverrouiller avec les clés D'ORIGINE
+# Le coffre se rescelle. Redémarrer le pod : le processus garde en
+# mémoire les réglages du coffre en place et refuserait les clés
+# d'origine (« invalid key size 33 », constaté le 12/11)
+kubectl -n openbao delete pod openbao-0
+# Puis le déverrouiller avec les clés D'ORIGINE (étape 3)
 ```
 
 Après la restauration, le coffre retrouve ses données, ses règles et ses
 jetons : les clés et le jeton racine d'origine (Bitwarden) redeviennent
-les bons ; ceux du coffre neuf ne servent plus.
+les bons ; ceux du coffre neuf ne servent plus. Procédure complète,
+jouée le 12/11 après la suppression du cluster :
+[plan de reprise](../../docs/05-plan-de-reprise.md#étape-5-coffre-fort-openbao-restauré-depuis-linstantané).
 
 ## Certificat
 

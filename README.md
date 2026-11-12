@@ -40,23 +40,27 @@ DevOps » (OpenClassrooms, option B), à partir de
 
 ## État d'avancement
 
-Au 10/11/2026 :
+Au 12/11/2026 :
 
 | Étape | État |
 |---|---|
 | Audit, veille et recommandations ; normalisation et plan CI | ✅ [`docs/`](docs/) |
-| Pipeline CI : tests, couverture, SonarQube, scans de sécurité, images | ✅ |
+| Pipeline CI : tests, couverture, SonarQube, scans de sécurité, images ; 14 contrôles obligatoires sur chaque PR | ✅ |
+| Tests de bout en bout (Playwright) : 3 parcours dans un vrai navigateur, sur les images construites | ✅ [`e2e.sh`](scripts/README.md#e2esh) |
+| Images signées (cosign) avec leur SBOM, signature vérifiée avant chaque déploiement ; images en production analysées chaque jour | ✅ [`image-scan.yml`](.github/workflows/image-scan.yml) |
 | Versions automatiques (semantic-release) et publication des images | ✅ |
 | Scripts : dépendances, tests, notification, avec leurs tests | ✅ [`scripts/`](scripts/README.md) |
 | Chart Helm de l'application (testé dans `dev`) | ✅ [`infra/helm/microcrm/`](infra/helm/microcrm/README.md) |
 | Script de déploiement avec test de fumée et retour arrière | ✅ [`scripts/deploy.sh`](scripts/README.md#deploysh) |
 | Déploiement continu : `dev` puis `staging` à chaque fusion, `prod` sur une version après approbation | ✅ [`deploy.yml`](.github/workflows/deploy.yml) |
 | Test d'intrusion automatisé (ZAP) : passif à chaque déploiement de `staging` (bloque la prod), actif à la demande | ✅ [`zap.yml`](.github/workflows/zap.yml), [règles](infra/zap/rules.tsv) |
-| Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée au démarrage du poste et chaque jour, restauration vérifiée chaque semaine, copie hors site chiffrée |
+| Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée au démarrage du poste et chaque jour, restauration vérifiée chaque semaine, copie hors site chiffrée ; coffre OpenBao et base de SonarQube sauvegardés chaque jour |
+| Plan de reprise d'activité : plateforme reconstruite de zéro en 48 min, données comprises (exercice du 12/11) | ✅ [`docs/05`](docs/05-plan-de-reprise.md) |
 | Socle du cluster en code : fichiers Terraform, exécutés par OpenTofu depuis le 09/11 (namespaces, comptes de déploiement aux droits limités, supervision, OpenBao) ; vérifiés et testés par la CI, appliqués par l'Ops | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) ; 5 rôles testés par Molecule à chaque PR | ✅ [`infra/ansible/`](infra/ansible/README.md) |
 | Supervision : métriques, journaux structurés en JSON, 12 alertes par e-mail, 4 tableaux de bord dont les indicateurs DORA, déploiements marqués sur les courbes (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) ; journaux JSON : v1.9.0 |
 | Coffre-fort de secrets OpenBao (TLS, déverrouillage manuel par l'Ops, clés hors du dépôt, journal d'audit) | ✅ [`infra/openbao/`](infra/openbao/README.md) |
+| Headlamp : interface web du cluster, en lecture seule | ✅ [`infra/headlamp/`](infra/headlamp/README.md) |
 | Identité de la CI : **aucun secret dans GitHub** ; chaque job reçoit d'OpenBao un accès court contre son badge OIDC ; jetons longue durée supprimés | ✅ [Identité de la CI](infra/openbao/README.md#identité-de-la-ci) |
 | Tests de charge k6 (6 profils) ; test de fumée k6 avant chaque mise en prod ; autoscaling (HPA) du back en `staging` et en `prod` | ✅ [`load-test.sh`](scripts/README.md#load-testsh) |
 | Indicateurs DORA, calculés chaque jour ouvré et à la demande, affichés dans Grafana | ✅ [`dora.py`](scripts/README.md#dorapy) |
@@ -94,6 +98,8 @@ orchestre la CI et héberge le registre d'images.
                                    ├─ monitoring  : métriques, journaux,
                                    │  Grafana, alertes (+ collecteur de
                                    │  journaux : monitoring-collector)
+                                   ├─ headlamp    : interface web du
+                                   │  cluster, en lecture seule
                                    └─ dev, staging, prod : MicroCRM
                                       (+ pods ZAP et k6 éphémères en
                                       staging)
@@ -144,7 +150,7 @@ orchestre la CI et héberge le registre d'images.
   actionlint.yaml         réglages d'actionlint (étiquette du runner local)
   dependabot.yml          mises à jour automatiques des dépendances
   release/                semantic-release (versions figées)
-  ISSUE_TEMPLATE/         formulaires de tickets [Dev] et [Ops]
+  ISSUE_TEMPLATE/         formulaires de tickets [Dev], [Ops] et Incident
   CODEOWNERS, pull_request_template.md
 front/                    application Angular, Dockerfile, nginx.conf
 back/                     API Spring Boot (Gradle), Dockerfile
@@ -168,7 +174,8 @@ scripts/                  scripts d'automatisation et leurs tests
 e2e/                      tests de bout en bout (Playwright) : parcours,
                           MicroCRM jetable (compose.yaml), relais nginx
 docs/                     audit, normalisation et plan CI, documentation
-                          CI/CD, mesures de départ, rapport de performance
+                          CI/CD, mesures de départ, rapport de
+                          performance, plan de reprise d'activité
 sonar-project.properties  réglages de l'analyse SonarQube
 .trivyignore              failles acceptées, justifiées et datées
 ```
@@ -543,6 +550,11 @@ scripts/deploy-sonarqube.sh
    avec la variable `SONAR_HOST_URL` (adresse de SonarQube vue depuis le
    runner). **Aucun secret** à créer.
 
+**Reconstruire après la perte du cluster** : le
+[plan de reprise d'activité](docs/05-plan-de-reprise.md) reprend ces
+étapes dans l'ordre, avec la restauration des données (coffre OpenBao,
+SonarQube, base de prod). Il a été joué en entier le 12/11 : 48 min.
+
 ## Sauvegarder la base
 
 ```shell
@@ -565,7 +577,14 @@ la prod date de plus de 26 h.
 La base de SonarQube est sauvegardée de la même façon (chaque jour à
 11 h 40, vérifiée le vendredi, alerte `SonarQubeBackupTooOld`) :
 [`scripts/backup-sonarqube.sh`](scripts/README.md#backup-sonarqubesh).
+Le coffre OpenBao est sauvegardé chaque jour à 11 h 50 (instantané,
+alerte `OpenBaoBackupTooOld`) :
+[`scripts/backup-openbao.sh`](scripts/README.md#backup-openbaosh).
 Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#backupsh).
+
+Si tout le cluster est perdu, ces trois sauvegardes sont restaurées par
+le [plan de reprise d'activité](docs/05-plan-de-reprise.md), testé le
+12/11 : 48 min pour reconstruire toute la plateforme.
 
 ## Superviser
 
@@ -666,7 +685,7 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Runner local (ARC) et SonarQube installés à la main (`helm install`, `deploy-sonarqube.sh`), hors du socle OpenTofu : un écart entre le cluster et le dépôt n'y est pas détecté (constaté le 09/11 sur 2 règles réseau de SonarQube) ; chart et image de SonarQube mis à jour à la main | Les décrire en OpenTofu avec le reste du socle (ou GitOps) ; suivre le chart SonarQube (2026.5.1004 disponible ; la version suivante passe de StatefulSet à Deployment : migration à préparer, base sauvegardée avant) | [rapport, recommandation 28](docs/04-rapport-performance.md#83-recommandations) |
 | Images déployées par étiquette (`vX.Y.Z`, `sha-…`), réinscriptible sur le registre, et non par empreinte : la signature est vérifiée sur l'étiquette juste avant le déploiement, mais l'étiquette pourrait changer entre les deux ; le cluster lui-même n'exige ni signature ni registre de confiance (Trivy, KSV-0125) ; images publiées avant le 12/11 non signées | Déployer par empreinte (`image@sha256:…`, celle que la vérification renvoie) ; politique d'admission (ValidatingAdmissionPolicy de Kubernetes, Kyverno ou policy-controller de Sigstore) qui refuse toute image non signée ou hors GHCR | [rapport, recommandation 27](docs/04-rapport-performance.md#83-recommandations) |
 | Namespace `arc-systems` (contrôleur des runners, installé par `helm --create-namespace`) sans niveau Pod Security : le contrôleur ne respecte pas « restricted » avec ses réglages par défaut (vérifié à blanc le 11/11) | Réglages de sécurité du contrôleur dans ses valeurs Helm, puis namespace en « restricted » (avec ARC en OpenTofu, recommandation 28) | [installation](#installer-la-chaîne-sur-le-poste-ops) |
-| Installation jamais rejouée de zéro depuis ce README : la reproductibilité est décrite, pas prouvée | Exercice planifié : `minikube delete`, puis réinstallation complète en suivant ce document, temps mesuré, écarts corrigés | [rapport, recommandation 29](docs/04-rapport-performance.md#83-recommandations) |
+| Reprise après la perte du cluster : procédure jouée le 12/11 (48 min), mais manuelle ; aucune alerte ne part pendant la perte du cluster (supervision dans le cluster) ; historique des métriques et des journaux non sauvegardé ; perte du poste entier non rejouée | Script d'orchestration puis GitOps ; surveillance externe de l'alerte `Watchdog` ; sauvegarde des métriques ; exercice sur une machine vierge | [plan de reprise, limites](docs/05-plan-de-reprise.md#7-limites-et-évolutions) |
 | La chaîne dépend de services extérieurs (Gradle, registres npm, Maven et d'images, miroirs Ubuntu) : versions figées et empreintes vérifiées, mais une source en panne bloque la CI (08/11 : livraison retardée de plus de 6 h ; 11/11 : fusion bloquée près de 2 h) | Dépôt d'artefacts mandataire qui garde une copie de tout ce qui est téléchargé (Harbor pour les images, Pulp pour les paquets) ; délais courts pour qu'une panne échoue vite | [rapport, 7.6 et 7.8, recommandation 16](docs/04-rapport-performance.md#83-recommandations) |
 | Logique shell des actions composites `kube-access` et `openbao-secret` sans test automatique, contrairement aux scripts | La déplacer dans `scripts/` et la couvrir par bashunit | [scripts](scripts/README.md#tests-des-scripts) |
 
@@ -695,17 +714,20 @@ Règles complètes : [normalisation](docs/02-normalisation-plan-ci.md#2-normes-e
 | [Scripts](scripts/README.md) | Chaque script : but, fonctionnement, paramètres, tests |
 | [Documentation CI/CD complète](docs/03-documentation-ci-cd.md) | Tests, architecture (actuelle et cible AWS), sécurité, releases, retour arrière, sauvegardes, supervision |
 | [Rapport de performance](docs/04-rapport-performance.md) | Mesures avant/après (DORA, tests, sécurité, charge), incidents, recommandations |
+| [Plan de reprise d'activité](docs/05-plan-de-reprise.md) | Reconstruire toute la plateforme après la perte du cluster : procédure pas à pas, exercice du 12/11 (48 min), limites |
 | [Chart Helm](infra/helm/microcrm/README.md) | Déploiement Kubernetes, environnements, sécurité, limites |
 | [OpenTofu](infra/terraform/README.md) | Socle du cluster, comptes de déploiement, installation de la supervision et d'OpenBao |
 | [OpenBao](infra/openbao/README.md) | Coffre-fort : installation, initialisation, déverrouillage du matin, identité de la CI, sauvegarde, certificat |
 | [Ansible](infra/ansible/README.md) | Configuration et durcissement du poste Ops ; tests des rôles (Molecule) |
 | [Supervision](infra/monitoring/README.md) | Métriques, journaux, alertes, tableaux de bord, premiers gestes |
+| [Headlamp](infra/headlamp/README.md) | Interface web du cluster, en lecture seule |
 | [Démarrage de Minikube](infra/systemd/README.md) | Service systemd du cluster |
 
 ## Versions des outils
 
 Vérifiées le 07/11/2026, complétées le 11/11 (OpenBao, Molecule, fournisseurs
-TLS et Vault) ; dernière version publiée et fin de support sur
+TLS et Vault) et le 12/11 (cosign, actionlint, zizmor, Playwright,
+Headlamp) ; dernière version publiée et fin de support sur
 [endoflife.date](https://endoflife.date) :
 
 | Outil | Version |

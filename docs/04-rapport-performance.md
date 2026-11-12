@@ -5,8 +5,8 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataires : Maria, CTO, et les équipes Dev et Ops) |
 | Auteur  | Yohan Bouchet |
-| Version | 1.3 (recommandations 26 à 30, DORA dans Grafana, incident du 11/11 (7.8), sauvegarde d'OpenBao (reco 26 appliquée) ; 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
-| Date    | 11/11/2026 : état de la production au 11/11 (v1.9.1, en production depuis le 11/11) ; mesures du 06/11 au 11/11 |
+| Version | 1.4 (12/11 : exercice de reprise après la perte du cluster (7.9), 14 contrôles, images signées, tests de bout en bout, sauvegardes du coffre et de SonarQube ; 1.3 du 11/11, 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
+| Date    | 12/11/2026 : état de la production au 12/11 (v1.9.1, en production depuis le 11/11) ; mesures du 06/11 au 12/11 |
 
 **Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
 chaque capture d'écran munie d'un texte de remplacement qui décrit ce
@@ -22,10 +22,10 @@ chaîne qui contrôle chaque modification, livre en production en
 quelques minutes après une approbation humaine, et se surveille
 elle-même.
 
-| Ce qui compte pour Orion | Avant (27-28/10) | Après (06-10/11) |
+| Ce qui compte pour Orion | Avant (27-28/10) | Après (06-12/11) |
 | --- | --- | --- |
 | Failles connues dans les images livrées | 95 dans l'image back, dont 8 critiques | **0**, toutes gravités confondues (v1.9.1, analysée le 11/11 ; voir 5.1) |
-| Contrôles automatiques sur chaque modification | 4 tâches (tests et construction), rien de bloquant sur la qualité ou la sécurité | **12** (tests, qualité, failles, secrets, infrastructure) |
+| Contrôles automatiques sur chaque modification | 4 tâches (tests et construction), rien de bloquant sur la qualité ou la sécurité | **14**, tous obligatoires (tests, qualité, failles, secrets, infrastructure, workflows, parcours dans un vrai navigateur) |
 | Couverture du code par les tests | non mesurée | **82,9 %**, mesurée à chaque modification |
 | Compte utilisé par l'API dans la base | superutilisateur | **compte limité** à la lecture et à l'écriture des lignes |
 | Déploiement en production | manuel | **automatique après approbation**, retour arrière automatique |
@@ -36,6 +36,7 @@ elle-même.
 | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (mesurés le 08/11, avant correction) | **0** en 8 redémarrages |
 | Supervision | aucune | **4 tableaux de bord** (dont les indicateurs DORA), **12 alertes** (dont 3 de sécurité) envoyées par e-mail ; journaux au format JSON, recherchés par champ |
 | Perte d'un serveur d'API en production (exercice du 07/11) | non testée | **0 erreur** pour l'utilisateur, remplacement prêt en 11 s |
+| Perte de tout le cluster (exercice du 12/11) | non testée | plateforme reconstruite **en 48 min**, données restaurées (section 7.9) |
 
 **Trois recommandations prioritaires** (détail en section 8.3) :
 
@@ -78,6 +79,22 @@ Les indicateurs DORA sont désormais aussi dans Grafana (tableau de
 bord *Orion - Delivery*), et chaque déploiement est marqué sur les
 courbes (recommandation 10, appliquée ; section 3.1).
 
+**Depuis la version 1.3 (12/11)** :
+
+- **exercice de reprise** : le cluster a été supprimé pour de vrai, puis
+  toute la plateforme reconstruite avec ses données en **48 min**, en
+  suivant le [plan de reprise](05-plan-de-reprise.md) ; 4 écarts
+  trouvés et corrigés (section 7.9 ; recommandation 29, appliquée) ;
+- **14 contrôles obligatoires** au lieu de 12 : sécurité des workflows
+  (recommandation 25) et 3 parcours joués dans un vrai navigateur
+  (Playwright, recommandation 2) ;
+- images **signées** à la publication, signature vérifiée avant chaque
+  déploiement (recommandation 27, en partie) ; images en production
+  analysées chaque jour (recommandation 30) ;
+- le coffre OpenBao et la base de SonarQube sont sauvegardés chaque
+  jour, avec une alerte chacun : **12 alertes** au lieu de 9
+  (recommandations 20 et 26).
+
 ## 2. Contexte et objectifs
 
 L'audit du 29/10 ([document 1](01-veille-audit-recommandations.md))
@@ -92,8 +109,8 @@ la sécurité. Le plan de mise en œuvre
 | Aucune faille connue livrée sans décision | 95 failles dans l'image back (8 critiques) | 0 critique ou haute corrigeable dans une image publiée | **oui** : 0 (section 5) |
 | Qualité contrôlée à chaque modification | Quality Gate sans condition | Quality Gate bloquant sur chaque PR | **oui** : 3 conditions (section 4.2) |
 | Tests mesurés | couverture non mesurée | mesurée et publiée à chaque PR | **oui** : 82,9 % (section 4.2) |
-| Pipeline plus rapide malgré plus de contrôles | 4,67 min, 4 tâches | durée suivie, gain mesuré | **oui** : 2,2 min, 12 contrôles (section 3.2) |
-| Livraison traçable | aucune image, version `0.0.1-SNAPSHOT` | chaque image liée à une version et à un commit | **oui** : 25 versions, v1.0.0 à v1.9.0 |
+| Pipeline plus rapide malgré plus de contrôles | 4,67 min, 4 tâches | durée suivie, gain mesuré | **oui** : 2,2 min avec 12 contrôles ; 3,2 à 3,4 min avec 14, depuis le 12/11 (section 3.2) |
+| Livraison traçable | aucune image, version `0.0.1-SNAPSHOT` | chaque image liée à une version et à un commit | **oui** : 26 versions, v1.0.0 à v1.9.1 |
 | Déploiement sans action manuelle | déploiement manuel | déploiement et retour arrière automatisés | **oui**, avec approbation humaine avant la prod |
 
 ## 3. Livraison : indicateurs DORA et pipeline
@@ -102,8 +119,8 @@ la sécurité. Le plan de mise en œuvre
 
 Les indicateurs **DORA** (du programme de recherche *DevOps Research and
 Assessment*, [dora.dev](https://dora.dev)) sont la mesure de référence
-de la performance de livraison. Ils sont calculés chaque semaine par
-`scripts/dora.py` à partir de l'historique des déploiements en
+de la performance de livraison. Ils sont calculés chaque jour ouvré
+(9 h et 16 h) par `scripts/dora.py` à partir de l'historique des déploiements en
 production (workflow *DORA metrics*).
 
 | Indicateur | Ce qu'il mesure | Valeur (30 derniers jours) |
@@ -201,11 +218,17 @@ cache vide ; la mesure « après » vient des runners de la CI, avec cache.
 Le gain s'explique surtout par l'exécution en parallèle et le cache : la
 chaîne contrôle **3 fois plus de choses en 2 fois moins de temps**.
 
+**Depuis le 12/11** : 14 contrôles obligatoires, avec `workflows`
+(sécurité des workflows) et `e2e` (tests de bout en bout). Les 3 PR
+suivantes ont duré **3,2 à 3,4 min** : les tests de bout en bout
+démarrent l'application complète et un vrai navigateur. La chaîne reste
+plus rapide qu'au départ (4,67 min), avec 3,5 fois plus de contrôles.
+
 ![Graphe de l'exécution du pipeline sur main qui a livré v1.9.1 le 11/11, toutes les étapes réussies en 8 min 25 s : 9 contrôles en parallèle, construction des 2 images, SonarQube, release, publication des 2 images, déploiements dev et staging, ZAP, test de charge, production après approbation, notification](rapport-performance/pipeline.png)
 
 ### 3.3 Releases
 
-- **25 versions** publiées du 31/10 au 09/11 (v1.0.0 à v1.9.0). Le
+- **26 versions** publiées du 31/10 au 11/11 (v1.0.0 à v1.9.1). Le
   numéro est calculé automatiquement à partir des messages de commit
   (*Semantic Versioning*) ; chaque image porte sa version et son commit.
   Depuis le 09/11, seul un changement du back, du front ou du chart crée
@@ -219,6 +242,8 @@ chaîne contrôle **3 fois plus de choses en 2 fois moins de temps**.
   restauration mesuré : 0,6 s sur la base de test (7 Ko). Ce chiffre
   dépend de la taille de la base : il est à remesurer sur des données
   réelles.
+- **Reprise après la perte du cluster** testée le 12/11 : 48 min pour
+  tout reconstruire, données comprises (section 7.9).
 - Les observations sur les déploiements et les releases sont
   regroupées en section 8.2.
 
@@ -454,8 +479,8 @@ CI/CD de l'OWASP.
 **Vérifié dans le journal d'audit** (10/11, de 10:33 à 17:19) : 45
 connexions de la CI, chacune suivie d'un seul accès (8 en dev, 24 en
 staging, 13 lectures du jeton SonarQube) ; aucune en production, faute de
-nouvelle version depuis. **Limite** : le chemin de la production n'a donc
-pas encore servi ; il sera vérifié à la prochaine version.
+nouvelle version ce jour-là. Le chemin de la production a servi pour la
+première fois le 11/11, avec la version v1.9.1 (section 3.2).
 
 **Coût d'exploitation** : un OpenBao redémarré est **scellé** (il a ses
 données, pas la clé pour les lire) ; l'équipe Ops le déverrouille avec
@@ -845,6 +870,56 @@ de Paris.
   - un contrôle obligatoire qui bloque est le comportement attendu : il
     vaut mieux attendre que fusionner sans vérification.
 
+### 7.9 12/11 : exercice de reprise après la perte du cluster
+
+Exercice annoncé, **pas un incident** : il n'entre pas dans les
+indicateurs DORA. Heures de Paris.
+
+- **Question** : si le cluster est perdu, sait-on tout reconstruire,
+  avec les données, et en combien de temps ? L'installation était
+  décrite, jamais rejouée d'un bloc (recommandation 29).
+- **Méthode** : sauvegardes fraîches de la base de prod, du coffre
+  OpenBao et de la base de SonarQube ; cluster **supprimé pour de
+  vrai** (`minikube delete`) à 16:58 ; reconstruction par l'Ops seul,
+  en suivant une procédure écrite, chaque étape chronométrée
+  ([plan de reprise](05-plan-de-reprise.md)).
+- **Résultat** : plateforme reconstruite en **48 min** (fin à 17:46),
+  CI complète comprise : 38 pods comme avant, mêmes namespaces et
+  mêmes 9 installations Helm ; base de prod restaurée ; SonarQube avec
+  tout son historique (29 analyses depuis le 29/10) ; coffre OpenBao
+  rouvert par ses clés d'origine, configuration inchangée ; aucun
+  réglage de GitHub à refaire. L'étape la plus longue : SonarQube
+  (18 min, installation puis reconstruction de son index).
+- **Quatre écarts trouvés, tous corrigés** :
+  1. après sa restauration, OpenBao refusait ses clés d'origine tant
+     que son pod n'était pas redémarré (il gardait en mémoire les
+     réglages du coffre temporaire) ;
+  2. la CI, relancée 28 s avant que SonarQube ait fini de reconstruire
+     son index, a échoué une fois sur l'analyse ;
+  3. le nouveau cluster a reçu un autre réseau que l'ancien, alors que
+     la supervision visait l'ancien **en dur** : métriques de la
+     machine non lues (3 alertes de sauvegarde déclenchées à tort),
+     collecteur de journaux en échec. Adresses corrigées et réseau
+     désormais fixé à la création du cluster (PR #157) ;
+  4. le mot de passe d'envoi des e-mails d'alerte, créé à la main,
+     manquait dans la procédure : aucun e-mail d'alerte pendant près
+     d'une heure.
+- **Défaut trouvé en préparant l'exercice** : le contrôle de lecture
+  d'une sauvegarde restait bloqué sans fin sur un fichier de 6,8 Mo
+  (la base de SonarQube) ; invisible sur la base de prod, trop
+  petite (7 Ko). Corrigé dans les deux scripts de sauvegarde (PR #155)
+  et couvert par leurs tests.
+- **Ce que l'exercice a confirmé** : le runner local et SonarQube
+  s'installent encore à la main (recommandation 28) ; pendant la perte
+  du cluster, **aucune alerte ne part**, puisque la supervision est
+  dans le cluster (recommandation 11) ; l'historique des métriques et
+  des journaux n'est pas sauvegardé : les courbes repartent du 12/11
+  (les indicateurs DORA, eux, sont recalculés depuis GitHub).
+- **Enseignement** : une procédure jamais jouée contient des erreurs.
+  Aucun des 4 écarts n'était visible à la relecture ; une heure
+  d'exercice les a tous montrés. À rejouer après chaque changement
+  important du socle.
+
 ## 8. Gains obtenus et recommandations d'amélioration continue
 
 ### 8.1 Gains obtenus
@@ -859,21 +934,22 @@ de Paris.
 | Qualité | Couverture des tests | non mesurée | **82,9 %** (branches : 57,9 %), mesurée à chaque PR | 4.2 |
 | Qualité | Quality Gate | sans condition | **3 conditions bloquantes** | 4.2 |
 | Qualité | Notes SonarQube (sécurité, fiabilité) | C et D | **A et A**, 0 problème ouvert | 4.2 |
-| Livraison | Contrôles automatiques sur chaque PR | 4 tâches, rien de bloquant | **12 tâches** | 3.2 |
-| Livraison | Durée de ces contrôles | 4,67 min | **2,2 min** (médiane) | 3.2 |
+| Livraison | Contrôles automatiques sur chaque PR | 4 tâches, rien de bloquant | **14 contrôles obligatoires** (12 jusqu'au 11/11) | 3.2 |
+| Livraison | Durée de ces contrôles | 4,67 min | **2,2 min** (médiane, 12 contrôles) ; 3,2 à 3,4 min avec les tests de bout en bout (12/11) | 3.2 |
 | Livraison | Déploiement en production | manuel, non tracé | **automatique après approbation** : 5,1 par semaine, 0 % d'échec, 2,9 h entre un commit et la prod (médiane) | 3.1 |
-| Livraison | Versions | `0.0.1-SNAPSHOT`, aucune image | **25 versions** ; chaque image liée à sa version et à son commit ; une version seulement pour un changement livré | 3.3 |
+| Livraison | Versions | `0.0.1-SNAPSHOT`, aucune image | **26 versions** ; chaque image liée à sa version et à son commit ; une version seulement pour un changement livré | 3.3 |
 | Qualité | Tests de l'infrastructure | aucun | **16 tests OpenTofu** ; poste Ops testé par Molecule (5 rôles, idempotence, 6 contrôles) | 4.1 |
 | Disponibilité | Perte d'un serveur d'API en prod | jamais testée | **0 erreur**, remplacement prêt en 11 s | 7.3 |
 | Disponibilité | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (08/11, avant correction) | **0** en 8 redémarrages | 7.5 |
-| Disponibilité | Sauvegarde de la base | aucune | quotidienne, restauration vérifiée chaque semaine | 3.3 |
+| Disponibilité | Sauvegardes (base de prod, coffre OpenBao, base de SonarQube) | aucune | quotidiennes, restauration des bases vérifiée chaque semaine, copie hors site chiffrée | 3.3 |
+| Disponibilité | Reprise après la perte du cluster | jamais testée | **48 min** pour tout reconstruire, données comprises ; 4 écarts corrigés | 7.9 |
 | Performance | p95 au point de rupture (1 réplique) | 1,07 s (06/11, avant correction) | **6,5 ms** | 6.3 |
 | Supervision | Tableaux de bord et alertes | aucun | **4 tableaux de bord, 12 alertes** (dont 3 de sécurité) par e-mail, chaîne vérifiée ; déploiements marqués sur les courbes | 5.2, 5.3, 6.1 |
 | Supervision | Journaux | texte libre | **JSON**, recherche par champ, sans les paramètres des adresses | 5.2 |
 
 ### 8.2 Observations sur les déploiements et les releases
 
-- **15 des 25 versions sont des correctifs** (dernier chiffre du
+- **16 des 26 versions sont des correctifs** (dernier chiffre du
   numéro augmenté, comme v1.8.1) : la chaîne elle-même (tests de charge,
   supervision) a souvent été corrigée juste après sa première version.
   C'est attendu pendant la mise en place. Le taux de reprise DORA, plus
@@ -920,7 +996,9 @@ de Paris.
   (recommandation 28). Le coffre OpenBao, lui, est dans OpenTofu ; il
   n'était pas sauvegardé automatiquement et l'expiration de son
   certificat (1 an) n'était pas surveillée : corrigé le 12/11
-  (recommandation 26).
+  (recommandation 26). L'exercice de reprise du 12/11 l'a confirmé :
+  ces deux briques sont les seules étapes d'installation « à la main »
+  de la procédure (7.9).
 - **Les portes de qualité ont joué leur rôle** : le test d'intrusion a
   bloqué la prod tant que les en-têtes de sécurité manquaient (vérifié
   avant fusion), et un test de fumée raté remet la version précédente
@@ -939,9 +1017,9 @@ ajoutées le 10/11, puis 26 à 30, ajoutées le 11/11 (relecture de
 cohérence), viennent ensuite, pour que les numéros cités dans les
 sections précédentes restent valables. Les trois priorités du moment
 sont rappelées dans la synthèse (section 1). La colonne « État » montre
-où en est chacune le 12/11 : 8 sont appliquées, 6 le sont en partie.
+où en est chacune le 12/11 : 9 sont appliquées, 6 le sont en partie.
 
-| # | Recommandation | Constat | Effort | Équipe | État au 11/11 |
+| # | Recommandation | Constat | Effort | Équipe | État au 12/11 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Mettre à jour le front vers Angular 22 (et passer les tests à Vitest) | 4 failles hautes dans le code livré au navigateur ; Angular 17 n'est plus maintenu | moyen | Dev | **Appliquée** (v1.7.1) : 0 faille, 0 problème SonarQube (4.2, 5.1) |
 | 2 | Augmenter la couverture des tests, en priorité les cas d'erreur, et ajouter des tests de bout en bout | branches couvertes à 17 % le 06/11, 57,9 % le 08/11 ; aucun test de bout en bout | moyen | Dev | **Partielle** : couverture passée de 39,7 % à 82,9 % avec Angular 22 ; 3 parcours de bout en bout (Playwright, 12/11) ; reste : cas d'erreur, branches (57,9 %) |
@@ -953,7 +1031,7 @@ où en est chacune le 12/11 : 8 sont appliquées, 6 le sont en partie.
 | 8 | Faire suivre les images d'outils de la CI par Dependabot (fichier dédié) ; passer Trivy à 0.76.2 | mise à jour de sécurité de Trivy non proposée (8.2) | faible | Ops | **Partielle** : Trivy 0.76.2 (v1.7.0) ; images d'outils encore mises à jour à la main |
 | 9 | Garder 2 répliques minimum en prod ; pour les pics prévisibles, ajouter des pods à l'avance ; étudier une mise à l'échelle sur le nombre de requêtes (KEDA) | renfort arrivé après la fin du pic (6.3) | faible à moyen | Ops | **Partielle** : 2 répliques minimum en place ; le reste à faire |
 | 10 | Annoter automatiquement les déploiements dans Grafana | relier une dégradation à une version d'un coup d'œil | faible | Ops | **Appliquée** (11/11) : chaque nouvelle image marquée sur les 4 tableaux de bord ; indicateurs DORA dans Grafana |
-| 11 | Fixer un objectif de disponibilité (ex. 99,5 %) et alerter sur son budget d'erreur ; envoyer les alertes aussi vers la messagerie d'équipe ; faire surveiller l'alerte de contrôle `Watchdog` par un service externe | alertes par e-mail seulement, pas d'objectif chiffré ; personne n'est prévenu si la supervision elle-même s'arrête | faible | Ops et direction | À faire |
+| 11 | Fixer un objectif de disponibilité (ex. 99,5 %) et alerter sur son budget d'erreur ; envoyer les alertes aussi vers la messagerie d'équipe ; faire surveiller l'alerte de contrôle `Watchdog` par un service externe | alertes par e-mail seulement, pas d'objectif chiffré ; personne n'est prévenu si la supervision elle-même s'arrête (constaté le 12/11 : aucune alerte pendant la perte du cluster, 7.9) | faible | Ops et direction | À faire |
 | 12 | Déclarer chaque incident de prod avec le formulaire prévu, pour mesurer le temps de rétablissement | indicateur DORA non mesurable | faible | Dev et Ops | Formulaire « Incident » prêt ; aucun incident de prod à déclarer à ce jour |
 | 13 | Rejouer les tests de charge sur une machine dédiée, à chaque version majeure, avec le rapport HTML de k6 | point de rupture réel non atteint sur le poste | moyen | Ops | À faire |
 | 14 | Exclure les pods de test (ZAP, k6) de la recherche des journaux d'erreurs | lignes inoffensives mêlées aux vraies erreurs (5.2) | faible | Ops | À faire |
@@ -968,10 +1046,10 @@ où en est chacune le 12/11 : 8 sont appliquées, 6 le sont en partie.
 | 23 | Déverrouiller OpenBao automatiquement (AWS KMS dans la cible cloud ; sur site : KMS d'un hébergeur européen, boîtier HSM ou second OpenBao) et passer à 3 serveurs | geste manuel chaque matin ; tant qu'il manque, la CI ne peut plus déployer (5.3) | moyen | Ops | À faire ; comparatif des solutions (avantages, inconvénients, niveau de coût) dans `infra/openbao/README.md` |
 | 24 | Décrire les réglages du dépôt GitHub (environnements, approbations, branches autorisées, variables) en OpenTofu (fournisseur `integrations/github`) | réglages effacés sans trace par la suppression des environnements le 10/11 (7.7) | faible | Ops | À faire |
 | 25 | Lancer zizmor et actionlint (sécurité et syntaxe des workflows) dans la CI | contrôles lancés seulement sur le poste Ops (5.1) | faible | Ops | **Appliquée** (12/11) : job `workflows` (actionlint et zizmor, images figées par digest, contrôles en ligne de zizmor avec le jeton en lecture seule) |
-| 26 | Sauvegarder le coffre OpenBao chaque jour (instantané Raft planifié, jeton limité à cette action, copie hors site) et alerter 30 jours avant l'expiration de son certificat TLS (09/11/2027) | seule la base de prod est sauvegardée ; le renouvellement du certificat dépend d'un `tofu plan` que rien n'impose (8.2) | faible | Ops | **Appliquée** (11/11) : instantané chaque jour à 11 h 50 (`backup-openbao.sh`, jeton limité à l'instantané, copie hors site), alertes `OpenBaoBackupTooOld` et `OpenBaoCertExpiringSoon` |
+| 26 | Sauvegarder le coffre OpenBao chaque jour (instantané Raft planifié, jeton limité à cette action, copie hors site) et alerter 30 jours avant l'expiration de son certificat TLS (09/11/2027) | seule la base de prod est sauvegardée ; le renouvellement du certificat dépend d'un `tofu plan` que rien n'impose (8.2) | faible | Ops | **Appliquée** (12/11) : instantané chaque jour à 11 h 50 (`backup-openbao.sh`, jeton limité à l'instantané, copie hors site), alertes `OpenBaoBackupTooOld` et `OpenBaoCertExpiringSoon` |
 | 27 | Sécuriser la chaîne d'approvisionnement des images : déployer par empreinte plutôt que par étiquette, signer les images dans la CI (cosign, Sigstore) et publier leur SBOM, puis refuser dans le cluster toute image non signée ou hors GHCR (ValidatingAdmissionPolicy ou Kyverno) | une étiquette peut être réécrite sur le registre ; le cluster n'exige aucun registre de confiance (constat Trivy KSV-0125 du 09/11) | moyen | Ops | **Partielle** (12/11) : images signées à la publication (cosign, sans clé) avec leur SBOM signé, signature vérifiée avant chaque déploiement ; reste : déploiement par empreinte, politique d'admission |
 | 28 | Décrire le runner local (ARC) et SonarQube en OpenTofu, avec le reste du socle, et suivre le chart SonarQube (2026.5.1004 disponible, base sauvegardée avant la montée de version) | deux briques installées à la main, écarts non détectés (8.2) | faible | Ops | À faire ; le GitOps (recommandation 7) les couvrirait aussi |
-| 29 | Rejouer l'installation complète de zéro (`minikube delete`, puis le README), temps mesuré, écarts corrigés | la procédure d'installation est décrite, jamais rejouée d'un bloc : reproductibilité non prouvée | faible | Ops | À faire |
+| 29 | Rejouer l'installation complète de zéro (`minikube delete`, puis le README), temps mesuré, écarts corrigés | la procédure d'installation est décrite, jamais rejouée d'un bloc : reproductibilité non prouvée | faible | Ops | **Appliquée** (12/11) : cluster supprimé, plateforme reconstruite en 48 min avec ses données, 4 écarts corrigés ; procédure : [plan de reprise](05-plan-de-reprise.md) (7.9) |
 | 30 | Analyser chaque jour les images en service (workflow planifié ou Trivy Operator), avec un ticket ouvert d'office | le 11/11, le front v1.9.0 en prod avait 2 failles hautes (libxslt), publiées après sa construction et trouvées à la main | faible | Ops | **Appliquée** (12/11) : workflow `image-scan.yml`, chaque jour à 6 h 30, images de la version en production (dernier déploiement réussi), ticket « security » si faille haute ou critique |
 
 ## 9. Conclusion
@@ -983,7 +1061,9 @@ versionnées, déploiement automatisé avec retour arrière. S'y ajoutent
 une supervision avec alertes, un accès à la base réduit au strict
 nécessaire et, depuis le 10/11, une CI qui ne détient plus aucun
 secret : chaque accès au cluster dure 15 min et passe par un
-coffre-fort qui trace chaque demande.
+coffre-fort qui trace chaque demande. Enfin, la plateforme entière a
+été reconstruite de zéro en 48 min le 12/11, données comprises : la
+reprise après sinistre est prouvée, et non plus seulement décrite.
 
 Les mesures ont surtout montré leur valeur là où rien ne semblait
 anormal : le principal gain de performance (p95 divisé par 165) est venu
@@ -1008,13 +1088,15 @@ et détecterait les modifications faites hors du dépôt.
 | Test de fumée | test court qui vérifie que l'essentiel fonctionne après un déploiement |
 | Moindre privilège | chaque compte ne reçoit que les droits dont il a besoin : l'API peut lire et écrire des lignes, pas modifier les tables |
 | Correctif (version « patch ») | version qui ne fait que corriger, sans nouvelle fonctionnalité : seul le dernier chiffre augmente (v1.8.0 → v1.8.1) |
-| Dépôt d'artefacts mandataire | serveur qui garde une copie de tout ce que la chaîne télécharge (outils, bibliothèques, images) et la resert si la source est en panne |
+| Dépôt d'artefacts mandataire | serveur qui garde une copie de tout ce que la chaîne télécharge (outils, bibliothèques, images) et la ressert si la source est en panne |
 | Coffre-fort de secrets (OpenBao) | service qui garde les secrets chiffrés, ne les délivre qu'à une identité vérifiée, et trace chaque demande |
 | Scellé, déverrouillage | un coffre-fort redémarré est scellé : il garde ses données, mais ne peut pas les lire tant qu'on ne lui a pas redonné sa clé |
 | Badge OIDC | jeton signé par GitHub qui décrit le job (dépôt, branche, environnement, workflow) ; il prouve son identité sans aucun mot de passe |
 | Journaux structurés (JSON) | chaque ligne de journal est un objet à champs nommés (niveau, code HTTP, chemin…), qu'une recherche vise directement |
 | Idempotence | rejouer une configuration déjà appliquée ne change rien |
 | GitOps | le cluster lit lui-même Git et s'aligne dessus, au lieu de recevoir les changements de la CI |
+| Plan de reprise d'activité (PRA) | procédure écrite qui remet le service en route après un sinistre (ici : la perte de tout le cluster) |
+| Temps de reprise (RTO) | temps nécessaire pour remettre le service en route après un sinistre ; mesuré ici : 48 min |
 
 ## Annexe B. Sources des mesures
 
@@ -1039,3 +1121,5 @@ et détecterait les modifications faites hors du dépôt.
 | Journaux JSON | requête de test en dev (chemin sans paramètres) ; recherche par champ dans VictoriaLogs | 09/11/2026 |
 | Identité de la CI | journal d'audit d'OpenBao dans VictoriaLogs (connexions et accès par chemin) ; réglages des environnements lus par l'API de GitHub | 10/11/2026 |
 | Alerte OpenBaoSealed | e-mails « FIRING » et « RESOLVED » reçus, coffre-fort scellé le matin | 10/11/2026 |
+| Durée des contrôles à 14 | API GitHub Actions : 3 exécutions réussies du workflow CI sur des PR, après l'ajout des tests de bout en bout | 12/11/2026 |
+| Exercice de reprise | journal horodaté de chaque étape ; état du cluster relevé avant et après (`kubectl`, `helm`) ; journaux d'OpenBao et de SonarQube ; exécution de la CI relancée | 12/11/2026 |
