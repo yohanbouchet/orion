@@ -18,6 +18,7 @@ marche dans la CI, et inversement.
 | [`load-test.sh`](#load-testsh) | Test de charge de `staging` avec k6 (6 profils) | job `load-test` de la CI (`load-test.yml`) ; l'opérateur |
 | [`backup.sh`](#backupsh) | Sauvegarder, vérifier et restaurer la base | l'opérateur ; tâches planifiées installées par Ansible (sauvegarde au démarrage du poste et chaque jour, vérification chaque semaine) |
 | [`backup-openbao.sh`](#backup-openbaosh) | Sauvegarder le coffre OpenBao (instantané Raft vérifié) | tâche planifiée installée par Ansible (chaque jour, 11 h 50) ; l'opérateur, avant une opération risquée |
+| [`backup-sonarqube.sh`](#backup-sonarqubesh) | Sauvegarder, vérifier et restaurer la base de SonarQube | tâches planifiées installées par Ansible (chaque jour à 11 h 40, vérification le vendredi) ; l'opérateur, avant une montée de version ou une reconstruction |
 | [`e2e.sh`](#e2esh) | Tests de bout en bout : MicroCRM jetable, parcours dans un vrai navigateur | job `e2e` de la CI ; l'opérateur |
 | [`deploy-sonarqube.sh`](#deploy-sonarqubesh) | Déployer SonarQube dans le cluster Minikube | l'opérateur, à la main |
 
@@ -461,7 +462,10 @@ scripts/backup.sh restore dev <fichier> --table person
   d'une table possible), lancé **dans le pod de la base** : aucun outil
   PostgreSQL à installer sur le poste. Écriture dans un fichier
   temporaire, renommé seulement si tout a réussi ; empreinte SHA-256 dans
-  un fichier `.sha256` ; contenu relu par `pg_restore --list` ; seules les
+  un fichier `.sha256` ; contenu relu par `pg_restore --list` (fichier
+  d'abord copié en entier dans le pod : lu par le tube, `pg_restore`
+  s'arrête au sommaire et `kubectl` attend sans fin le reste, constaté
+  le 12/11 sur la base de SonarQube) ; seules les
   `KEEP` sauvegardes les plus récentes sont gardées. Nom :
   `microcrm-<env>-<date UTC>.dump` ;
 - **verify** : la dernière sauvegarde (ou celle donnée) est restaurée
@@ -592,6 +596,84 @@ Restauration : même README, « Restaurer ».
 | Coffre injoignable | 1 | `kubectl -n openbao get pods` |
 | Instantané refusé (jeton expiré après 7 jours sans sauvegarde) | 1 | refaire le jeton |
 | Copie abîmée ou archive incomplète | 1 | aucun fichier gardé ; relancer |
+
+## backup-sonarqube.sh
+
+**But** : sauvegarder la base de SonarQube (historique de la qualité,
+profils et règles, statut des problèmes revus, comptes et jeton de la
+CI) pour la retrouver après la perte de son disque, une reconstruction
+du cluster ou une montée de version ratée (recommandation 20 du
+rapport).
+
+```shell
+scripts/backup-sonarqube.sh                   # ~/backups/sonarqube/
+scripts/backup-sonarqube.sh verify            # se restaure-t-elle ?
+scripts/backup-sonarqube.sh restore <fichier> # SonarQube arrêté
+```
+
+**Ce qui est sauvegardé** : seulement la base, comme le demande la
+[documentation de SonarQube](https://docs.sonarsource.com/sonarqube-community-build/server-update-and-maintenance/maintenance/backup-and-restore)
+(outil de la base, sauvegarde à chaud permise) ; l'index de recherche
+(Elasticsearch, sur le disque de SonarQube) n'est pas sauvegardé : il
+se reconstruit au démarrage.
+
+**Fonctionnement** : comme [`backup.sh`](#backupsh) : `pg_dump` au
+format « custom » dans le pod `sonarqube-db-0`, fichier temporaire
+renommé si tout a réussi, empreinte `.sha256`, contenu relu par
+`pg_restore --list`, 7 sauvegardes gardées, métrique
+`sonarqube_backup_last_success_timestamp_seconds` (alerte
+`SonarQubeBackupTooOld`) ;
+- **verify** : restauration dans une base temporaire
+  `sonarqube_verify`, projets et comptes comptés, puis base supprimée ;
+- **restore** : refusée si SonarQube tourne (il écrirait pendant la
+  restauration) ; sauvegarde de sécurité de l'état actuel, restauration
+  en une seule transaction (tout ou rien), puis suppression du disque
+  de l'index (la documentation demande de le vider) ; ensuite
+  `scripts/deploy-sonarqube.sh` recrée ce disque et redémarre SonarQube,
+  qui reconstruit son index.
+
+**Restaurer, pas à pas** :
+
+```shell
+kubectl -n sonarqube scale statefulset sonarqube-sonarqube --replicas=0
+scripts/backup-sonarqube.sh restore ~/backups/sonarqube/<fichier>.dump
+scripts/deploy-sonarqube.sh   # SonarQube redémarre, index reconstruit
+```
+
+Après une reconstruction du cluster (base vide), même ordre : la base
+est restaurée avant le 1er démarrage de SonarQube. Le mot de passe de
+la base est un secret Kubernetes, pas une donnée de la sauvegarde : un
+nouveau secret convient. Les comptes, le mot de passe administrateur et
+le jeton de la CI rangé dans OpenBao, eux, reviennent avec la base.
+
+**Paramètres** : `BACKUP_DIR` (défaut `~/backups/sonarqube`), `KEEP`
+(défaut 7), `BACKUP_METRICS_DIR` (dossier lu par node_exporter ; vide :
+aucune métrique).
+
+**Conditions d'exécution** : `kubectl` et `sha256sum` ; droit
+`pods/exec` dans le namespace `sonarqube` ; pod `sonarqube-db-0`
+démarré.
+
+**Sécurité** : fichiers en 600, dossier en 700 (la base contient les
+comptes et les jetons, chiffrés par SonarQube) ; copie hors site
+chiffrée (GPG) par la sauvegarde de la machine ; jamais de mot de passe
+en argument (connexion locale au pod).
+
+**Vérifié le 12/11/2026** : sauvegarde de 6,6 Mo en 1,3 s, restauration
+dans la base temporaire en 2,7 s (1 projet, 2 comptes).
+
+**Arrêts expliqués** :
+
+| Cas | Code | Correction proposée |
+|---|---|---|
+| Argument inconnu, `restore` sans fichier | 2 | syntaxe rappelée |
+| `kubectl` ou `sha256sum` absent | 127 | installer l'outil |
+| `pg_dump` en échec | 1 | aucun fichier gardé ; `kubectl -n sonarqube get pods` |
+| Fichier illisible par `pg_restore` | 1 | relancer la sauvegarde |
+| Aucune sauvegarde (verify) | 1 | lancer `scripts/backup-sonarqube.sh` |
+| Fichier abîmé ou modifié (empreinte) | 1 | choisir un autre fichier |
+| SonarQube démarré (restore) | 1 | `kubectl -n sonarqube scale … --replicas=0` |
+| Restauration en échec | 1 | base inchangée ; la sauvegarde de sécurité est citée |
 
 ## e2e.sh
 

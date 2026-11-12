@@ -34,7 +34,7 @@ elle-même.
 | Délai entre un commit et la production | non mesurable | **2,9 h** (médiane ; explication en 3.1) |
 | Temps de réponse au test de rupture (p95) | 1,07 s (mesuré avant correction) | **6,5 ms**, 0 erreur |
 | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (mesurés le 08/11, avant correction) | **0** en 8 redémarrages |
-| Supervision | aucune | **4 tableaux de bord** (dont les indicateurs DORA), **11 alertes** (dont 3 de sécurité) envoyées par e-mail ; journaux au format JSON, recherchés par champ |
+| Supervision | aucune | **4 tableaux de bord** (dont les indicateurs DORA), **12 alertes** (dont 3 de sécurité) envoyées par e-mail ; journaux au format JSON, recherchés par champ |
 | Perte d'un serveur d'API en production (exercice du 07/11) | non testée | **0 erreur** pour l'utilisateur, remplacement prêt en 11 s |
 
 **Trois recommandations prioritaires** (détail en section 8.3) :
@@ -232,7 +232,7 @@ chaîne contrôle **3 fois plus de choses en 2 fois moins de temps**.
 | --- | --- | --- | --- |
 | Tests du back (JUnit) | 2 | 6 (dont l'intégration avec la base) | chaque PR |
 | Tests du front | 8 (Karma) | 16 (Vitest, depuis le 08/11) | chaque PR |
-| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 93 + 30 | chaque PR |
+| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 104 + 30 | chaque PR |
 | Tests de bout en bout (Playwright, vrai navigateur) | 0 | 3 parcours : accueil, création d'une organisation, d'une personne rattachée (depuis le 12/11) | chaque PR, sur les images construites |
 | Tests de l'infrastructure (OpenTofu) | 0 | 16 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
 | Test du poste Ops (Ansible, Molecule) | 0 | 5 rôles appliqués sur une machine jetable, rejoués sans aucun changement (idempotence), puis 6 contrôles (outils, sauvegardes planifiées, services, métriques, pare-feu, journaux Docker) | chaque PR (depuis le 10/11) |
@@ -494,6 +494,7 @@ Choix justifié dans le document 1 (section 2.3.7).
 | BackupTooOld | dernière sauvegarde de la prod il y a plus de 26 h | données |
 | OpenBaoBackupTooOld | dernier instantané du coffre OpenBao il y a plus de 74 h | données (secrets de la CI) |
 | OpenBaoCertExpiringSoon | certificat TLS du coffre expiré dans moins de 30 jours | accès de la CI |
+| SonarQubeBackupTooOld | dernière sauvegarde de la base de SonarQube il y a plus de 74 h | données (historique de la qualité) |
 | MicrocrmClientErrorSpike | plus de 50 réponses 4xx de l'API en prod en 5 min | sécurité |
 | LogIngestionStopped | aucune ligne de journal reçue depuis 15 min | sécurité |
 | OpenBaoSealed | coffre-fort scellé ou arrêté depuis 15 min : la CI ne peut plus déployer | sécurité (accès de la CI) |
@@ -867,7 +868,7 @@ de Paris.
 | Disponibilité | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (08/11, avant correction) | **0** en 8 redémarrages | 7.5 |
 | Disponibilité | Sauvegarde de la base | aucune | quotidienne, restauration vérifiée chaque semaine | 3.3 |
 | Performance | p95 au point de rupture (1 réplique) | 1,07 s (06/11, avant correction) | **6,5 ms** | 6.3 |
-| Supervision | Tableaux de bord et alertes | aucun | **4 tableaux de bord, 11 alertes** (dont 3 de sécurité) par e-mail, chaîne vérifiée ; déploiements marqués sur les courbes | 5.2, 5.3, 6.1 |
+| Supervision | Tableaux de bord et alertes | aucun | **4 tableaux de bord, 12 alertes** (dont 3 de sécurité) par e-mail, chaîne vérifiée ; déploiements marqués sur les courbes | 5.2, 5.3, 6.1 |
 | Supervision | Journaux | texte libre | **JSON**, recherche par champ, sans les paramètres des adresses | 5.2 |
 
 ### 8.2 Observations sur les déploiements et les releases
@@ -916,9 +917,9 @@ de Paris.
   local (ARC) et SonarQube sont installés à la main (`helm install`,
   `deploy-sonarqube.sh`), pas par OpenTofu ; les 2 règles réseau
   modifiées hors du dépôt le 09/11 étaient celles de SonarQube
-  (recommandation 28). Le coffre OpenBao, lui, est dans OpenTofu, mais
-  il n'est pas sauvegardé automatiquement, et son certificat (1 an)
-  n'est renouvelé que si quelqu'un lance `tofu plan`
+  (recommandation 28). Le coffre OpenBao, lui, est dans OpenTofu ; il
+  n'était pas sauvegardé automatiquement et l'expiration de son
+  certificat (1 an) n'était pas surveillée : corrigé le 12/11
   (recommandation 26).
 - **Les portes de qualité ont joué leur rôle** : le test d'intrusion a
   bloqué la prod tant que les en-têtes de sécurité manquaient (vérifié
@@ -938,7 +939,7 @@ ajoutées le 10/11, puis 26 à 30, ajoutées le 11/11 (relecture de
 cohérence), viennent ensuite, pour que les numéros cités dans les
 sections précédentes restent valables. Les trois priorités du moment
 sont rappelées dans la synthèse (section 1). La colonne « État » montre
-où en est chacune le 12/11 : 7 sont appliquées, 6 le sont en partie.
+où en est chacune le 12/11 : 8 sont appliquées, 6 le sont en partie.
 
 | # | Recommandation | Constat | Effort | Équipe | État au 11/11 |
 | --- | --- | --- | --- | --- | --- |
@@ -961,7 +962,7 @@ où en est chacune le 12/11 : 7 sont appliquées, 6 le sont en partie.
 | 17 | Alerter quand un conteneur dépasse 90 % de sa limite de mémoire pendant 15 min | hausse de la mémoire de SonarQube restée invisible 37 h, jusqu'à son arrêt (7.4) | faible | Ops | À faire |
 | 18 | Garder des PR petites (un seul changement), fusionnées dès qu'elles sont prêtes | délai médian de mise en production passé de 0,3 h à 2,5 h ; 4,6 h à 7,4 h pour les versions qui ont regroupé 6 à 13 commits (3.1) | faible | Dev et Ops | À faire |
 | 19 | Lancer les migrations de schéma (Flyway) dans une tâche séparée, avant le déploiement, pour que l'API n'ait plus le mot de passe du superutilisateur de la base | limite du compte limité de l'application (5.1) | moyen | Dev et Ops | À faire |
-| 20 | Sauvegarder aussi la base de SonarQube | historique de la qualité perdu si son disque est perdu ; seules les bases de MicroCRM sont sauvegardées | faible | Ops | À faire |
+| 20 | Sauvegarder aussi la base de SonarQube | historique de la qualité perdu si son disque est perdu ; seules les bases de MicroCRM étaient sauvegardées | faible | Ops | Appliquée le 12/11 (`backup-sonarqube.sh` : chaque jour, restauration vérifiée chaque semaine, alerte `SonarQubeBackupTooOld`) |
 | 21 | Ne créer une version que pour un changement de ce qui est livré (back, front, chart), et donner au chart déployé le numéro de cette version | 12 des 19 mises en prod sans changement de l'application ; chart toujours affiché en `1.1.0` (3.1, 8.2) | faible | Dev et Ops | **Appliquée** (PR #124, v1.8.2, 09/11) |
 | 22 | Tester aussi les 3 rôles Ansible liés au cluster (Minikube, images, metrics-server) : scénario Molecule chaque semaine sur une machine virtuelle avec Minikube | Molecule ne teste que les 5 rôles du poste (4.1) | moyen | Ops | À faire |
 | 23 | Déverrouiller OpenBao automatiquement (AWS KMS dans la cible cloud ; sur site : KMS d'un hébergeur européen, boîtier HSM ou second OpenBao) et passer à 3 serveurs | geste manuel chaque matin ; tant qu'il manque, la CI ne peut plus déployer (5.3) | moyen | Ops | À faire ; comparatif des solutions (avantages, inconvénients, niveau de coût) dans `infra/openbao/README.md` |

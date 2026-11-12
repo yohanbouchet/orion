@@ -51,6 +51,11 @@ backup_log: "{{ ops_home }}/.local/state/microcrm-backup.log"
 # (le coffre est alors scellé)
 openbao_backup_dir: "{{ ops_home }}/backups/openbao"
 openbao_backup_log: "{{ ops_home }}/.local/state/openbao-backup.log"
+# Base de SonarQube (historique de la qualité, réglages, jetons) : chaque
+# jour à 11 h 40, avant la copie hors site de midi ; restauration
+# vérifiée chaque vendredi
+sonarqube_backup_dir: "{{ ops_home }}/backups/sonarqube"
+sonarqube_backup_log: "{{ ops_home }}/.local/state/sonarqube-backup.log"
 
 # Docker : journaux limités à 3 fichiers de 10 Mo par conteneur ;
 # nettoyage chaque semaine de ce qui n'a pas servi depuis 7 jours
