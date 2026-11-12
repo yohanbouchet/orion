@@ -1,0 +1,97 @@
+# Fichier  : e2e/compose.yaml
+# Rôle     : MicroCRM complet et jetable pour les tests de bout en bout :
+#            base PostgreSQL (en mémoire), back et front (les images
+#            construites par la CI, celles qui seront publiées), puis
+#            Playwright (profil « tests ») qui joue les parcours
+# Utilise  : images FRONT_IMAGE et BACK_IMAGE (variables obligatoires) ;
+#            E2E_DB_PASSWORD (tiré au hasard par scripts/e2e.sh, jamais
+#            écrit dans le dépôt) ; nginx/ ; tests/
+# Utilisé par : scripts/e2e.sh
+# Réseau privé du projet, rien n'est publié sur la machine : seul
+# Playwright parle au front
+
+name: microcrm-e2e
+
+services:
+  # Même image de base que infra/postgres ; données en mémoire (tmpfs) :
+  # tout disparaît à l'arrêt
+  db:
+    image: postgres:18.6-alpine3.24@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
+    environment:
+      POSTGRES_DB: microcrm
+      POSTGRES_USER: microcrm
+      POSTGRES_PASSWORD: ${E2E_DB_PASSWORD:?run scripts/e2e.sh}
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "microcrm", "-d", "microcrm"]
+      interval: 2s
+      retries: 30
+
+  # Back : crée son schéma au démarrage (Flyway) ; prêt quand sa sonde
+  # readiness répond (base joignable), testée toutes les 3 s
+  back:
+    image: ${BACK_IMAGE:?run scripts/e2e.sh}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/microcrm
+      SPRING_DATASOURCE_USERNAME: microcrm
+      SPRING_DATASOURCE_PASSWORD: ${E2E_DB_PASSWORD:?run scripts/e2e.sh}
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:8081/actuator/health/readiness
+      interval: 3s
+      start_period: 120s
+      retries: 40
+
+  # Front (nginx) : même relais /api que le chart Helm, fichiers montés
+  # aux mêmes endroits ; disque système en lecture seule, comme en prod
+  front:
+    image: ${FRONT_IMAGE:?run scripts/e2e.sh}
+    depends_on:
+      back:
+        condition: service_healthy
+    volumes:
+      - ./nginx/api.conf:/etc/nginx/extra/api.conf:ro
+      - ./nginx/upstream.conf:/etc/nginx/conf.d/upstream.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 2s
+      retries: 30
+
+  # Playwright : image officielle (navigateurs inclus), version identique
+  # à package.json ; lancé seulement par « compose run » ; sous le compte
+  # de l'utilisateur de la machine (rapports lisibles, aucun root)
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.65.0-noble@sha256:9beb546099e11f52d62e505537914870e01a67e0e6b00ae41da4775324e73dbe
+    profiles: [tests]
+    depends_on:
+      front:
+        condition: service_healthy
+    user: ${E2E_UID:-1000}:${E2E_GID:-1000}
+    working_dir: /e2e
+    volumes:
+      - .:/e2e
+    environment:
+      BASE_URL: http://front:8080
+      CI: ${CI:-}
+      HOME: /tmp
+      npm_config_cache: /tmp/npm
+    init: true
+    command:
+      - sh
+      - -c
+      - npm ci --no-audit --no-fund --ignore-scripts && npx playwright test

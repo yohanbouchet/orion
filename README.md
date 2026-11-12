@@ -164,6 +164,8 @@ infra/
   arc/                    runner local de la CI (image durcie, réglages)
   systemd/                démarrage automatique de Minikube
 scripts/                  scripts d'automatisation et leurs tests
+e2e/                      tests de bout en bout (Playwright) : parcours,
+                          MicroCRM jetable (compose.yaml), relais nginx
 docs/                     audit, normalisation et plan CI, documentation
                           CI/CD, mesures de départ, rapport de performance
 sonar-project.properties  réglages de l'analyse SonarQube
@@ -189,6 +191,7 @@ main depuis l'onglet **Actions**.
 | `ansible` | Syntaxe et bonnes pratiques du code Ansible ; rôles appliqués à la machine jetable du job, idempotence et contrôles (jamais au poste Ops) | ansible-playbook `--syntax-check`, ansible-lint (profil production), Molecule | GitHub |
 | `trivy` | Failles des dépendances (production et outillage) | Trivy | GitHub |
 | `workflows` | Syntaxe et sécurité des workflows et des actions du dépôt | actionlint, zizmor | GitHub |
+| `e2e` | Tests de bout en bout : les 2 images construites, une base jetable, 3 parcours dans Chromium | `e2e.sh` (Playwright, Docker Compose) | GitHub |
 | `images` | Construction et scan des images front et back | Docker, Trivy | GitHub |
 | `release` | Numéro de version et Release GitHub (sur `main`) | semantic-release | GitHub |
 | `publish` | Publication des images sur GHCR (sur `main`), signature et SBOM attesté | Docker, cosign, Trivy | GitHub |
@@ -275,6 +278,15 @@ Tests, comme dans la CI :
 ```shell
 scripts/run-tests.sh front
 scripts/run-tests.sh back
+```
+
+Tests de bout en bout (Docker) : MicroCRM complet et jetable, puis 3
+parcours joués par un vrai navigateur ; images construites localement
+ou publiées ([`e2e.sh`](scripts/README.md#e2esh)) :
+
+```shell
+scripts/e2e.sh ghcr.io/yohanbouchet/orion-front:<étiquette> \
+  ghcr.io/yohanbouchet/orion-back:<étiquette>
 ```
 
 ## Images Docker
@@ -703,6 +715,7 @@ TLS et Vault) ; dernière version publiée et fin de support sur
 | Trivy / hadolint / gitleaks / ShellCheck | 0.76.2 / 2.15.1 / 8.30.1 / 0.11.0 |
 | cosign (Sigstore, Apache 2.0) | 3.1.4 (20/10/2026) |
 | actionlint / zizmor (workflows, MIT) | 1.7.12 / 1.32.0 |
+| Playwright (tests de bout en bout, Apache 2.0) | 1.65.0 |
 | Grafana / chart victoria-metrics-k8s-stack | 13.2.5 (dernière 13.2 ; 13.3.0 sortie) / 0.97.1 |
 | k6 (tests de charge) | 2.3.0 |
 

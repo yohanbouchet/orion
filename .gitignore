@@ -61,3 +61,9 @@ node_modules/
 # Fichiers compilés et cache de pytest, recréés à chaque exécution
 __pycache__/
 .pytest_cache/
+
+# --- Tests de bout en bout ---
+# Résultats des tests de bout en bout (scripts/e2e.sh), recréés à
+# chaque lancement
+e2e/playwright-report/
+e2e/test-results/

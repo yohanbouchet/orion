@@ -95,6 +95,21 @@ updates:
   # Outils Python de la CI, empreintes comprises : pytest
   # (scripts/tests/requirements.txt), ansible-core et ansible-lint
   # (infra/ansible/requirements-ci.txt)
+  # Tests de bout en bout (Playwright, e2e/) : même rythme ; la version de
+  # l'image mcr.microsoft.com/playwright de e2e/compose.yaml doit suivre
+  # celle du paquet (sinon le job e2e échoue : navigateurs introuvables),
+  # à monter à la main dans la même PR
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+
   - package-ecosystem: pip
     directories:
       - /scripts/tests
