@@ -86,7 +86,7 @@ function test_backup_writes_a_private_dump_with_its_checksum() {
   assert_equals "600" "$(stat -c %a "$dump")"
   assert_equals "700" "$(stat -c %a "$BACKUP_DIR/dev")"
   assert_contains "pg_dump -U microcrm -d microcrm -Fc" "$(calls)"
-  assert_contains "pg_restore --list" "$(calls)"
+  assert_contains "pg_restore --list /tmp/check.dump" "$(calls)"
 }
 
 function test_backup_writes_the_metric_for_the_alert() {

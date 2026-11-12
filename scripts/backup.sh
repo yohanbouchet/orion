@@ -99,8 +99,14 @@ backup() {
   fi
   mv "$dir/$name.tmp" "$dir/$name"
   (cd "$dir" && sha256sum "$name" >"$name.sha256")
-  # Le fichier doit être lisible par pg_restore (sauvegarde utilisable)
-  in_pod_stdin pg_restore --list <"$dir/$name" >/dev/null ||
+  # Le fichier doit être lisible par pg_restore (sauvegarde utilisable) ;
+  # il est d'abord copié EN ENTIER dans le pod (/tmp), puis lu : par le
+  # tube, pg_restore --list s'arrête au sommaire et kubectl attend sans fin
+  # le reste du fichier (constaté le 12/11 avec 6,8 Mo)
+  # shellcheck disable=SC2016 # $? est lu par le shell du pod
+  in_pod_stdin sh -c 'cat >/tmp/check.dump &&
+    pg_restore --list /tmp/check.dump >/dev/null; rc=$?
+    rm -f /tmp/check.dump; exit "$rc"' <"$dir/$name" ||
     die "backup $name is not readable by pg_restore"
   # Rotation : les noms contiennent la date, le tri donne l'ordre ; on
   # garde les KEEP plus récentes
