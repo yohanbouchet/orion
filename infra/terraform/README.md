@@ -151,7 +151,7 @@ tofu test     # 9 tests, faux fournisseurs : aucun cluster nécessaire
 | `deployer_rights_stay_in_their_namespace` | aucun jeton monté dans un pod ; aucun joker `*` ; lecture de son seul namespace |
 | `unknown_environment_is_refused` | un environnement inconnu est refusé par la validation |
 | `unpinned_pod_security_is_refused` | une version de règles Pod Security non figée (`latest`) est refusée |
-| `monitoring_namespaces_security` | `monitoring` en « restricted » ; le namespace du collecteur avertit de tout écart à « restricted » |
+| `monitoring_namespaces_security` | `monitoring` en « restricted » ; le namespace du collecteur avertit de tout écart à « restricted », à la version figée |
 | `monitoring_stack_is_pinned` | chart de supervision à version figée ; un ConfigMap par tableau de bord (4) |
 | `non_gmail_alert_address_is_refused` | une adresse d'alerte non Gmail est refusée |
 | `openbao_is_locked_down` | namespace `openbao` en « restricted » ; chart figé (0.30.7) ; TLS gardé, injecteur désactivé, règle réseau, système de fichiers en lecture seule ; journal d'audit déclaré ; OpenBao ne peut créer que des jetons des comptes `deployer` ; clé de l'autorité en ECDSA |

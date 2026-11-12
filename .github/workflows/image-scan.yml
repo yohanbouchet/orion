@@ -127,7 +127,7 @@ jobs:
         run: |
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs"
           run_url="$run_url/$GITHUB_RUN_ID"
-          title_prefix="[Ops] Failles dans les images en production"
+          title_prefix="[Ops] Vulnerabilities in production images"
           open="$(gh issue list --state open --label security \
             --search "\"$title_prefix\" in:title" --json number --jq 'length')"
           if [ "$open" -gt 0 ]; then
@@ -135,10 +135,11 @@ jobs:
               >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          body="Analyse quotidienne : faille haute ou critique dans"
-          body="$body les images \`$TAG\` en production. Détail : $run_url."
-          body="$body Suite : corriger la dépendance ou l'image de base,"
-          body="$body publier une version et la déployer en prod"
-          body="$body (documentation CI/CD, section 6.4)."
+          body="Daily scan: high or critical vulnerability in the"
+          body="$body \`$TAG\` images running in production."
+          body="$body Details: $run_url."
+          body="$body Next: fix the dependency or the base image,"
+          body="$body release a version and deploy it to prod"
+          body="$body (CI/CD documentation, section 6.4)."
           gh issue create --label security --label team:ops \
             --title "$title_prefix ($TAG)" --body "$body"
