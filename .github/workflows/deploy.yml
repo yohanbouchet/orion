@@ -1,10 +1,12 @@
 # Fichier  : .github/workflows/deploy.yml
 # Rôle     : déploie MicroCRM dans UN environnement (dev, staging ou prod)
-#            avec scripts/deploy.sh, sur le runner local, avec un jeton
+#            après avoir vérifié la signature des images, avec
+#            scripts/deploy.sh, sur le runner local, avec un jeton
 #            court du compte deployer de cet environnement (délivré par
 #            OpenBao) ; workflow réutilisable, appelé trois fois par ci.yml
 #            (une fois par environnement)
-# Utilise  : scripts/deploy.sh, infra/helm/microcrm ; action
+# Utilise  : scripts/deploy.sh, infra/helm/microcrm ; actions
+#            .github/actions/cosign (vérification des signatures) et
 #            .github/actions/kube-access (kubectl, helm, jeton OpenBao,
 #            kubeconfig) ; environnements GitHub dev, staging, production
 #            (règle « main seulement », approbation pour production) ;
@@ -59,6 +61,26 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Signatures des 2 images vérifiées AVANT tout accès au cluster :
+      # signées par le job publish de ci.yml de CE dépôt, sur main, avec
+      # un badge OIDC de GitHub ; sinon (image non signée, signée par un
+      # autre dépôt, un autre workflow ou une branche) : aucun déploiement
+      - name: Install cosign
+        uses: ./.github/actions/cosign
+      - name: Verify image signatures
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          tag="${TAG:-sha-${GITHUB_SHA::7}}"
+          workflow=".github/workflows/ci.yml@refs/heads/main"
+          identity="https://github.com/$GITHUB_REPOSITORY/$workflow"
+          issuer="https://token.actions.githubusercontent.com"
+          for component in front back; do
+            image="ghcr.io/$GITHUB_REPOSITORY_OWNER/orion-$component:$tag"
+            cosign verify --certificate-identity "$identity" \
+              --certificate-oidc-issuer "$issuer" "$image" >/dev/null
+            echo "Signature verified: \`$image\`" >> "$GITHUB_STEP_SUMMARY"
+          done
       # kubectl et helm à l'empreinte vérifiée, kubeconfig du deployer
       # de cet environnement (action composite du dépôt)
       - name: Kubernetes access
