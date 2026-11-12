@@ -112,7 +112,7 @@ de performance (document 4) :
 | 2. Qualité contrôlée à chaque modification | Quality Gate sans condition, couverture non mesurée | Quality Gate bloquant ; nouveau code couvert à 80 % | **3 conditions bloquantes** ; couverture 82,9 % |
 | 3. Livrer plus vite et de façon traçable | déploiement manuel, non tracé | chaque déploiement lié à une version, une image et un commit | **5,1 mises en prod par semaine**, 2,9 h entre un commit et la prod (médiane), 0 % d'échec |
 | 4. Revenir en arrière sans coupure | aucun retour arrière ni sauvegarde | retour arrière automatique ; sauvegarde restaurable | **testés** : retour arrière sans coupure ; restauration vérifiée chaque semaine |
-| 5. Voir et être prévenu | aucune supervision | disponibilité, performance et sécurité suivies | **4 tableaux de bord, 9 alertes**, indicateurs DORA chaque jour ouvré, dans Grafana |
+| 5. Voir et être prévenu | aucune supervision | disponibilité, performance et sécurité suivies | **4 tableaux de bord, 11 alertes**, indicateurs DORA chaque jour ouvré, dans Grafana |
 
 ## 3. Workflow de branches
 
@@ -199,11 +199,11 @@ manuelle ratée.
 | Type de test | Outil | Déclenchement | Couverture cible |
 | --- | --- | --- | --- |
 | Unitaires | Vitest, navigateur simulé jsdom (front, 16 tests, back simulé : chargement, création, suppression, liens entre personnes et organisations) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; au 08/11, 82,9 % de l'ensemble (lignes 87,6 %, branches 57,9 %) |
-| Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (13 tests : 8 du socle, 5 de la configuration d'OpenBao) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle et d'OpenBao |
+| Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (15 tests : 8 du socle, 7 de la configuration d'OpenBao) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle et d'OpenBao |
 | E2E | **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | chaque déploiement (dev, staging, prod) | le parcours complet ; un échec remet la version précédente |
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
-| Scripts d'exploitation | bashunit (74 tests), pytest (30 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
+| Scripts d'exploitation | bashunit (87 tests), pytest (30 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
 | Infrastructure | `tofu fmt`, `validate` et `test` ; `ansible-playbook --syntax-check`, ansible-lint (profil production) ; **Molecule** : 5 rôles Ansible appliqués à une machine jetable, idempotence, contrôles | chaque PR | 100 % des fichiers Terraform et Ansible ; 5 rôles sur 8 exécutés |
 
 **Limite** : pas de test de bout en bout dans un navigateur (Cypress,
@@ -522,8 +522,8 @@ infra/
   monitoring/       réglages, alertes et tableaux de bord de la supervision
   openbao/          réglages et exploitation du coffre-fort OpenBao
     config/           identité de la CI (OpenTofu, état à part) : badges
-                      OIDC de GitHub, jetons courts, jeton SonarQube ;
-                      5 tests
+                      OIDC de GitHub, jetons courts, jeton SonarQube,
+                      droit de sauvegarde ; 7 tests
   postgres/, zap/, arc/   images durcies (base, test d'intrusion, runner)
   sonarqube/, k6/, systemd/   SonarQube, scénarios de charge, démarrage
 ```
@@ -975,19 +975,19 @@ d'arrêt) et testé à chaque PR (bashunit, pytest).
 | Vérification | restauration dans une base temporaire, lignes comptées | chaque vendredi | — | — |
 | Code, configuration, infrastructure | Git (tout est décrit en code : chart, fichiers Terraform pour OpenTofu, Ansible, supervision) | à chaque PR | historique complet | GitHub |
 | Images | GHCR, une image par version et par commit | à chaque fusion | toutes les versions | GHCR |
-| Coffre OpenBao | instantané Raft chiffré (`bao operator raft snapshot`) | **à la main seulement** (limite) | — | poste Ops |
+| Coffre OpenBao | `backup-openbao.sh` : instantané Raft chiffré par le coffre, pris avec un jeton qui ne peut que ça, empreinte et archive vérifiées | chaque jour à 11 h 50 (Ansible), coffre déverrouillé | 7 instantanés | poste Ops (fichiers en 600), puis copie hors site chiffrée (GPG) |
 
 **Objectifs** : **RPO** (perte de données maximale) de **24 h**, avec
 une sauvegarde par jour ; **RTO** (temps de restauration) mesuré à
 **0,6 s** sur la base de test (7 Ko), à remesurer sur des données
 réelles. Une alerte (`BackupTooOld`) prévient si la dernière sauvegarde
-réussie de la prod a plus de 26 h. **Limites** : sauvegarde complète
-quotidienne, sans restauration à un instant donné ; évolution : journaux
-de transactions (WAL), CloudNativePG ou RDS (cible AWS). Le coffre
-OpenBao n'est pas sauvegardé automatiquement : sans instantané, la
-perte de son disque obligerait à le réinitialiser et à refaire
-l'identité de la CI ; évolution : instantané quotidien planifié, copié
-hors site (rapport, recommandation 26).
+réussie de la prod a plus de 26 h, et `OpenBaoBackupTooOld` si le
+dernier instantané du coffre a plus de 74 h (un week-end poste éteint
+n'alerte pas ; le jeton de sauvegarde expire après 7 jours sans
+sauvegarde). **Limites** : sauvegarde complète quotidienne, sans
+restauration à un instant donné ; évolution : journaux de transactions
+(WAL), CloudNativePG ou RDS (cible AWS). Restauration du coffre :
+[README d'OpenBao](../infra/openbao/README.md#restaurer).
 
 ### 7.7 Monitoring et alerting
 
@@ -1013,6 +1013,8 @@ premiers gestes ; e-mail de fin d'alerte) :
 | Performance | `MicrocrmSlowResponses` | p95 au-dessus de 500 ms pendant 10 min |
 | Machine | `HostDiskAlmostFull` | disque rempli à plus de 85 % |
 | Machine | `BackupTooOld` | dernière sauvegarde réussie de la prod il y a plus de 26 h |
+| Machine | `OpenBaoBackupTooOld` | dernier instantané du coffre OpenBao il y a plus de 74 h |
+| Machine | `OpenBaoCertExpiringSoon` | certificat TLS du coffre expiré dans moins de 30 jours |
 | Sécurité | `MicrocrmClientErrorSpike` | plus de 50 réponses 4xx de l'API de prod en 5 min |
 | Sécurité | `LogIngestionStopped` | aucune ligne de journal reçue depuis 15 min |
 | Sécurité | `OpenBaoSealed` | coffre-fort OpenBao scellé ou absent depuis 15 min (après un démarrage du poste) |

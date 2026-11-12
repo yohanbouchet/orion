@@ -38,6 +38,7 @@
         that:
           - verify_crontab.stdout is search('backup.sh')
           - verify_crontab.stdout is search('@reboot')
+          - verify_crontab.stdout is search('backup-openbao.sh')
         quiet: true
 
     - name: Read the services
