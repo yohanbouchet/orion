@@ -4,7 +4,7 @@
 #            parallèle sur les runners hébergés par GitHub, puis l'analyse
 #            SonarQube et son Quality Gate sur le runner local ; en
 #            parallèle, les scans de sécurité (gitleaks, hadolint,
-#            ShellCheck, Trivy), les tests des scripts (bashunit, pytest),
+#            ShellCheck, Trivy, actionlint et zizmor pour les workflows), les tests des scripts (bashunit, pytest),
 #            les contrôles OpenTofu (fmt, validate, test : socle du cluster
 #            et configuration d'OpenBao) et du code Ansible (syntaxe,
 #            ansible-lint, Molecule), et la construction des
@@ -226,6 +226,11 @@ jobs:
           path: ci/sonarqube
           field: token
           openbao-ca: ${{ vars.OPENBAO_CA }}
+      # Version affichée par SonarQube : l'étiquette de l'image du même
+      # commit (sha-xxxxxxx), pour relier une analyse à une image
+      - name: Analysis version
+        id: version
+        run: echo "value=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
       # Analyse (réglages dans sonar-project.properties) puis attente du
       # Quality Gate ; le jeton n'est donné qu'à cette étape
       - name: SonarQube analysis
@@ -233,6 +238,8 @@ jobs:
         env:
           SONAR_TOKEN: ${{ steps.sonar-token.outputs.value }}
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          args: -Dsonar.projectVersion=${{ steps.version.outputs.value }}
 
   # Secrets oubliés (mots de passe, jetons, clés) dans tout l'historique
   # Git ; ticket #20
@@ -294,6 +301,41 @@ jobs:
           -v "$PWD":/src:ro -w /src
           koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
           --color=never scripts/*.sh scripts/lib/*.sh scripts/tests/*.sh
+
+  # Sécurité et syntaxe des workflows et des actions du dépôt :
+  # actionlint (syntaxe, expressions, scripts shell des étapes) et zizmor
+  # (injections, droits trop larges, actions non figées, identifiants
+  # gardés…) ; avant, lancés seulement sur le poste Ops (recommandation
+  # 25 du rapport) ; images figées par digest, aucun droit d'écriture
+  workflows:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Réglages lus dans .github/actionlint.yaml (étiquette du runner
+      # local) ; aucun accès réseau
+      - name: Lint workflows (actionlint)
+        run: >-
+          docker run --rm --network none --user "$(id -u):$(id -g)"
+          -v "$PWD":/repo:ro -w /repo
+          rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+          -no-color
+      # Réglages lus dans .github/zizmor.yml ; le jeton du job (lecture
+      # seule) active les contrôles en ligne : actions connues pour une
+      # faille, empreintes de commit qui n'appartiennent pas à l'action
+      - name: Audit workflows (zizmor)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          docker run --rm --user "$(id -u):$(id -g)" -e GH_TOKEN
+          -v "$PWD":/repo:ro -w /repo
+          ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d
+          --no-progress .
 
   # Tests unitaires des scripts d'automatisation (bashunit pour Bash,
   # pytest pour Python) ; ticket #56
@@ -427,7 +469,11 @@ jobs:
       # (Ubuntu 24.04 jetable, détruite après), puis 2e passage sans
       # changement (idempotence) et contrôles (molecule/default) ; les
       # rôles qui demandent le cluster ne sont pas testés ici
+      # Délai de 8 min (une minute en temps normal) : un miroir de paquets
+      # en panne fait échouer vite au lieu de bloquer 17 min (incident du
+      # 11/11, rapport 7.8)
       - name: Test the roles (Molecule)
+        timeout-minutes: 8
         run: molecule test
 
   # Failles connues dans les dépendances (npm, Gradle) : bloque sur les
@@ -545,6 +591,7 @@ jobs:
       - gitleaks
       - hadolint
       - shellcheck
+      - workflows
       - script-tests
       - opentofu
       - ansible
@@ -600,6 +647,7 @@ jobs:
       - gitleaks
       - hadolint
       - shellcheck
+      - workflows
       - script-tests
       - opentofu
       - ansible
@@ -778,6 +826,7 @@ jobs:
       - gitleaks
       - hadolint
       - shellcheck
+      - workflows
       - script-tests
       - opentofu
       - ansible

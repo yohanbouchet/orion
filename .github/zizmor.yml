@@ -2,8 +2,8 @@
 # Rôle     : réglages de zizmor (audit de sécurité des workflows) : règles
 #            désactivées, chacune avec sa raison
 # Utilise  : rien
-# Utilisé par : zizmor (lancé en local avant chaque PR ; lu tout seul
-#               dans .github/)
+# Utilisé par : zizmor (job workflows de ci.yml à chaque PR, et en local
+#               avant chaque PR ; lu tout seul dans .github/)
 
 rules:
   # Syntaxe « $/ » de GitHub (juillet 2026) pour appeler une action du
