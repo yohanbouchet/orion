@@ -131,23 +131,24 @@ départ (couverture non mesurée).
 
 ```mermaid
 gitGraph
-    commit id: "v1.5.2"
-    branch feat/security-alerts
-    checkout feat/security-alerts
-    commit id: "feat(monitoring)"
-    checkout main
-    merge feat/security-alerts id: "PR #107" tag: "v1.6.0"
-    branch docs/documentation-cicd
-    checkout docs/documentation-cicd
+    commit id: "v1.9.0"
+    branch docs/coherence-finale
+    checkout docs/coherence-finale
     commit id: "docs"
     checkout main
-    merge docs/documentation-cicd id: "PR docs"
+    merge docs/coherence-finale id: "PR #144"
+    branch fix/front-ignore-scripts
+    checkout fix/front-ignore-scripts
+    commit id: "fix(front)"
+    checkout main
+    merge fix/front-ignore-scripts id: "PR #145" tag: "v1.9.1"
 ```
 
-*Description du schéma* : chaque changement part de `main` sur une
-branche courte (ici `feat/security-alerts`), revient dans `main` par une
-PR ; une PR `feat` ou `fix` publie une version (ici v1.6.0), une PR
-`docs` n'en publie pas.
+*Description du schéma* (cas réel du 11/11) : chaque changement part de
+`main` sur une branche courte et revient dans `main` par une PR. La PR
+`docs` (#144) ne publie pas de version ; la PR `fix(front)` (#145), qui
+change ce qui est livré, publie la version v1.9.1 (règle de la
+section 7.3).
 
 | Branche | Rôle | Durée de vie |
 | --- | --- | --- |
