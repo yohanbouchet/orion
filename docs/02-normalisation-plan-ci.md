@@ -265,7 +265,7 @@ flowchart TB
 | Unitaires et d'intégration back | JUnit 5 + Spring Boot Test (existant) | chaque PR | oui |
 | Couverture | JaCoCo (back), lcov (front), envoyés à SonarQube | chaque PR | oui, via le Quality Gate |
 | Scripts | bashunit (Bash, version figée et vérifiée par empreinte), pytest (Python) | chaque PR (job `script-tests`) | oui |
-| Fumée après déploiement | Appel du point de santé de l'API | chaque déploiement | oui (retour arrière) |
+| Fumée après déploiement | Appel de `/api/persons` depuis le pod du front (front → back → base) | chaque déploiement | oui (retour arrière) |
 
 Règles :
 

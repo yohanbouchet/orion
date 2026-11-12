@@ -418,7 +418,8 @@ résumé de l'exécution (image déployée).
   `KUBE_CA` : le job vérifie qu'il parle au vrai cluster
   (`https://kubernetes.default.svc`, adresse interne).
 - `kubectl` et `helm` sont les binaires officiels, refusés si leur
-  empreinte SHA-256 diffère de celle notée dans `deploy.yml`.
+  empreinte SHA-256 diffère de celle notée dans l'action
+  [`kube-access`](.github/actions/kube-access/action.yml).
 - Un seul déploiement à la fois par environnement ; un échec du test de
   fumée remet la version précédente et fait échouer le job.
 

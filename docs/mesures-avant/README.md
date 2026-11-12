@@ -25,7 +25,7 @@ Exécuté en local avec gitlab-ci-local 4.77.0, cache froid.
 | Indicateur        | Valeur                          |
 | ----------------- | ------------------------------- |
 | Lignes de code    | 960 (Java 226, TypeScript 332, HTML 401) |
-| Problèmes         | 37 (fiabilité 33, sécurité 4, maintenabilité 5) |
+| Problèmes         | 37 (fiabilité 33, sécurité 4, maintenabilité 5 ; un même problème peut relever de plusieurs qualités : la somme dépasse 37) |
 | Notes             | sécurité C, fiabilité D, maintenabilité A |
 | Couverture        | 0,0 % sur 166 lignes à couvrir (non mesurée : aucun rapport fourni ; mesurée le 30/10 : back 60 %, front 31 % des lignes) |
 | Duplication       | 2,5 %                           |
