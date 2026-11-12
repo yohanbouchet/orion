@@ -5,7 +5,7 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataire : Maria, CTO)           |
 | Auteur  | Yohan Bouchet                               |
-| Version | 1.3 (11/11/2026 : R5, Headlamp reporté ; 2.3.6, Docker Compose finalement inutile ; 1.2 du 07/11 : renvois vers 2.3.7, consommation corrigée) |
+| Version | 1.4 (12/11/2026 : R5, Headlamp ajouté en lecture seule ; 1.3 du 11/11 : Headlamp reporté ; 2.3.6, Docker Compose finalement inutile ; 1.2 du 07/11 : renvois vers 2.3.7, consommation corrigée) |
 | Date    | 29/10/2026                                  |
 
 **Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
@@ -508,8 +508,9 @@ support publiées sur **endoflife.date** (maintenance).
   aucune procédure de retour arrière (3.3.6).
 - **Implémentation** : phases 4 et 5 ; environnements séparés par espaces de
   noms ; conteneurs non root conformes aux Pod Security Standards.
-  Headlamp (interface web du cluster) n'a pas été installé : `kubectl`
-  et les tableaux de bord Grafana ont suffi ; reporté en évolution.
+  Headlamp (interface web du cluster) a été ajouté le 12/11, en lecture
+  seule (rôle `view`, jeton d'une heure), après la phase principale où
+  `kubectl` et Grafana avaient suffi.
 - **Impacts** : livraisons fréquentes et sans risque ; temps de
   rétablissement mesurable.
 

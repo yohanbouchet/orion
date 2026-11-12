@@ -199,7 +199,7 @@ manuelle ratée.
 | Type de test | Outil | Déclenchement | Couverture cible |
 | --- | --- | --- | --- |
 | Unitaires | Vitest, navigateur simulé jsdom (front, 16 tests, back simulé : chargement, création, suppression, liens entre personnes et organisations) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; au 08/11, 82,9 % de l'ensemble (lignes 87,6 %, branches 57,9 %) |
-| Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (15 tests : 8 du socle, 7 de la configuration d'OpenBao) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle et d'OpenBao |
+| Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (16 tests : 9 du socle, 7 de la configuration d'OpenBao) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle et d'OpenBao |
 | E2E | **Playwright** (vrai navigateur Chromium, 3 parcours : accueil, création d'une organisation, création d'une personne rattachée à l'organisation) sur les images construites, avec une base jetable (`scripts/e2e.sh`, `e2e/`) ; **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | Playwright : chaque PR et chaque fusion (job `e2e`) ; fumée : chaque déploiement (dev, staging, prod) | les écrans principaux, de l'interface à la base ; un échec de la fumée remet la version précédente |
 | Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
@@ -510,8 +510,9 @@ infra/
     monitoring.tf     supervision : chart Helm, tableaux de bord
     openbao.tf        coffre-fort OpenBao : certificat TLS, chart Helm,
                       droit de créer des jetons courts des deployer
+    headlamp.tf       interface web du cluster, lecture seule
     variables.tf, outputs.tf, providers.tf, versions.tf (versions figées)
-    tests/            8 tests (tofu test, faux fournisseurs)
+    tests/            9 tests (tofu test, faux fournisseurs)
   helm/microcrm/    chart de l'application
     templates/        front, API (+ autoscaling), PostgreSQL
                       (StatefulSet) et compte limité de l'appli (script

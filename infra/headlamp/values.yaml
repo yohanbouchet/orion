@@ -1,0 +1,50 @@
+# Fichier  : infra/headlamp/values.yaml
+# Rôle     : réglages du chart officiel de Headlamp (interface web de
+#            Kubernetes, projet kubernetes-sigs, Apache 2.0) : lecture
+#            seule, aucun droit propre, conteneur durci (« restricted »)
+# Utilise  : chart headlamp 0.46.0 (https://kubernetes-sigs.github.io/headlamp/)
+# Utilisé par : infra/terraform/headlamp.tf (tofu apply)
+
+# Image figée par empreinte (le chart accepte « étiquette@empreinte »)
+image:
+  tag: v0.46.0@sha256:8a0ef97527544baa2b35825940ddf4db6e2d09c30cd5aa31fd269ff604cc8b75
+
+config:
+  # Session de l'interface : 1 h au lieu de 24 h
+  sessionTTL: 3600
+  # Pas d'OIDC ici : aucun Secret vide créé
+  oidc:
+    secret:
+      create: false
+
+# Le chart lie par défaut son compte à cluster-admin (tous les droits) :
+# désactivé. Le compte de Headlamp n'a AUCUN droit ; chaque personne se
+# connecte avec un jeton court du compte headlamp-viewer (rôle « view »,
+# lecture sans les Secrets), créé par headlamp.tf
+clusterRoleBinding:
+  create: false
+
+# Niveau « restricted » complet (le chart n'en met qu'une partie) ;
+# disque système en lecture seule : le chart ajoute alors /tmp inscriptible
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 100
+  runAsGroup: 101
+  privileged: false
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

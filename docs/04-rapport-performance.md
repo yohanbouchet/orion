@@ -234,7 +234,7 @@ chaîne contrôle **3 fois plus de choses en 2 fois moins de temps**.
 | Tests du front | 8 (Karma) | 16 (Vitest, depuis le 08/11) | chaque PR |
 | Tests des scripts d'exploitation (bashunit, pytest) | 0 | 93 + 30 | chaque PR |
 | Tests de bout en bout (Playwright, vrai navigateur) | 0 | 3 parcours : accueil, création d'une organisation, d'une personne rattachée (depuis le 12/11) | chaque PR, sur les images construites |
-| Tests de l'infrastructure (OpenTofu) | 0 | 15 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
+| Tests de l'infrastructure (OpenTofu) | 0 | 16 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
 | Test du poste Ops (Ansible, Molecule) | 0 | 5 rôles appliqués sur une machine jetable, rejoués sans aucun changement (idempotence), puis 6 contrôles (outils, sauvegardes planifiées, services, métriques, pare-feu, journaux Docker) | chaque PR (depuis le 10/11) |
 | Test d'intrusion (OWASP ZAP) | 0 | 0 échec ; 19 règles bloquantes | chaque déploiement de staging |
 | Test de fumée de charge (k6) | 0 | seuils respectés | chaque déploiement de staging, bloque la prod |
@@ -862,7 +862,7 @@ de Paris.
 | Livraison | Durée de ces contrôles | 4,67 min | **2,2 min** (médiane) | 3.2 |
 | Livraison | Déploiement en production | manuel, non tracé | **automatique après approbation** : 5,1 par semaine, 0 % d'échec, 2,9 h entre un commit et la prod (médiane) | 3.1 |
 | Livraison | Versions | `0.0.1-SNAPSHOT`, aucune image | **25 versions** ; chaque image liée à sa version et à son commit ; une version seulement pour un changement livré | 3.3 |
-| Qualité | Tests de l'infrastructure | aucun | **15 tests OpenTofu** ; poste Ops testé par Molecule (5 rôles, idempotence, 6 contrôles) | 4.1 |
+| Qualité | Tests de l'infrastructure | aucun | **16 tests OpenTofu** ; poste Ops testé par Molecule (5 rôles, idempotence, 6 contrôles) | 4.1 |
 | Disponibilité | Perte d'un serveur d'API en prod | jamais testée | **0 erreur**, remplacement prêt en 11 s | 7.3 |
 | Disponibilité | Requêtes perdues pendant une mise à jour | 22 échecs en 6 redémarrages (08/11, avant correction) | **0** en 8 redémarrages | 7.5 |
 | Disponibilité | Sauvegarde de la base | aucune | quotidienne, restauration vérifiée chaque semaine | 3.3 |

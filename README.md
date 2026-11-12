@@ -154,6 +154,7 @@ infra/
                           installation de la supervision et d'OpenBao)
   monitoring/             supervision : réglages, alertes, tableaux de bord
   openbao/                coffre-fort de secrets (réglages, exploitation)
+  headlamp/               interface web du cluster, lecture seule
   ansible/                configuration et durcissement du poste Ops ;
                           molecule/ : test des rôles sur une machine jetable
   zap/                    règles du test d'intrusion (bloquant ou non)
@@ -567,16 +568,19 @@ sauf Grafana en AGPL v3), installée par OpenTofu dans deux namespaces :
 `monitoring` (« restricted ») et `monitoring-collector` (collecteur de
 journaux seul, verrouillé). Elle lit les métriques de l'API (Spring Boot
 Actuator, port de gestion 8081), de Kubernetes et de la machine
-(node_exporter), et les journaux des conteneurs (gardés 7 jours). Neuf
+(node_exporter), et les journaux des conteneurs (gardés 7 jours). Onze
 alertes sont envoyées par e-mail : disponibilité (prod arrêtée,
 redémarrages en boucle), performance (erreurs 5xx, lenteur), machine
-(disque, sauvegarde) et sécurité (rafale de requêtes refusées, journaux
+(disque, sauvegardes de la base et du coffre, certificat du coffre) et
+sécurité (rafale de requêtes refusées, journaux
 qui n'arrivent plus, coffre-fort scellé). Quatre tableaux de bord sont
 disponibles : disponibilité, performance, sécurité, et livraison
 (indicateurs DORA) ; chaque mise en service d'une image y est marquée
 sur les courbes. Consommation mesurée le 07/11 :
 ≈ 1,1 Gio et 0,1 cœur. Détails, premiers gestes face à une alerte,
 sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.md).
+L'Ops voit aussi le cluster dans **Headlamp**, interface web en lecture
+seule (jeton d'une heure) : [`infra/headlamp/README.md`](infra/headlamp/README.md).
 
 ## Sécurité
 
@@ -716,6 +720,7 @@ TLS et Vault) ; dernière version publiée et fin de support sur
 | cosign (Sigstore, Apache 2.0) | 3.1.4 (20/10/2026) |
 | actionlint / zizmor (workflows, MIT) | 1.7.12 / 1.32.0 |
 | Playwright (tests de bout en bout, Apache 2.0) | 1.65.0 |
+| Headlamp / chart Helm (interface du cluster, Apache 2.0) | 0.46.0 / 0.46.0 |
 | Grafana / chart victoria-metrics-k8s-stack | 13.2.5 (dernière 13.2 ; 13.3.0 sortie) / 0.97.1 |
 | k6 (tests de charge) | 2.3.0 |
 

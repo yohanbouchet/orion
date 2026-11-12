@@ -46,6 +46,7 @@ run "three_restricted_namespaces" {
     condition = alltrue([
       for ns in concat(values(kubernetes_namespace_v1.env), [
         kubernetes_namespace_v1.monitoring, kubernetes_namespace_v1.openbao,
+        kubernetes_namespace_v1.headlamp,
       ]) :
       ns.metadata[0].labels["pod-security.kubernetes.io/enforce-version"]
       == "v1.37"
@@ -202,5 +203,35 @@ run "openbao_is_locked_down" {
   assert {
     condition     = tls_private_key.openbao_ca.algorithm == "ECDSA"
     error_message = "The OpenBao CA key must be ECDSA."
+  }
+}
+
+# Headlamp : lecture seule (rôle « view »), jamais cluster-admin, chart
+# figé, conteneur en lecture seule, aucune entrée réseau
+run "headlamp_is_read_only" {
+  command = plan
+
+  assert {
+    condition = (
+      kubernetes_namespace_v1.headlamp.metadata[0].labels["pod-security.kubernetes.io/enforce"]
+      == "restricted"
+      && helm_release.headlamp.version == "0.46.0"
+    )
+    error_message = "Headlamp must run in a restricted namespace with a pinned chart."
+  }
+  assert {
+    condition = (
+      kubernetes_cluster_role_binding_v1.headlamp_viewer.role_ref[0].name == "view"
+      && yamldecode(helm_release.headlamp.values[0]).clusterRoleBinding.create == false
+    )
+    error_message = "Headlamp must stay read-only: view role, never cluster-admin."
+  }
+  assert {
+    condition = (
+      yamldecode(helm_release.headlamp.values[0]).securityContext.readOnlyRootFilesystem == true
+      && yamldecode(helm_release.headlamp.values[0]).securityContext.allowPrivilegeEscalation == false
+      && length(kubernetes_network_policy_v1.headlamp_deny_ingress.spec[0].ingress) == 0
+    )
+    error_message = "Headlamp must keep a read-only root filesystem and refuse all ingress."
   }
 }
