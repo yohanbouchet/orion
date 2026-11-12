@@ -29,7 +29,10 @@ extraObjects:
           path: /actuator/prometheus
 
   # Machine hôte : node_exporter installé par Ansible, joignable
-  # seulement depuis le réseau du cluster (pare-feu ufw)
+  # seulement depuis le réseau du cluster (pare-feu ufw) ; adresse de la
+  # passerelle du réseau Docker de Minikube, fixé par « --subnet » au
+  # « minikube start » (README) : sans lui, Minikube peut en choisir un
+  # autre à la reconstruction (vu le 12/11 : 192.168.58 → 192.168.49)
   - apiVersion: operator.victoriametrics.com/v1beta1
     kind: VMStaticScrape
     metadata:
@@ -38,7 +41,7 @@ extraObjects:
     spec:
       jobName: node-exporter
       targetEndpoints:
-        - targets: ["192.168.58.1:9100"]
+        - targets: ["192.168.49.1:9100"]
           labels:
             instance: orion-host
 
@@ -373,8 +376,8 @@ extraObjects:
             - port: 53
               protocol: TCP
         # API de Kubernetes : adresse du Service (10.96.0.1:443) et du
-        # nœud derrière lui (192.168.58.2:8443), selon l'étape où kindnet
-        # applique la règle
+        # nœud derrière lui (192.168.49.2:8443, réseau fixé par
+        # « --subnet »), selon l'étape où kindnet applique la règle
         - to:
             - ipBlock:
                 cidr: 10.96.0.1/32
@@ -382,6 +385,6 @@ extraObjects:
             - port: 443
         - to:
             - ipBlock:
-                cidr: 192.168.58.2/32
+                cidr: 192.168.49.2/32
           ports:
             - port: 8443

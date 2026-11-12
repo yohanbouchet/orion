@@ -22,7 +22,7 @@ chart officiel `victoria-metrics-k8s-stack` **0.97.1** à version figée
       │      vlagent : lit /var/log/pods ───────────────┘ en lecture seule
       │
   API MicroCRM (port 8081, dev / staging / prod) ; kube-state-metrics ;
-  kubelet ; node_exporter de la machine (Ansible, 192.168.58.1:9100)
+  kubelet ; node_exporter de la machine (Ansible, 192.168.49.1:9100)
 ```
 
 ## Composants et licences

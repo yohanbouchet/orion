@@ -493,8 +493,11 @@ est faite par **Ansible**, après l'étape 1 :
 #    performance) ; Minikube ne redimensionne pas un cluster existant :
 #    agrandi à chaud avec « docker update --memory 10g --memory-swap 12g
 #    orion » + "Memory": 10240 dans ~/.minikube/profiles/orion/config.json
+#    Réseau fixé (--subnet) : la supervision vise ces adresses
+#    (infra/monitoring/extras.yaml) ; sans lui, Minikube peut en choisir
+#    un autre quand on recrée le cluster (constaté au PRA du 12/11)
 minikube start -p orion --driver=docker --cpus=4 --memory=10g \
-  --kubernetes-version=v1.37.0
+  --kubernetes-version=v1.37.0 --subnet=192.168.49.0/24
 
 # 2. Contrôleur des runners (ARC), version figée
 helm install arc --namespace arc-systems --create-namespace \
