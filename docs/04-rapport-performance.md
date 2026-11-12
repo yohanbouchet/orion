@@ -313,7 +313,7 @@ ces nombres ne s'additionnent pas.
 | Test d'intrusion ZAP | 3 règles en échec | **0 échec** ; 19 règles bloquantes, dont la bibliothèque JavaScript vulnérable (10003) et le contrôle d'intégrité (90003), bloquantes depuis le 08/11 |
 | Secrets dans le dépôt (gitleaks) | non contrôlé | contrôlé à chaque PR, aucun trouvé |
 | Secrets rangés dans GitHub | sans objet (aucun déploiement automatisé) | **0** depuis le 10/11 (3 jetons du cluster sans expiration et le jeton SonarQube jusque-là) : section 5.3 |
-| Sécurité des workflows (zizmor) | non contrôlée | **0 trouvaille** (10/11) : délai de 7 jours ajouté à Dependabot, 2 exceptions justifiées ; contrôle lancé sur le poste Ops, pas encore dans la CI (recommandation 25) |
+| Sécurité des workflows (zizmor) | non contrôlée | **0 trouvaille** (10/11) : délai de 7 jours ajouté à Dependabot, 2 exceptions justifiées ; dans la CI depuis le 12/11 avec actionlint (job `workflows`, recommandation 25) |
 | Compte de l'application dans la base | superutilisateur (réglage par défaut de l'image) | **compte limité** : lire et écrire des lignes, rien d'autre (v1.8.0) |
 
 **Plus aucune faille connue ni acceptée** : la mise à jour vers
@@ -936,7 +936,7 @@ ajoutées le 10/11, puis 26 à 30, ajoutées le 11/11 (relecture de
 cohérence), viennent ensuite, pour que les numéros cités dans les
 sections précédentes restent valables. Les trois priorités du moment
 sont rappelées dans la synthèse (section 1). La colonne « État » montre
-où en est chacune le 12/11 : 5 sont appliquées, 5 le sont en partie.
+où en est chacune le 12/11 : 7 sont appliquées, 5 le sont en partie.
 
 | # | Recommandation | Constat | Effort | Équipe | État au 11/11 |
 | --- | --- | --- | --- | --- | --- |
@@ -964,12 +964,12 @@ où en est chacune le 12/11 : 5 sont appliquées, 5 le sont en partie.
 | 22 | Tester aussi les 3 rôles Ansible liés au cluster (Minikube, images, metrics-server) : scénario Molecule chaque semaine sur une machine virtuelle avec Minikube | Molecule ne teste que les 5 rôles du poste (4.1) | moyen | Ops | À faire |
 | 23 | Déverrouiller OpenBao automatiquement (AWS KMS dans la cible cloud ; sur site : KMS d'un hébergeur européen, boîtier HSM ou second OpenBao) et passer à 3 serveurs | geste manuel chaque matin ; tant qu'il manque, la CI ne peut plus déployer (5.3) | moyen | Ops | À faire ; comparatif des solutions (avantages, inconvénients, niveau de coût) dans `infra/openbao/README.md` |
 | 24 | Décrire les réglages du dépôt GitHub (environnements, approbations, branches autorisées, variables) en OpenTofu (fournisseur `integrations/github`) | réglages effacés sans trace par la suppression des environnements le 10/11 (7.7) | faible | Ops | À faire |
-| 25 | Lancer zizmor et actionlint (sécurité et syntaxe des workflows) dans la CI | contrôles lancés seulement sur le poste Ops (5.1) | faible | Ops | À faire |
+| 25 | Lancer zizmor et actionlint (sécurité et syntaxe des workflows) dans la CI | contrôles lancés seulement sur le poste Ops (5.1) | faible | Ops | **Appliquée** (12/11) : job `workflows` (actionlint et zizmor, images figées par digest, contrôles en ligne de zizmor avec le jeton en lecture seule) |
 | 26 | Sauvegarder le coffre OpenBao chaque jour (instantané Raft planifié, jeton limité à cette action, copie hors site) et alerter 30 jours avant l'expiration de son certificat TLS (09/11/2027) | seule la base de prod est sauvegardée ; le renouvellement du certificat dépend d'un `tofu plan` que rien n'impose (8.2) | faible | Ops | **Appliquée** (11/11) : instantané chaque jour à 11 h 50 (`backup-openbao.sh`, jeton limité à l'instantané, copie hors site), alertes `OpenBaoBackupTooOld` et `OpenBaoCertExpiringSoon` |
 | 27 | Sécuriser la chaîne d'approvisionnement des images : déployer par empreinte plutôt que par étiquette, signer les images dans la CI (cosign, Sigstore) et publier leur SBOM, puis refuser dans le cluster toute image non signée ou hors GHCR (ValidatingAdmissionPolicy ou Kyverno) | une étiquette peut être réécrite sur le registre ; le cluster n'exige aucun registre de confiance (constat Trivy KSV-0125 du 09/11) | moyen | Ops | **Partielle** (12/11) : images signées à la publication (cosign, sans clé) avec leur SBOM signé, signature vérifiée avant chaque déploiement ; reste : déploiement par empreinte, politique d'admission |
 | 28 | Décrire le runner local (ARC) et SonarQube en OpenTofu, avec le reste du socle, et suivre le chart SonarQube (2026.5.1004 disponible, base sauvegardée avant la montée de version) | deux briques installées à la main, écarts non détectés (8.2) | faible | Ops | À faire ; le GitOps (recommandation 7) les couvrirait aussi |
 | 29 | Rejouer l'installation complète de zéro (`minikube delete`, puis le README), temps mesuré, écarts corrigés | la procédure d'installation est décrite, jamais rejouée d'un bloc : reproductibilité non prouvée | faible | Ops | À faire |
-| 30 | Analyser chaque jour les images en service (workflow planifié ou Trivy Operator), avec un ticket ouvert d'office | le 11/11, le front v1.9.0 en prod avait 2 failles hautes (libxslt), publiées après sa construction et trouvées à la main | faible | Ops | À faire |
+| 30 | Analyser chaque jour les images en service (workflow planifié ou Trivy Operator), avec un ticket ouvert d'office | le 11/11, le front v1.9.0 en prod avait 2 failles hautes (libxslt), publiées après sa construction et trouvées à la main | faible | Ops | **Appliquée** (12/11) : workflow `image-scan.yml`, chaque jour à 6 h 30, images de la version en production (dernier déploiement réussi), ticket « security » si faille haute ou critique |
 
 ## 9. Conclusion
 

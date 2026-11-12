@@ -1,0 +1,144 @@
+# Fichier  : .github/workflows/image-scan.yml
+# Rôle     : analyse chaque jour les images EN PRODUCTION (front, back)
+#            avec la base de failles du jour : une image saine à sa
+#            construction peut devenir vulnérable quand une faille est
+#            publiée ensuite (constat du 11/11 sur v1.9.0) ; ouvre un
+#            ticket s'il y a une faille haute ou critique (un seul ticket
+#            ouvert à la fois)
+# Utilise  : API de GitHub (dernier déploiement réussi de l'environnement
+#            production) ; Trivy, image figée par digest ; .trivyignore
+# Utilisé par : l'équipe Ops (ticket « security », e-mail de GitHub) ;
+#               recommandation 30 du rapport
+
+name: Image scan
+
+on:
+  # Chaque jour à 5 h 30 UTC (6 h 30 à Paris) : machine de GitHub, le
+  # poste Ops n'a pas besoin d'être allumé
+  schedule:
+    - cron: "30 5 * * *"
+  # Lancement à la main : Actions → Image scan → Run workflow
+  workflow_dispatch:
+
+# Aucun droit par défaut ; chaque job reçoit le strict nécessaire
+permissions: {}
+
+# Une seule analyse à la fois : jamais deux tickets pour la même faille
+concurrency:
+  group: image-scan
+  cancel-in-progress: false
+
+env:
+  TRIVY_IMAGE: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+
+jobs:
+  # 1. Analyse : lecture seule (code, déploiements)
+  scan:
+    name: Scan production images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # .trivyignore (failles acceptées et datées)
+      deployments: read # version actuellement en production
+    outputs:
+      tag: ${{ steps.prod.outputs.tag }}
+      vulnerable: ${{ steps.scan.outputs.vulnerable }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Dernier déploiement de production dont l'état le plus récent est
+      # « success » (GitHub passe les précédents à « inactive ») ; son
+      # commit donne l'étiquette de l'image (sha-xxxxxxx, même empreinte
+      # que la version vX.Y.Z)
+      - name: Find the production version
+        id: prod
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          api="repos/$GITHUB_REPOSITORY/deployments"
+          sha=""
+          for id_sha in $(gh api "$api?environment=production&per_page=30" \
+            --jq '.[] | "\(.id):\(.sha)"'); do
+            state="$(gh api "$api/${id_sha%%:*}/statuses?per_page=1" \
+              --jq '.[0].state // ""')"
+            if [ "$state" = "success" ]; then
+              sha="${id_sha#*:}"
+              break
+            fi
+          done
+          if [ -z "$sha" ]; then
+            echo "::error::no successful production deployment found"
+            exit 1
+          fi
+          echo "tag=sha-${sha::7}" >> "$GITHUB_OUTPUT"
+      # Failles hautes et critiques des 2 images (rapport JSON, puis
+      # tableau dans le résumé) ; une erreur de Trivy (image introuvable,
+      # base indisponible) fait échouer le job sans ouvrir de ticket
+      - name: Scan the images
+        id: scan
+        env:
+          TAG: ${{ steps.prod.outputs.tag }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy"
+          total=0
+          for component in front back; do
+            image="ghcr.io/$GITHUB_REPOSITORY_OWNER/orion-$component:$TAG"
+            docker run --rm --user "$(id -u):$(id -g)" \
+              -v "$PWD":/src:ro -w /src -v "$RUNNER_TEMP/trivy":/cache \
+              "$TRIVY_IMAGE" image --scanners vuln --cache-dir /cache \
+              --no-progress --quiet --severity HIGH,CRITICAL \
+              --format json --output "/cache/$component.json" "$image"
+            count="$(jq '[.Results[]?.Vulnerabilities[]?] | length' \
+              "$RUNNER_TEMP/trivy/$component.json")"
+            total=$((total + count))
+            {
+              echo "### $image: $count high or critical"
+              echo '```'
+              docker run --rm --user "$(id -u):$(id -g)" \
+                -v "$RUNNER_TEMP/trivy":/cache "$TRIVY_IMAGE" convert \
+                --scanners vuln --format table "/cache/$component.json"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+          if [ "$total" -gt 0 ]; then
+            echo "vulnerable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "vulnerable=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # 2. Ticket, seulement s'il y a une faille : droit d'écrire des
+  #    tickets, rien d'autre ; pas de doublon si un ticket est déjà ouvert
+  ticket:
+    name: Open a security ticket
+    needs: scan
+    if: needs.scan.outputs.vulnerable == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write # ouvrir le ticket « security »
+    steps:
+      - name: Open the ticket
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.scan.outputs.tag }}
+        run: |
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs"
+          run_url="$run_url/$GITHUB_RUN_ID"
+          title_prefix="[Ops] Failles dans les images en production"
+          open="$(gh issue list --state open --label security \
+            --search "\"$title_prefix\" in:title" --json number --jq 'length')"
+          if [ "$open" -gt 0 ]; then
+            echo "A ticket is already open: nothing created" \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          body="Analyse quotidienne : faille haute ou critique dans"
+          body="$body les images \`$TAG\` en production. Détail : $run_url."
+          body="$body Suite : corriger la dépendance ou l'image de base,"
+          body="$body publier une version et la déployer en prod"
+          body="$body (documentation CI/CD, section 6.4)."
+          gh issue create --label security --label team:ops \
+            --title "$title_prefix ($TAG)" --body "$body"

@@ -161,7 +161,7 @@ administrateurs) :
 
 - passage obligatoire par une PR : pas de poussée directe, ni de
   réécriture de l'historique, ni de suppression de `main` ;
-- **12 contrôles obligatoires** au vert (section 4.2), et PR **à jour
+- **13 contrôles obligatoires** au vert (section 4.2), et PR **à jour
   avec `main`** : le code testé est le code fusionné ;
 - toutes les discussions de la PR résolues ; fusion par commit de fusion
   (historique lisible, PR retrouvable) ;
@@ -222,7 +222,7 @@ vers `main`, chaque fusion sur `main`, et à la main (onglet Actions).
 
 | Étape | Jobs | Quand | Bloquant |
 | --- | --- | --- | --- |
-| Contrôles (en parallèle, machines jetables de GitHub) | `test-front`, `test-back`, `gitleaks`, `hadolint`, `shellcheck`, `script-tests`, `opentofu`, `ansible`, `trivy`, `images (front)`, `images (back)` ; les images attendent `test-back`, qui fournit le jar du back | chaque PR et chaque fusion | oui : contrôles obligatoires de `main` |
+| Contrôles (en parallèle, machines jetables de GitHub) | `test-front`, `test-back`, `gitleaks`, `hadolint`, `shellcheck`, `script-tests`, `opentofu`, `ansible`, `trivy`, `workflows`, `images (front)`, `images (back)` ; les images attendent `test-back`, qui fournit le jar du back | chaque PR et chaque fusion | oui : contrôles obligatoires de `main` |
 | Analyse de qualité (runner local) | `sonarqube`, après les deux jobs de tests (il lit leurs rapports de couverture) | chaque PR et chaque fusion ; sautée pour les PR de Dependabot (aucun secret, versions seulement) | oui |
 | Version et publication | `release`, `publish` | fusion sur `main`, si tout est vert | — |
 | Déploiement et tests en fonctionnement | `deploy-dev`, `deploy-staging`, `zap`, `load-test` | fusion sur `main` | oui : un échec arrête la chaîne avant la prod |
@@ -457,7 +457,7 @@ reste la dernière vérification.
 ```mermaid
 flowchart TB
     pr["PR vers main, ou fusion"] --> checks
-    checks["1. Sur chaque PR et chaque fusion :<br/>12 contrôles obligatoires en parallèle<br/>tests, qualité, sécurité,<br/>images (après test-back, qui fournit le jar),<br/>outillage (section 4.2)"]
+    checks["1. Sur chaque PR et chaque fusion :<br/>13 contrôles obligatoires en parallèle<br/>tests, qualité, sécurité,<br/>images (après test-back, qui fournit le jar),<br/>outillage (section 4.2)"]
     checks -->|"tout vert : PR fusionnable ;<br/>sur main, la chaîne continue"| rel
     subgraph liv["2. Après une fusion sur main : livraison"]
         direction LR
@@ -474,7 +474,7 @@ flowchart TB
     pre -.->|"échec"| notify
 ```
 
-*Description du schéma* : à chaque PR et à chaque fusion, 12 contrôles
+*Description du schéma* : à chaque PR et à chaque fusion, 13 contrôles
 tournent en parallèle (l'analyse SonarQube attend les tests, dont elle
 lit la couverture ; les images attendent `test-back`, qui leur fournit
 le jar testé du back). Sur une PR, ils décident si la fusion est permise.
@@ -688,6 +688,7 @@ Top 10 2025 (application) et OWASP Top 10 CI/CD Security Risks (chaîne).
 | **Trivy** 0.76.2 (`fs`) + **Dependabot** | SCA (dépendances) | failles connues des dépendances npm et Gradle, y compris l'outillage de développement ; mises à jour proposées chaque semaine, tout de suite pour une faille |
 | **Trivy** 0.76.2 (`image`) | Container scanning | failles du système et des bibliothèques de chaque image, avant sa publication |
 | **cosign** 3.1.4 (Sigstore) + SBOM CycloneDX (Trivy) | Signature des images | chaque image publiée est signée par son empreinte, sans clé (badge OIDC du job `publish`, trace dans le journal de transparence Rekor) ; sa liste de composants est attachée et signée ; le déploiement vérifie la signature (identité : `ci.yml` du dépôt, sur `main`) |
+| **actionlint** 1.7.12 + **zizmor** 1.32.0 | Sécurité des workflows | syntaxe et scripts des workflows ; injections, droits trop larges, actions non figées ou connues pour une faille (job `workflows`, chaque PR) |
 | **gitleaks** 8.30.1 + protection de GitHub | Secrets detection | mots de passe, jetons ou clés dans tout l'historique ; poussée bloquée par GitHub si un secret connu est détecté |
 | **OWASP ZAP** 2.17.0 | DAST (test d'intrusion) | en-têtes de sécurité, fuites d'information, injections ; passif à chaque déploiement de `staging`, actif à la demande |
 | Pod Security « restricted » | Contrôle d'admission Kubernetes | refuse tout pod root, privilégié ou avec des capacités |
@@ -764,11 +765,12 @@ le 10/11) avait 2 failles hautes dans libxslt, corrigées depuis par
 Alpine : relevées par un scan fait à la main, corrigées par la version
 suivante (image reconstruite).
 
-**Limite** : Trivy n'analyse une image qu'à sa construction ; une faille
-publiée ensuite dans une image déjà en prod n'est vue que si quelqu'un
-la rescanne. Évolution : scan planifié chaque jour des images en
-service (workflow `schedule`, ou Trivy Operator dans le cluster), avec
-un ticket ouvert d'office (rapport, recommandation 30).
+**Scan quotidien des images en service** (depuis le 12/11) : le
+workflow `image-scan.yml` analyse chaque jour à 6 h 30 les images de la
+version en production (dernier déploiement réussi), avec la base de
+failles du jour ; une faille haute ou critique ouvre un ticket
+« security » (un seul à la fois). Il répond au cas du 11/11 : une image
+saine à sa construction ne le reste pas (rapport, recommandation 30).
 
 ### 6.5 Plan de sécurité de la chaîne CI
 
@@ -872,8 +874,8 @@ Rollouts dans la cible cloud.
 
 ### 7.2 Pipeline de release
 
-1. **Fusion** d'une PR sur `main`, après ses 12 contrôles.
-2. Les 12 contrôles **repassent** sur `main`.
+1. **Fusion** d'une PR sur `main`, après ses 13 contrôles.
+2. Les 13 contrôles **repassent** sur `main`.
 3. **`release`** : semantic-release lit les messages de commit, calcule
    la version, crée l'étiquette `vX.Y.Z` et la release GitHub avec ses
    notes (aucun commit poussé sur `main`).
@@ -973,7 +975,7 @@ d'arrêt) et testé à chaque PR (bashunit, pytest).
 | `dora.py` | Python | calculer les indicateurs DORA | `scripts/` |
 | `deploy-sonarqube.sh` | Bash | installer SonarQube dans le cluster | `scripts/` |
 | `lib/common.sh` | Bash | journal et arrêts expliqués, communs aux scripts | `scripts/lib/` |
-| `ci.yml`, `deploy.yml`, `zap.yml`, `load-test.yml`, `dora.yml` | YAML (GitHub Actions) | pipeline, déploiement, tests, indicateurs | `.github/workflows/` |
+| `ci.yml`, `deploy.yml`, `zap.yml`, `load-test.yml`, `dora.yml`, `image-scan.yml` | YAML (GitHub Actions) | pipeline, déploiement, tests, indicateurs, scan quotidien des images en prod | `.github/workflows/` |
 
 ### 7.6 Stratégie de backup
 
