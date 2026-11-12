@@ -5,8 +5,8 @@
 | Projet | Démarche DevOps pour l'application MicroCRM |
 | Client | Orion (destinataire : Maria, CTO) |
 | Auteur | Yohan Bouchet, ingénieur DevOps |
-| Version | 1.1 (11/11 : coffre-fort OpenBao et accès courts de la CI, OpenTofu, Molecule, DORA dans Grafana, dépendance aux services extérieurs, essai de la cible AWS avec floci ; chiffres du 10/11) |
-| Date | 07/11/2026, mis à jour le 11/11/2026 (configuration vérifiée ce jour) |
+| Version | 1.2 (12/11 : images signées, tests de bout en bout, contrôle des workflows, analyse quotidienne des images, sauvegardes du coffre et de SonarQube, plan de reprise testé ; 1.1 du 11/11 : OpenBao, OpenTofu, Molecule, DORA dans Grafana ; indicateurs de livraison du 10/11) |
+| Date | 07/11/2026, mis à jour le 12/11/2026 (configuration vérifiée ce jour) |
 | Dépôt | [github.com/yohanbouchet/orion](https://github.com/yohanbouchet/orion) (public) |
 
 ## Sommaire
@@ -35,7 +35,7 @@ d'intégration et de déploiement continus (**CI/CD**) mise en place pour
 elle : comment le code est testé, analysé, versionné, déployé, surveillé,
 et comment revenir en arrière.
 
-Il décrit la configuration **réelle**, vérifiée le 11/11/2026, et renvoie
+Il décrit la configuration **réelle**, vérifiée le 12/11/2026, et renvoie
 aux fichiers du dépôt pour le détail. Rédigé avec l'assistance de l'IA
 (Claude, Anthropic) à partir de la configuration vérifiée, puis relu et
 validé par l'ingénieur DevOps. Il suit le modèle de documentation
@@ -47,6 +47,7 @@ et 6) et le **plan de CD** (sections 5 et 7). Documents liés :
 | [1. Veille, audit et recommandations](01-veille-audit-recommandations.md) | état de départ, choix des outils |
 | [2. Normalisation et plan CI](02-normalisation-plan-ci.md) | règles communes aux deux équipes |
 | [4. Rapport de performance](04-rapport-performance.md) | résultats mesurés, gains, recommandations |
+| [5. Plan de reprise d'activité](05-plan-de-reprise.md) | reconstruire toute la plateforme après la perte du cluster (testé le 12/11) |
 | [README du dépôt](../README.md) | instructions d'installation et de déploiement |
 
 **Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
@@ -111,7 +112,7 @@ de performance (document 4) :
 | 1. Aucune faille connue livrée sans décision | 95 failles dans l'image back, dont 8 critiques | 0 critique ou haute corrigeable dans une image publiée | **0**, toutes gravités confondues (images v1.9.0, Trivy 0.76.2) |
 | 2. Qualité contrôlée à chaque modification | Quality Gate sans condition, couverture non mesurée | Quality Gate bloquant ; nouveau code couvert à 80 % | **3 conditions bloquantes** ; couverture 82,9 % |
 | 3. Livrer plus vite et de façon traçable | déploiement manuel, non tracé | chaque déploiement lié à une version, une image et un commit | **5,1 mises en prod par semaine**, 2,9 h entre un commit et la prod (médiane), 0 % d'échec |
-| 4. Revenir en arrière sans coupure | aucun retour arrière ni sauvegarde | retour arrière automatique ; sauvegarde restaurable | **testés** : retour arrière sans coupure ; restauration vérifiée chaque semaine |
+| 4. Revenir en arrière sans coupure | aucun retour arrière ni sauvegarde | retour arrière automatique ; sauvegarde restaurable | **testés** : retour arrière sans coupure ; restauration vérifiée chaque semaine ; plateforme entière reconstruite en 48 min (exercice du 12/11) |
 | 5. Voir et être prévenu | aucune supervision | disponibilité, performance et sécurité suivies | **4 tableaux de bord, 12 alertes**, indicateurs DORA chaque jour ouvré, dans Grafana |
 
 ## 3. Workflow de branches
@@ -351,10 +352,11 @@ flowchart TB
             arc["arc-runners<br/>runner local de la CI"]
             bao["openbao<br/>coffre-fort, audit"]
             sq["sonarqube<br/>SonarQube + PostgreSQL"]
+            hl["headlamp<br/>interface web,<br/>lecture seule"]
             envs["dev, staging, prod<br/>front → API → PostgreSQL"]
             mon["monitoring<br/>métriques, journaux,<br/>Grafana, alertes"]
         end
-        bk[("Sauvegardes de la base<br/>+ copie hors site chiffrée")]
+        bk[("Sauvegardes : base de prod,<br/>coffre, base de SonarQube<br/>+ copie hors site chiffrée")]
     end
     repo -->|"jobs d'analyse<br/>et de déploiement"| arc
     arc -->|"badge OIDC du job"| bao
@@ -363,7 +365,9 @@ flowchart TB
     arc -->|"Helm"| envs
     ghcr -->|"images"| envs
     envs -->|"métriques, journaux"| mon
-    envs -->|"pg_dump"| bk
+    envs -->|"pg_dump (prod)"| bk
+    bao -->|"instantané"| bk
+    sq -->|"pg_dump"| bk
     mon -->|"e-mails d'alerte"| ops["Équipe Ops"]
 ```
 
@@ -375,8 +379,9 @@ chaque job présente à OpenBao le badge OIDC que GitHub a signé pour lui
 et reçoit un jeton de 15 min (aucun secret n'est rangé dans GitHub) ;
 il installe les images dans `dev`, `staging` et `prod` avec Helm. La
 supervision lit métriques et journaux et envoie les alertes par e-mail ;
-la base de prod est sauvegardée sur le poste, avec une copie hors site
-chiffrée.
+la base de prod, le coffre OpenBao et la base de SonarQube sont
+sauvegardés chaque jour sur le poste, avec une copie hors site chiffrée.
+Headlamp montre le cluster à l'Ops dans un navigateur, en lecture seule.
 
 **Cible proposée sur AWS (non déployée)**
 
@@ -515,13 +520,14 @@ infra/
     tests/            9 tests (tofu test, faux fournisseurs)
   helm/microcrm/    chart de l'application
     templates/        front, API (+ autoscaling), PostgreSQL
-                      (StatefulSet) et compte limité de l'appli (script
+                      (StatefulSet) et compte limité de l'API (script
                       SQL), pare-feu réseau (NetworkPolicy)
     values.yaml       réglages communs ; values-<env>.yaml par environnement
   ansible/          poste Ops : site.yml + 8 rôles (outils, Docker,
                     démarrage de Minikube, images, metrics-server,
                     sauvegardes, node_exporter, durcissement)
   monitoring/       réglages, alertes et tableaux de bord de la supervision
+  headlamp/         réglages de l'interface web du cluster (lecture seule)
   openbao/          réglages et exploitation du coffre-fort OpenBao
     config/           identité de la CI (OpenTofu, état à part) : badges
                       OIDC de GitHub, jetons courts, jeton SonarQube,
@@ -591,7 +597,8 @@ validé par la direction.
   démarré automatiquement avec le poste (service systemd). Namespaces
   séparés par usage : application (`dev`, `staging`, `prod`), CI
   (`arc-systems`, `arc-runners`), qualité (`sonarqube`), supervision
-  (`monitoring`, `monitoring-collector`). Accès protégés par des comptes
+  (`monitoring`, `monitoring-collector`), secrets de la CI (`openbao`),
+  interface web en lecture seule (`headlamp`). Accès protégés par des comptes
   aux droits limités (section 6.5).
 - **Déploiement** : `scripts/deploy.sh` lance `helm upgrade --install`
   avec les réglages de l'environnement, attend que les pods soient prêts,
@@ -621,7 +628,9 @@ validé par la direction.
 
 - **Fiabilité** : front et API en 2 répliques minimum en prod ; retour
   arrière automatique ; sauvegarde quotidienne vérifiée chaque semaine ;
-  alerte si la prod n'a plus de pod prêt. **Point de défaillance unique
+  alerte si la prod n'a plus de pod prêt ; reprise après la perte du
+  cluster testée le 12/11 (48 min,
+  [plan de reprise](05-plan-de-reprise.md)). **Point de défaillance unique
   assumé** : le poste Ops (cluster, CI et supervision sur une machine),
   levé par la cible AWS.
 - **Réseau** : aucun service exposé hors du poste (accès par tunnel
@@ -897,7 +906,8 @@ Rollouts dans la cible cloud.
    release ; ticket et e-mail si une étape échoue.
 
 Durées mesurées : contrôles d'une PR 2,2 min (médiane du 07 au
-10/11) ; de la fusion à `staging` testé 6,7 min ; production 0,8 min
+10/11, 12 contrôles), 3,2 à 3,4 min depuis le 12/11 (14 contrôles, dont
+les tests de bout en bout) ; de la fusion à `staging` testé 6,7 min ; production 0,8 min
 après l'approbation (v1.9.1, 11/11).
 
 ### 7.3 Système de versioning
@@ -931,7 +941,7 @@ base), donc une nouvelle version ; `build(deps)` et `build(deps-dev)`
 pour les outils et le développement, sans version.
 
 Plusieurs commits entre deux versions : le type le plus fort l'emporte.
-25 versions publiées du 31/10 au 09/11 (v1.0.0 à v1.9.0) ; chaque image
+26 versions publiées du 31/10 au 11/11 (v1.0.0 à v1.9.1) ; chaque image
 porte sa version et son commit, et chaque déploiement en prod remonte à
 une PR et à son ticket. Depuis le 09/11, le chart est installé avec le
 numéro de la version déployée : `helm history` l'affiche dans la colonne
@@ -971,6 +981,9 @@ d'arrêt) et testé à chaque PR (bashunit, pytest).
 | `run-tests.sh` | Bash | lancer tests et couverture, comme la CI | `scripts/` |
 | `deploy.sh` | Bash | déployer, vérifier (test de fumée), revenir en arrière | `scripts/` |
 | `backup.sh` | Bash | sauvegarder, vérifier, restaurer la base (entière ou une table) | `scripts/` |
+| `backup-openbao.sh` | Bash | instantané quotidien du coffre OpenBao | `scripts/` |
+| `backup-sonarqube.sh` | Bash | sauvegarder, vérifier, restaurer la base de SonarQube | `scripts/` |
+| `e2e.sh` | Bash | tests de bout en bout (Playwright) sur les images construites | `scripts/` |
 | `zap-scan.sh` | Bash | test d'intrusion ZAP de `staging` | `scripts/` |
 | `load-test.sh` | Bash | tests de charge k6 (6 profils) | `scripts/` |
 | `notify.py` | Python | ticket et e-mail quand la CI échoue sur `main` | `scripts/` |
@@ -1002,6 +1015,9 @@ SonarQube. **Limites** : sauvegarde complète quotidienne, sans
 restauration à un instant donné ; évolution : journaux de transactions
 (WAL), CloudNativePG ou RDS (cible AWS). Restauration du coffre :
 [README d'OpenBao](../infra/openbao/README.md#restaurer).
+
+**Après la perte de tout le cluster**, ces sauvegardes sont restaurées
+par le plan de reprise (section 7.8).
 
 ### 7.7 Monitoring et alerting
 
@@ -1056,6 +1072,33 @@ section 3.1). Détail, captures et analyse :
 [rapport de performance](04-rapport-performance.md) (sections 3, 5.2
 et 6).
 
+### 7.8 Plan de reprise d'activité
+
+Le retour arrière (7.4) répond à une version défectueuse, la
+restauration d'une sauvegarde (7.6) à des données abîmées. La **perte
+de tout le cluster** a sa propre procédure, pas à pas : le
+[plan de reprise d'activité](05-plan-de-reprise.md).
+
+| Étape | Outil | Ce qui revient |
+| --- | --- | --- |
+| Cluster | `minikube start` (réseau fixé) | un cluster vide |
+| Poste et images du projet | Ansible | images durcies, metrics-server, tâches planifiées |
+| Socle | OpenTofu | namespaces, comptes de déploiement, supervision, OpenBao, Headlamp |
+| Coffre OpenBao | instantané restauré, clés d'origine | identité de la CI, jeton SonarQube |
+| Runner local, SonarQube | Helm, `deploy-sonarqube.sh`, `backup-sonarqube.sh restore` | la CI et l'historique de la qualité |
+| Production | `deploy.sh`, `backup.sh restore` | la dernière version et ses données |
+| Preuve | CI relancée sur `main` | `dev` et `staging` redéployés, ZAP et k6 verts |
+
+**Testé le 12/11** : cluster supprimé pour de vrai, plateforme
+reconstruite en **48 min** (temps de reprise mesuré, RTO), données
+restaurées ; 4 écarts trouvés et corrigés dans la procédure (rapport,
+section 7.9). **Limites** : procédure manuelle (elle enchaîne des
+outils automatisés) ; aucune alerte pendant la perte du cluster, la
+supervision étant dans le cluster ; historique des métriques et des
+journaux non sauvegardé. Évolutions : GitOps, déverrouillage
+automatique du coffre, surveillance externe (rapport, recommandations
+7, 23 et 11).
+
 ## 8. Annexes
 
 ### Annexe A. Glossaire
@@ -1072,6 +1115,7 @@ et 6).
 | SemVer | Numérotation MAJEUR.MINEUR.CORRECTIF des versions |
 | HPA | *Horizontal Pod Autoscaler* : ajoute ou retire des pods selon la charge |
 | RPO / RTO | Perte de données maximale acceptable / temps maximal pour restaurer |
+| PRA | Plan de reprise d'activité : procédure qui remet le service en route après un sinistre |
 | DORA | Programme de recherche *DevOps Research and Assessment* et ses indicateurs de livraison |
 | p95 | Temps de réponse sous lequel se trouvent 95 % des requêtes |
 | OIDC | Protocole d'identité qui permet à la CI d'obtenir des jetons de courte durée, sans secret stocké |
@@ -1087,5 +1131,6 @@ et 6).
 | Ansible | [`infra/ansible/README.md`](../infra/ansible/README.md) |
 | Supervision, alertes, premiers gestes | [`infra/monitoring/README.md`](../infra/monitoring/README.md) |
 | Coffre-fort OpenBao (initialisation, déverrouillage) | [`infra/openbao/README.md`](../infra/openbao/README.md) |
+| Reprise après la perte du cluster | [plan de reprise d'activité](05-plan-de-reprise.md) |
 | Scripts | [`scripts/README.md`](../scripts/README.md) |
 | Exceptions de sécurité | [`.trivyignore`](../.trivyignore), [`infra/zap/rules.tsv`](../infra/zap/rules.tsv) |

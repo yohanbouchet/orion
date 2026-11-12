@@ -365,7 +365,7 @@ personnes de test restées après un test interrompu ou saturé.
 
 | Profil ([types de tests de k6](https://grafana.com/docs/k6/latest/testing-guides/test-types/)) | Charge | Durée | Question | Lancement |
 |---|---|---|---|---|
-| `smoke` (fumée) | 1 VU | 30 s | le script et l'appli fonctionnent ? | **CI, après ZAP ; bloque la prod** |
+| `smoke` (fumée) | 1 VU | 30 s | le script et l'application fonctionnent ? | **CI, après ZAP ; bloque la prod** |
 | `average` (charge moyenne) | 20 VUs | 5 min | comportement normal ? | à la main |
 | `stress` | 60 VUs (3 × la moyenne) | 5 min | au-delà du normal ? | à la main |
 | `spike` (pic) | 0 → 100 VUs en 10 s | 1 min | arrivée brutale ? | à la main |
@@ -421,7 +421,7 @@ de la CI) les ressources de ce qu'il mesure.
 prend du processeur : les chiffres servent à **comparer** (avant/après),
 pas à annoncer une capacité absolue ; le point de rupture est plafonné
 à ce que le poste supporte (à 200 parcours/s, c'est le poste qui a
-cédé, pas l'appli) ; la charge « normale » de 20
+cédé, pas l'application) ; la charge « normale » de 20
 utilisateurs et la part d'écritures (1 parcours sur 10) sont des
 hypothèses, l'énoncé ne donnant aucun chiffre de fréquentation.
 
@@ -436,7 +436,7 @@ hypothèses, l'énoncé ne donnant aucun chiffre de fréquentation.
 | Scénario absent | 1 | `infra/k6/microcrm.js` |
 | Un Job `k6` tourne déjà | 1 | attendre sa fin (`kubectl -n staging get job k6`) |
 | Job de CI en cours (lancement depuis le poste) | 1 | attendre la fin du pipeline, ou passer par Actions → Load test |
-| Seuil dépassé | 1 | lire le résumé ; corriger l'appli ou ses ressources |
+| Seuil dépassé | 1 | lire le résumé ; corriger l'application ou ses ressources |
 | Job pas fini à temps | 1 | `kubectl -n staging describe job k6` |
 
 ## backup.sh
@@ -640,8 +640,13 @@ scripts/backup-sonarqube.sh restore ~/backups/sonarqube/<fichier>.dump
 scripts/deploy-sonarqube.sh   # SonarQube redémarre, index reconstruit
 ```
 
-Après une reconstruction du cluster (base vide), même ordre : la base
-est restaurée avant le 1er démarrage de SonarQube. Le mot de passe de
+Après une reconstruction du cluster : `deploy-sonarqube.sh` d'abord
+(il installe la base, vide, et SonarQube), puis les trois commandes
+ci-dessus. Pendant la reconstruction de l'index, SonarQube peut
+redémarrer une fois ; attendre l'état `UP` avant de relancer la CI
+(joué le 12/11 :
+[plan de reprise](../docs/05-plan-de-reprise.md#étape-7-sonarqube-base-restaurée)).
+Le mot de passe de
 la base est un secret Kubernetes, pas une donnée de la sauvegarde : un
 nouveau secret convient. Les comptes, le mot de passe administrateur et
 le jeton de la CI rangé dans OpenBao, eux, reviennent avec la base.
