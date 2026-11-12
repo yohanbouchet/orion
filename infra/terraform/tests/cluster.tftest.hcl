@@ -133,6 +133,13 @@ run "monitoring_namespaces_security" {
     )
     error_message = "The collector namespace must warn about restricted."
   }
+  assert {
+    condition = (
+      kubernetes_namespace_v1.monitoring_collector.metadata[0].labels["pod-security.kubernetes.io/warn-version"]
+      == var.pod_security_version
+    )
+    error_message = "The collector warning must use the pinned Pod Security version."
+  }
 }
 
 # Chart figé à une version précise ; un tableau de bord par fichier JSON

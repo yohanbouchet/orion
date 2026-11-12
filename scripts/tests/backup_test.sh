@@ -167,6 +167,19 @@ function test_full_restore_starts_with_a_safety_backup() {
     "$(calls)"
 }
 
+# Défaut trouvé à la relecture du 12/11 : avec KEEP sauvegardes déjà
+# présentes, la sauvegarde de sécurité faisait tourner la rotation, qui
+# supprimait la plus ancienne... celle qu'on voulait restaurer
+function test_restoring_the_oldest_backup_does_not_delete_it() {
+  make_backup_file microcrm-dev-20260101T000000Z.dump
+  make_backup_file microcrm-dev-20260102T000000Z.dump
+  KEEP=2 run_backup restore dev \
+    "$BACKUP_DIR/dev/microcrm-dev-20260101T000000Z.dump" >/dev/null
+  assert_successful_code
+  assert_file_exists "$BACKUP_DIR/dev/microcrm-dev-20260101T000000Z.dump"
+  assert_contains "--clean --if-exists" "$(calls)"
+}
+
 function test_table_restore_only_adds_missing_rows() {
   make_backup_file microcrm-dev-20260101T000000Z.dump
   run_backup restore dev \

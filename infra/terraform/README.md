@@ -49,7 +49,7 @@ besoin :
 | Lire `pods`, `pods/log`, `events`, `persistentvolumeclaims`, `replicasets` | Attente des pods (`helm --wait`), diagnostic |
 | Créer `pods/exec` | Test de fumée de `deploy.sh` |
 | Lire **son** namespace (rôle de cluster limité à ce seul nom) | `deploy.sh` vérifie le niveau « restricted » |
-| Gérer `jobs` (**`staging` seulement**) | Test d'intrusion ZAP (`scripts/zap-scan.sh`) |
+| Gérer `jobs` (**`staging` seulement**) | Test d'intrusion ZAP (`scripts/zap-scan.sh`) et test de charge k6 (`scripts/load-test.sh`) |
 
 Il ne peut pas : agir dans un autre namespace, créer des rôles ou des
 comptes, lire les autres namespaces. Aucun joker `*`, droit `jobs`
@@ -151,10 +151,11 @@ tofu test     # 9 tests, faux fournisseurs : aucun cluster nécessaire
 | `deployer_rights_stay_in_their_namespace` | aucun jeton monté dans un pod ; aucun joker `*` ; lecture de son seul namespace |
 | `unknown_environment_is_refused` | un environnement inconnu est refusé par la validation |
 | `unpinned_pod_security_is_refused` | une version de règles Pod Security non figée (`latest`) est refusée |
-| `monitoring_namespaces_security` | `monitoring` en « restricted » ; le namespace du collecteur avertit de tout écart à « restricted » |
-| `monitoring_stack_is_pinned` | chart de supervision à version figée ; un ConfigMap par tableau de bord (3) |
+| `monitoring_namespaces_security` | `monitoring` en « restricted » ; le namespace du collecteur avertit de tout écart à « restricted », à la version figée |
+| `monitoring_stack_is_pinned` | chart de supervision à version figée ; un ConfigMap par tableau de bord (4) |
 | `non_gmail_alert_address_is_refused` | une adresse d'alerte non Gmail est refusée |
 | `openbao_is_locked_down` | namespace `openbao` en « restricted » ; chart figé (0.30.7) ; TLS gardé, injecteur désactivé, règle réseau, système de fichiers en lecture seule ; journal d'audit déclaré ; OpenBao ne peut créer que des jetons des comptes `deployer` ; clé de l'autorité en ECDSA |
+| `headlamp_is_read_only` | namespace `headlamp` en « restricted », chart figé ; rôle `view` seulement, jamais `cluster-admin` ; système de fichiers en lecture seule, aucune entrée réseau |
 
 Le job `opentofu` de la CI lance `tofu fmt -check`, `tofu validate` et
 ces tests à chaque PR. Les fournisseurs y sont gardés en cache tant que
@@ -223,6 +224,6 @@ Le dossier garde son nom (`infra/terraform`, état dans
 |---|---|
 | Un `deployer` peut lire les Secrets de son namespace, dont le mot de passe de la base (Helm range ses versions dans des Secrets) | Inhérent à Helm ; à compenser par un mot de passe propre à chaque environnement (déjà le cas) et la rotation |
 | État local sur une seule machine, sans verrou contre deux `apply` simultanés | État distant chiffré et verrouillé (par exemple S3 avec verrou, dans la cible cloud) |
-| Le certificat d'OpenBao (valable jusqu'au 09/11/2027) n'est renouvelé que si quelqu'un lance `tofu plan` ; aucune alerte avant l'échéance | Alerte de la supervision 30 jours avant, ou cert-manager |
+| Le certificat d'OpenBao (valable jusqu'au 09/11/2027) n'est renouvelé que si quelqu'un lance `tofu apply` (l'alerte `OpenBaoCertExpiringSoon` prévient 30 jours avant, depuis le 12/11) | Renouvellement automatique (cert-manager) |
 | Deux briques hors du socle : le runner local (ARC) et SonarQube sont installés à la main (README du dépôt) | Les décrire ici (`helm_release`), ou GitOps |
 | Pas de module : deux dossiers de quelques fichiers, lus tels quels | Modules (`terraform-aws-modules` : réseau, EKS) dans la cible AWS, où le code se répète |

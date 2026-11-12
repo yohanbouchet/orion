@@ -6,8 +6,8 @@
 #            récents et écrit la métrique de la dernière réussite ; écrit
 #            aussi la date d'expiration du certificat TLS du coffre
 # Utilise  : scripts/lib/common.sh ; kubectl, sha256sum, tar, openssl,
-#            date ; bao (dans
-#            le pod) ; jeton de sauvegarde (règle openbao-backup,
+#            date ; bao (dans le pod) ; jeton de sauvegarde (règle
+#            openbao-backup,
 #            infra/openbao/config/backup.tf)
 # Utilisé par : tâche planifiée installée par Ansible (rôle backup) ;
 #               l'Ops, avant une opération risquée ; recommandation 26

@@ -173,6 +173,10 @@ restore() {
   [[ "${replicas:-0}" == "0" ]] ||
     die "SonarQube is running;" \
       "fix: kubectl -n $NAMESPACE scale $APP --replicas=0"
+  # La sauvegarde de sécurité ne doit pas faire supprimer par la rotation
+  # le fichier qu'on restaure (s'il est le plus ancien des KEEP gardés) :
+  # une de plus est gardée, le temps de cette restauration
+  KEEP=$((KEEP + 1))
   log INFO "safety backup of the current state first"
   backup
   log INFO "restoring the whole database from $(basename "$file")"

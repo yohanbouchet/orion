@@ -4,7 +4,7 @@
 #            (VictoriaMetrics), journaux (VictoriaLogs + collecteur
 #            vlagent), alertes (vmalert + Alertmanager), Grafana
 # Utilise  : Secret créé par l'Ops (mot de passe SMTP) ;
-#            ${ops_email} : adresse donnée par Terraform (variable
+#            ${ops_email} : adresse donnée par OpenTofu (variable
 #            ops_email, hors du dépôt : donnée personnelle)
 # Utilisé par : infra/terraform/monitoring.tf (helm_release) ; ticket #83
 
@@ -161,7 +161,7 @@ grafana:
     # 13.3.0 (27/10) a plus de failles hautes (Trivy : 39 contre 35)
     tag: 13.2.5-distroless
   # Conteneur qui charge les tableaux de bord (ConfigMaps du namespace
-  # étiquetés grafana_dashboard=1, créés par Terraform) : 2.14.3 (Trivy,
+  # étiquetés grafana_dashboard=1, créés par OpenTofu) : 2.14.3 (Trivy,
   # 04/11 : 0 critique / 5 hautes, contre 1 / 14 pour la 2.11.2 du chart)
   sidecar:
     image:

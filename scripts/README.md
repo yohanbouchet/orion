@@ -199,7 +199,7 @@ standard seule. **Sécurité** : lecture seule (`contents`, `deployments`,
 **Codes** : 0 réussi ; 1 appel à l'API GitHub en échec ; 2 `DORA_DAYS`
 invalide.
 
-**Limites** (approximations assumées, à dire à l'oral) :
+**Limites** (approximations assumées) :
 
 - historique court : déploiements en prod depuis le 03/11/2026 ; la
   fréquence est rapportée à toute la période (la 1re date est affichée) ;
@@ -472,7 +472,9 @@ scripts/backup.sh restore dev <fichier> --table person
   dans une base temporaire `microcrm_verify`, ses lignes sont comptées,
   puis la base est supprimée. La vraie base n'est pas touchée ;
 - **restore** : contrôles d'abord (nom de table, clé primaire, empreinte
-  du fichier), puis **sauvegarde de sécurité** de l'état actuel, puis :
+  du fichier), puis **sauvegarde de sécurité** de l'état actuel (une
+  sauvegarde de plus est alors gardée : la rotation ne supprime jamais
+  le fichier en cours de restauration), puis :
   - toute la base : `pg_restore --clean --single-transaction`, tout ou
     rien. Les droits du compte limité de l'application font partie de la
     sauvegarde ; une sauvegarde qui ne les contient pas (faite avant ce
@@ -800,6 +802,7 @@ docker run --rm -v "$PWD":/src:ro -w /src koalaman/shellcheck:v0.11.0 \
 | `tests/run_tests_test.sh` | bashunit | usage, dépendances absentes, Vitest lancé une fois sans navigateur, tests rouges, Gradle lancé, rapport absent |
 | `tests/backup_test.sh` | bashunit | usage, fichier privé (600/700) et empreinte, rotation, `pg_dump` en échec sans fichier partiel, `verify` (base temporaire), fichier abîmé refusé, sauvegarde de sécurité avant restauration, table : lignes absentes seulement, table sans clé refusée, nom de table piégé ; métrique de supervision écrite après une sauvegarde réussie (fichier en 640), aucune après un échec |
 | `tests/backup_openbao_test.sh` | bashunit | usage, jeton absent ou lisible par d'autres, coffre scellé, instantané privé (600/700) avec empreinte, jeton passé par l'entrée standard et jamais en argument, jeton prolongé, métrique écrite (640), échec sans fichier ni métrique, copie abîmée ou archive à l'empreinte fausse refusées, rotation, fichier du pod toujours effacé |
+| `tests/backup_sonarqube_test.sh` | bashunit | usage, sauvegarde privée (600) relue dans le pod, métrique écrite (640), `pg_dump` en échec sans fichier ni métrique, rotation, `verify` (base temporaire créée puis supprimée), fichier abîmé refusé, restauration refusée tant que SonarQube tourne, ordre de la restauration (sauvegarde de sécurité, base, puis disque de l'index supprimé) |
 | `tests/e2e_test.sh` | bashunit | usage, pile démarrée avec attente des sondes puis parcours lancés, images et mot de passe aléatoire transmis à compose, tout supprimé après un succès ou un échec, pile qui ne démarre pas (parcours non lancés, journaux gardés), parcours en échec (code 1), mot de passe jamais dans une commande |
 | `tests/deploy_test.sh` | bashunit | usage, étiquette piégée, namespace absent ou non « restricted », Secret créé par un tube ou conservé, lint et options de Helm, chart emballé avec la version déployée (archive effacée ensuite) ou installé tel quel sans étiquette, échec de l'emballage ou de Helm, test de fumée raté → retour arrière, `rollback` |
 | `tests/load_test_test.sh` | bashunit | usage, profil inconnu, prod refusée, `PUSH_METRICS` invalide, scénario absent, fumée dans `staging` contre le front (durée limitée), envoi des mesures activable, pod sans privilège sur image figée, résumé gardé, seuil dépassé (code 1), point de rupture atteint (succès) |

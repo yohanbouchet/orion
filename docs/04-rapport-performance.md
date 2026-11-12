@@ -257,7 +257,7 @@ plus rapide qu'au départ (4,67 min), avec 3,5 fois plus de contrôles.
 | --- | --- | --- | --- |
 | Tests du back (JUnit) | 2 | 6 (dont l'intégration avec la base) | chaque PR |
 | Tests du front | 8 (Karma) | 16 (Vitest, depuis le 08/11) | chaque PR |
-| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 104 + 30 | chaque PR |
+| Tests des scripts d'exploitation (bashunit, pytest) | 0 | 106 + 30 | chaque PR |
 | Tests de bout en bout (Playwright, vrai navigateur) | 0 | 3 parcours : accueil, création d'une organisation, d'une personne rattachée (depuis le 12/11) | chaque PR, sur les images construites |
 | Tests de l'infrastructure (OpenTofu) | 0 | 16 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
 | Test du poste Ops (Ansible, Molecule) | 0 | 5 rôles appliqués sur une machine jetable, rejoués sans aucun changement (idempotence), puis 6 contrôles (outils, sauvegardes planifiées, services, métriques, pare-feu, journaux Docker) | chaque PR (depuis le 10/11) |
@@ -909,6 +909,13 @@ indicateurs DORA. Heures de Paris.
   (la base de SonarQube) ; invisible sur la base de prod, trop
   petite (7 Ko). Corrigé dans les deux scripts de sauvegarde (PR #155)
   et couvert par leurs tests.
+- **Défaut trouvé à la relecture du code, le soir même** : avant de
+  restaurer, les scripts font une sauvegarde de sécurité ; si 7
+  sauvegardes existaient déjà et qu'on restaurait la plus ancienne, la
+  rotation la supprimait juste avant de la lire. La base restait
+  intacte, mais la sauvegarde voulue était perdue. Corrigé (une
+  sauvegarde de plus est gardée pendant une restauration) et couvert
+  par 2 nouveaux tests, qui échouaient avant la correction.
 - **Ce que l'exercice a confirmé** : le runner local et SonarQube
   s'installent encore à la main (recommandation 28) ; pendant la perte
   du cluster, **aucune alerte ne part**, puisque la supervision est

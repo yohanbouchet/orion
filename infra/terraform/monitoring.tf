@@ -32,9 +32,11 @@ resource "kubernetes_namespace_v1" "monitoring_collector" {
     name = "monitoring-collector"
     labels = {
       "pod-security.kubernetes.io/enforce" = "privileged"
-      # Avertit de tout écart à « restricted » (message dans kubectl, Helm)
+      # Avertit de tout écart à « restricted » (message dans kubectl,
+      # Helm), à la même version figée que les autres namespaces (jamais
+      # « latest »)
       "pod-security.kubernetes.io/warn"         = "restricted"
-      "pod-security.kubernetes.io/warn-version" = "latest"
+      "pod-security.kubernetes.io/warn-version" = var.pod_security_version
       "app.kubernetes.io/part-of"               = "monitoring"
       "app.kubernetes.io/managed-by"            = "opentofu"
     }

@@ -1,8 +1,8 @@
 # Fichier  : infra/terraform/variables.tf
 # Rôle     : réglages du socle du cluster, avec leurs valeurs par défaut
 # Utilise  : rien
-# Utilisé par : providers.tf, main.tf, rbac.tf, monitoring.tf, openbao.tf ;
-#               tests/
+# Utilisé par : providers.tf, main.tf, rbac.tf, monitoring.tf, openbao.tf,
+#               headlamp.tf ; tests/
 
 variable "kubeconfig_path" {
   description = "Path of the kubeconfig file used to reach the cluster"
