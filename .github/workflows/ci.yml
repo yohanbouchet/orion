@@ -327,7 +327,9 @@ jobs:
           -no-color
       # Réglages lus dans .github/zizmor.yml ; le jeton du job (lecture
       # seule) active les contrôles en ligne : actions connues pour une
-      # faille, empreintes de commit qui n'appartiennent pas à l'action
+      # faille, empreintes de commit qui n'appartiennent pas à l'action ;
+      # cache dans /tmp (sans root, le dossier par défaut /.cache est
+      # refusé : constaté au 1er passage, le 12/11)
       - name: Audit workflows (zizmor)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -335,7 +337,7 @@ jobs:
           docker run --rm --user "$(id -u):$(id -g)" -e GH_TOKEN
           -v "$PWD":/repo:ro -w /repo
           ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d
-          --no-progress .
+          --no-progress --cache-dir /tmp/zizmor .
 
   # Tests unitaires des scripts d'automatisation (bashunit pour Bash,
   # pytest pour Python) ; ticket #56
