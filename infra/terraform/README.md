@@ -31,6 +31,7 @@ Helm (scripts/deploy.sh, avec le jeton court du deployer de l'environnement)
 | `rbac.tf` | Un compte `deployer` par namespace et ses droits (aucun jeton rangé depuis le 10/11) |
 | `monitoring.tf` | Supervision : namespaces `monitoring` (« restricted ») et `monitoring-collector` (« privileged », collecteur de journaux seul), pile VictoriaMetrics + VictoriaLogs + Grafana (chart Helm figé), tableaux de bord ([détails](../monitoring/README.md)) |
 | `openbao.tf` | Coffre-fort OpenBao : namespace `openbao` (« restricted »), autorité de certification et certificat TLS, chart Helm figé, droit d'OpenBao de créer des jetons courts des comptes `deployer` ([détails](../openbao/README.md)) |
+| `headlamp.tf` | Headlamp, interface web du cluster en lecture seule : namespace `headlamp` (« restricted »), compte `headlamp-viewer` (rôle `view`), pare-feu sans entrée, chart Helm figé ([détails](../headlamp/README.md)) |
 | `outputs.tf` | Certificats publics : celui du cluster (`cluster_ca`) et celui de l'autorité d'OpenBao (`openbao_ca_cert`), copiés dans les variables `KUBE_CA` et `OPENBAO_CA` du dépôt ; plus aucun jeton depuis le 10/11 |
 | `tests/cluster.tftest.hcl` | Tests unitaires avec de faux fournisseurs (sans cluster) |
 | `.terraform.lock.hcl` | Versions et empreintes des fournisseurs (registre d'OpenTofu, signés), produit par `tofu init` |
@@ -141,7 +142,7 @@ BACKUP_METRICS_DIR=/var/lib/node_exporter/textfile scripts/backup.sh prod
 ## Tests
 
 ```shell
-tofu test     # 8 tests, faux fournisseurs : aucun cluster nécessaire
+tofu test     # 9 tests, faux fournisseurs : aucun cluster nécessaire
 ```
 
 | Test | Vérifie |
