@@ -342,7 +342,7 @@ flowchart TB
     devs["Équipes Dev et Ops"] -->|"pull requests"| repo
     subgraph gh["GitHub"]
         direction LR
-        repo["Dépôt public<br/>règles de main"] --> hosted["Runners hébergés<br/>tests, scans,<br/>images, version"] --> ghcr[("GHCR<br/>images vX.Y.Z et sha")]
+        repo["Dépôt public<br/>règles de main"] --> hosted["Runners hébergés<br/>tests, scans,<br/>images, version"] --> ghcr[("GHCR<br/>images vX.Y.Z et sha,<br/>signées")]
     end
     subgraph host["Poste Ops Ubuntu, configuré et durci par Ansible"]
         subgraph mk["Cluster Minikube « orion », Kubernetes 1.37"]
@@ -461,7 +461,7 @@ flowchart TB
     checks -->|"tout vert : PR fusionnable ;<br/>sur main, la chaîne continue"| rel
     subgraph liv["2. Après une fusion sur main : livraison"]
         direction LR
-        rel["release<br/>version vX.Y.Z"] --> pub["publish<br/>images sur GHCR"] --> d1["deploy-dev"] --> d2["deploy-staging"]
+        rel["release<br/>version vX.Y.Z"] --> pub["publish<br/>images sur GHCR,<br/>signées + SBOM"] --> d1["deploy-dev"] --> d2["deploy-staging"]
     end
     d2 --> zap
     subgraph pre["3. Contrôles avant la production"]
@@ -687,6 +687,7 @@ Top 10 2025 (application) et OWASP Top 10 CI/CD Security Risks (chaîne).
 | **hadolint** 2.15.1, **ShellCheck** 0.11.0, ansible-lint, `tofu validate` | Linting | bonnes pratiques des Dockerfiles, erreurs des scripts Bash, du code Ansible et Terraform |
 | **Trivy** 0.76.2 (`fs`) + **Dependabot** | SCA (dépendances) | failles connues des dépendances npm et Gradle, y compris l'outillage de développement ; mises à jour proposées chaque semaine, tout de suite pour une faille |
 | **Trivy** 0.76.2 (`image`) | Container scanning | failles du système et des bibliothèques de chaque image, avant sa publication |
+| **cosign** 3.1.4 (Sigstore) + SBOM CycloneDX (Trivy) | Signature des images | chaque image publiée est signée par son empreinte, sans clé (badge OIDC du job `publish`, trace dans le journal de transparence Rekor) ; sa liste de composants est attachée et signée ; le déploiement vérifie la signature (identité : `ci.yml` du dépôt, sur `main`) |
 | **gitleaks** 8.30.1 + protection de GitHub | Secrets detection | mots de passe, jetons ou clés dans tout l'historique ; poussée bloquée par GitHub si un secret connu est détecté |
 | **OWASP ZAP** 2.17.0 | DAST (test d'intrusion) | en-têtes de sécurité, fuites d'information, injections ; passif à chaque déploiement de `staging`, actif à la demande |
 | Pod Security « restricted » | Contrôle d'admission Kubernetes | refuse tout pod root, privilégié ou avec des capacités |
@@ -796,7 +797,14 @@ un ticket ouvert d'office (rapport, recommandation 30).
 - Runner local : image durcie, sans Docker ni sudo, dans un namespace
   « restricted » ; il ne reçoit jamais les PR d'une copie extérieure du
   dépôt (risque OWASP CICD-SEC-4).
-- `kubectl` et `helm` des jobs vérifiés par empreinte SHA-256 avant usage.
+- `kubectl`, `helm` et `cosign` des jobs vérifiés par empreinte SHA-256
+  avant usage.
+- Images signées à la publication (cosign, sans clé) avec leur SBOM ;
+  signature vérifiée avant chaque déploiement : une image poussée à la
+  main sur GHCR, ou par un autre dépôt, n'est pas déployée (risque
+  OWASP CICD-SEC-9, intégrité des artefacts). **Limite** : vérification
+  par étiquette, pas encore par empreinte ; le cluster n'exige pas la
+  signature (recommandation 27).
 - Services extérieurs (GitHub, registres npm, Maven et d'images,
   miroirs Ubuntu) : versions figées et empreintes vérifiées, donc une
   source modifiée est refusée ; mais une source en panne bloque la

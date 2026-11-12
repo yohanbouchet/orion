@@ -1,0 +1,39 @@
+# Fichier  : .github/actions/cosign/action.yml
+# Rôle     : installe cosign (Sigstore, licence Apache 2.0), binaire
+#            officiel à l'empreinte vérifiée, et range son cache de
+#            confiance (TUF) dans un dossier du job ; action composite,
+#            écrite une fois, utilisée pour signer et pour vérifier
+# Utilise  : release officielle de sigstore/cosign
+# Utilisé par : job publish de .github/workflows/ci.yml (signature) ;
+#               .github/workflows/deploy.yml (vérification) ;
+#               recommandation 27 du rapport
+
+name: Install cosign
+description: Install a pinned, checksum-verified cosign binary
+
+runs:
+  using: composite
+  steps:
+    # Version figée ; empreinte relevée le 12/11/2026 et recoupée par 2
+    # sources (fichier cosign_checksums.txt de la release, empreinte
+    # calculée par GitHub pour ce fichier) ; à mettre à jour à la main.
+    # Dossier ajouté au PATH (GITHUB_PATH) et cache TUF (GITHUB_ENV) :
+    # chemins fixes du runner ($RUNNER_TEMP), jamais une valeur venue
+    # d'un tiers ; aucun workflow appelant n'a de déclencheur dangereux
+    # (pas de pull_request_target ni workflow_run) : exception justifiée
+    - name: Install cosign
+      shell: bash
+      env:
+        COSIGN_VERSION: v3.1.4
+        COSIGN_SHA256: 424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
+      run: | # zizmor: ignore[github-env]
+        bin="$RUNNER_TEMP/bin"
+        mkdir -p "$bin"
+        cd "$RUNNER_TEMP"
+        releases="https://github.com/sigstore/cosign/releases/download"
+        curl -fsSLo cosign \
+          "$releases/$COSIGN_VERSION/cosign-linux-amd64"
+        echo "$COSIGN_SHA256  cosign" | sha256sum --check --strict
+        install -m 755 cosign "$bin/cosign"
+        echo "$bin" >> "$GITHUB_PATH"
+        echo "TUF_ROOT=$RUNNER_TEMP/sigstore" >> "$GITHUB_ENV"

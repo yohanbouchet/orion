@@ -137,6 +137,7 @@ orchestre la CI et héberge le registre d'images.
   actions/kube-access/    accès au cluster des jobs du runner local
                           (jeton court délivré par OpenBao)
   actions/openbao-secret/ lecture d'un secret dans OpenBao (SonarQube)
+  actions/cosign/         installation de cosign (signer, vérifier)
   zizmor.yml              réglages de l'audit des workflows (zizmor)
   actionlint.yaml         réglages d'actionlint (étiquette du runner local)
   dependabot.yml          mises à jour automatiques des dépendances
@@ -187,7 +188,7 @@ main depuis l'onglet **Actions**.
 | `trivy` | Failles des dépendances (production et outillage) | Trivy | GitHub |
 | `images` | Construction et scan des images front et back | Docker, Trivy | GitHub |
 | `release` | Numéro de version et Release GitHub (sur `main`) | semantic-release | GitHub |
-| `publish` | Publication des images sur GHCR (sur `main`) | Docker | GitHub |
+| `publish` | Publication des images sur GHCR (sur `main`), signature et SBOM attesté | Docker, cosign, Trivy | GitHub |
 | `deploy-dev`, `deploy-staging` | Déploiement de l'image du commit (`sha-xxxxxxx`) dans `dev`, puis `staging` (sur `main`) | `deploy.yml`, `deploy.sh` | runner local |
 | `zap` | Test d'intrusion passif de `staging` ; une alerte réglée sur FAIL bloque la prod | `zap.yml`, `zap-scan.sh` (ZAP) | runner local |
 | `load-test` | Test de fumée k6 de `staging` (1 utilisateur simulé, 30 s) : un seuil dépassé bloque la prod | `load-test.yml`, `load-test.sh` (k6) | runner local |
@@ -234,6 +235,17 @@ Détails et choix : [normalisation et plan CI](docs/02-normalisation-plan-ci.md)
   (`v1.1.0`) et le commit (`sha-<7 caractères>`) :
   - `ghcr.io/yohanbouchet/orion-front`
   - `ghcr.io/yohanbouchet/orion-back`
+- Chaque image est **signée** par son empreinte (cosign, sans clé : le
+  badge OIDC du job `publish` sert d'identité) et accompagnée de sa
+  liste de composants (SBOM CycloneDX) signée ; le déploiement refuse
+  une image dont la signature ne vient pas de `ci.yml` sur `main`.
+  Vérifier à la main :
+
+  ```shell
+  cosign verify ghcr.io/yohanbouchet/orion-front:<étiquette> \
+    --certificate-identity https://github.com/yohanbouchet/orion/.github/workflows/ci.yml@refs/heads/main \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com
+  ```
 
 ## Lancer l'application sur un poste
 
@@ -565,7 +577,8 @@ sécurité et limites : [`infra/monitoring/README.md`](infra/monitoring/README.m
   `Referrer-Policy`, `Permissions-Policy`, isolation (COOP, CORP, COEP),
   `Cache-Control` (réponses de l'API jamais gardées par un cache).
 - **Images durcies** : sans root, versions figées, seulement le
-  nécessaire ; image PostgreSQL sans `gosu`.
+  nécessaire ; image PostgreSQL sans `gosu` ; **signées** (cosign,
+  Sigstore) avec leur SBOM, signature vérifiée avant chaque déploiement.
 - **Cluster** : namespaces au niveau Pod Security « restricted »,
   conteneurs en lecture seule et sans capacité Linux, pare-feu entre pods
   (NetworkPolicy, refus par défaut) ; un compte de déploiement par
@@ -626,13 +639,13 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Base de SonarQube non sauvegardée : l'historique de la qualité serait perdu avec son disque | La sauvegarder comme les bases de MicroCRM | [rapport, recommandation 20](docs/04-rapport-performance.md#83-recommandations) |
 | Coffre OpenBao : instantané quotidien sur le poste (jeton limité à l'instantané, rangé en 600) et copie hors site, mais un seul serveur ; certificat TLS renouvelé à la main, après l'alerte des 30 jours | 3 serveurs Raft ; dans la cible AWS, instantanés vers S3 par une identité IAM, sans jeton stocké ; cert-manager | [OpenBao](infra/openbao/README.md#limites), [rapport, recommandation 26](docs/04-rapport-performance.md#83-recommandations) |
 | Runner local (ARC) et SonarQube installés à la main (`helm install`, `deploy-sonarqube.sh`), hors du socle OpenTofu : un écart entre le cluster et le dépôt n'y est pas détecté (constaté le 09/11 sur 2 règles réseau de SonarQube) ; chart et image de SonarQube mis à jour à la main | Les décrire en OpenTofu avec le reste du socle (ou GitOps) ; suivre le chart SonarQube (2026.5.1004 disponible ; la version suivante passe de StatefulSet à Deployment : migration à préparer, base sauvegardée avant) | [rapport, recommandation 28](docs/04-rapport-performance.md#83-recommandations) |
-| Images déployées par étiquette (`vX.Y.Z`, `sha-…`), réinscriptible sur le registre, et non par empreinte ; images non signées, sans SBOM publié ; le cluster n'exige aucun registre de confiance (Trivy, KSV-0125) | Déployer par empreinte (`image@sha256:…`), signer les images dans la CI (cosign, Sigstore) et publier leur SBOM ; politique d'admission (ValidatingAdmissionPolicy de Kubernetes ou Kyverno) qui refuse toute image non signée ou hors GHCR | [rapport, recommandation 27](docs/04-rapport-performance.md#83-recommandations) |
+| Images déployées par étiquette (`vX.Y.Z`, `sha-…`), réinscriptible sur le registre, et non par empreinte : la signature est vérifiée sur l'étiquette juste avant le déploiement, mais l'étiquette pourrait changer entre les deux ; le cluster lui-même n'exige ni signature ni registre de confiance (Trivy, KSV-0125) ; images publiées avant le 12/11 non signées | Déployer par empreinte (`image@sha256:…`, celle que la vérification renvoie) ; politique d'admission (ValidatingAdmissionPolicy de Kubernetes, Kyverno ou policy-controller de Sigstore) qui refuse toute image non signée ou hors GHCR | [rapport, recommandation 27](docs/04-rapport-performance.md#83-recommandations) |
 | Namespace `arc-systems` (contrôleur des runners, installé par `helm --create-namespace`) sans niveau Pod Security : le contrôleur ne respecte pas « restricted » avec ses réglages par défaut (vérifié à blanc le 11/11) | Réglages de sécurité du contrôleur dans ses valeurs Helm, puis namespace en « restricted » (avec ARC en OpenTofu, recommandation 28) | [installation](#installer-la-chaîne-sur-le-poste-ops) |
 | Images en service analysées par Trivy à leur construction seulement : une faille publiée ensuite n'est pas signalée (11/11 : 2 failles hautes de libxslt trouvées à la main dans le front v1.9.0, corrigées par la version suivante) | Scan quotidien des images en service (workflow planifié ou Trivy Operator), ticket ouvert d'office | [rapport, recommandation 30](docs/04-rapport-performance.md#83-recommandations) |
 | Installation jamais rejouée de zéro depuis ce README : la reproductibilité est décrite, pas prouvée | Exercice planifié : `minikube delete`, puis réinstallation complète en suivant ce document, temps mesuré, écarts corrigés | [rapport, recommandation 29](docs/04-rapport-performance.md#83-recommandations) |
 | La chaîne dépend de services extérieurs (Gradle, registres npm, Maven et d'images, miroirs Ubuntu) : versions figées et empreintes vérifiées, mais une source en panne bloque la CI (08/11 : livraison retardée de plus de 6 h ; 11/11 : fusion bloquée près de 2 h) | Dépôt d'artefacts mandataire qui garde une copie de tout ce qui est téléchargé (Harbor pour les images, Pulp pour les paquets) ; délais courts pour qu'une panne échoue vite | [rapport, 7.6 et 7.8, recommandation 16](docs/04-rapport-performance.md#83-recommandations) |
 | L'analyse SonarQube ne reçoit pas de numéro de version : l'interface affiche encore un libellé de fin octobre (`jacoco-lcov-e18c1f7`) | Transmettre la version ou le commit analysé (`sonar.projectVersion`) | [rapport, 4.2](docs/04-rapport-performance.md#42-qualité-et-couverture-sonarqube) |
-| Logique shell des deux actions composites de la CI (`kube-access`, `openbao-secret`) sans test automatique, contrairement aux scripts | La déplacer dans `scripts/` et la couvrir par bashunit | [scripts](scripts/README.md#tests-des-scripts) |
+| Logique shell des actions composites `kube-access` et `openbao-secret` sans test automatique, contrairement aux scripts | La déplacer dans `scripts/` et la couvrir par bashunit | [scripts](scripts/README.md#tests-des-scripts) |
 
 ## Contribuer
 
@@ -687,6 +700,7 @@ TLS et Vault) ; dernière version publiée et fin de support sur
 | ARC (runner local) | 0.15.1, runner 2.338.2 |
 | SonarQube Community Build | 26.10 |
 | Trivy / hadolint / gitleaks / ShellCheck | 0.76.2 / 2.15.1 / 8.30.1 / 0.11.0 |
+| cosign (Sigstore, Apache 2.0) | 3.1.4 (20/10/2026) |
 | Grafana / chart victoria-metrics-k8s-stack | 13.2.5 (dernière 13.2 ; 13.3.0 sortie) / 0.97.1 |
 | k6 (tests de charge) | 2.3.0 |
 
