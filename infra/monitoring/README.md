@@ -59,7 +59,7 @@ nœud entier utilise alors 5,7 Gio sur 15 et 0,8 cœur sur 8.
 |---|---|---|
 | API MicroCRM | Spring Boot Actuator + Micrometer, **port de gestion 8081** (jamais exposé par le Service public, ticket #84) | requêtes, codes HTTP, temps de réponse (histogramme), mémoire Java |
 | Kubernetes | kube-state-metrics, kubelet (cAdvisor) | pods prêts, redémarrages, CPU et mémoire par pod, autoscaling |
-| Machine hôte | node_exporter installé par Ansible | disque, mémoire ; heure de la dernière sauvegarde de la base (écrite par `scripts/backup.sh`) et du coffre OpenBao, expiration du certificat du coffre (`scripts/backup-openbao.sh`) |
+| Machine hôte | node_exporter installé par Ansible | disque, mémoire ; heure de la dernière sauvegarde de la base (écrite par `scripts/backup.sh`), de la base de SonarQube (`scripts/backup-sonarqube.sh`) et du coffre OpenBao, expiration du certificat du coffre (`scripts/backup-openbao.sh`) |
 | Journaux | vlagent lit les fichiers des conteneurs | erreurs, réponses 4xx du front ; **sauf** `kube-system` et les jobs de la CI (`arc-*`) |
 
 ## Alertes
@@ -85,6 +85,7 @@ on ne peut plus la détecter.
 | <a id="backuptooold"></a>`BackupTooOld` | machine | dernière sauvegarde réussie de la prod il y a plus de 26 h, ou jamais | critique |
 | <a id="openbaocertexpiringsoon"></a>`OpenBaoCertExpiringSoon` | machine | certificat TLS du coffre OpenBao expiré dans moins de 30 jours (date lue chaque jour par `backup-openbao.sh`) | avertissement |
 | <a id="openbaobackuptooold"></a>`OpenBaoBackupTooOld` | machine | dernier instantané du coffre OpenBao il y a plus de 74 h (un week-end poste éteint n'alerte pas), ou jamais ; le jeton de sauvegarde expire après 7 jours sans sauvegarde | avertissement |
+| <a id="sonarqubebackuptooold"></a>`SonarQubeBackupTooOld` | machine | dernière sauvegarde de la base de SonarQube il y a plus de 74 h (un week-end poste éteint n'alerte pas), ou jamais ; la qualité se mesure encore, seul l'historique est en jeu | avertissement |
 | <a id="microcrmclienterrorspike"></a>`MicrocrmClientErrorSpike` | sécurité | plus de 50 réponses 4xx de l'API de la prod en 5 min (5 au plus vues depuis le 05/11) : balayage ou tentative d'intrusion probable | avertissement |
 | <a id="logingestionstopped"></a>`LogIngestionStopped` | sécurité | aucune ligne de journal reçue par VictoriaLogs depuis 15 min (10 min sans ligne, constaté pendant 5 min), ou mesure disparue : une intrusion ne laisserait plus de trace | critique |
 | <a id="openbaosealed"></a>`OpenBaoSealed` | sécurité | coffre-fort OpenBao scellé (ou absent) depuis 15 min : après chaque démarrage du poste, il attend le déverrouillage de l'Ops ; sans lui, la CI n'obtient plus d'accès | avertissement |
@@ -159,6 +160,9 @@ Choix de sécurité et d'exploitation :
 - `OpenBaoBackupTooOld` : `tail ~/.local/state/openbao-backup.log` ;
   coffre scellé ? jeton expiré ? ([README d'OpenBao](../openbao/README.md#sauvegarde-planifiée)) ;
   puis `scripts/backup-openbao.sh` à la main.
+- `SonarQubeBackupTooOld` : `tail ~/.local/state/sonarqube-backup.log`,
+  `kubectl -n sonarqube get pods`, puis `scripts/backup-sonarqube.sh` à
+  la main.
 - `OpenBaoCertExpiringSoon` : renouveler le certificat
   ([README d'OpenBao](../openbao/README.md#certificat) : `tofu plan`,
   `tofu apply`, redémarrage du pod, déverrouillage).
@@ -272,6 +276,10 @@ kill %1
 - `OpenBaoCertExpiringSoon` (11/11) : 2 cas `vmalert-tool` (certificat
   qui expire dans 31 jours : rien ; dans 29 jours depuis plus d'1 h :
   alerte) ; contre-épreuve (seuil passé à 20 jours) en échec ;
+- `SonarQubeBackupTooOld` (12/11) : `vmalert -dryRun` et 3 cas
+  `vmalert-tool` (sauvegarde de 72 h : rien ; de 76 h : rien à 10 min,
+  alerte à 20 min ; métrique jamais vue : alerte à 20 min) ;
+  contre-épreuve (seuil passé à 70 h) en échec comme attendu ;
 - conditions rejouées sur l'historique depuis le 05/11 : aucune fausse
   alerte. Sans le délai `for: 5m`, `LogIngestionStopped` aurait sonné à
   tort 3 fois (30 s à l'installation et au démarrage du poste, 2 min

@@ -55,7 +55,7 @@ Au 10/11/2026 :
 | Sauvegarde, vérification et restauration de la base | ✅ [`scripts/backup.sh`](scripts/README.md#backupsh) ; prod sauvegardée au démarrage du poste et chaque jour, restauration vérifiée chaque semaine, copie hors site chiffrée |
 | Socle du cluster en code : fichiers Terraform, exécutés par OpenTofu depuis le 09/11 (namespaces, comptes de déploiement aux droits limités, supervision, OpenBao) ; vérifiés et testés par la CI, appliqués par l'Ops | ✅ [`infra/terraform/`](infra/terraform/README.md) |
 | Ansible : configuration et durcissement du poste Ops (outils, cluster, images, sauvegardes, disque, pare-feu, métriques de l'hôte) ; 5 rôles testés par Molecule à chaque PR | ✅ [`infra/ansible/`](infra/ansible/README.md) |
-| Supervision : métriques, journaux structurés en JSON, 11 alertes par e-mail, 4 tableaux de bord dont les indicateurs DORA, déploiements marqués sur les courbes (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) ; journaux JSON : v1.9.0 |
+| Supervision : métriques, journaux structurés en JSON, 12 alertes par e-mail, 4 tableaux de bord dont les indicateurs DORA, déploiements marqués sur les courbes (VictoriaMetrics, VictoriaLogs, Grafana) | ✅ [`infra/monitoring/`](infra/monitoring/README.md) ; journaux JSON : v1.9.0 |
 | Coffre-fort de secrets OpenBao (TLS, déverrouillage manuel par l'Ops, clés hors du dépôt, journal d'audit) | ✅ [`infra/openbao/`](infra/openbao/README.md) |
 | Identité de la CI : **aucun secret dans GitHub** ; chaque job reçoit d'OpenBao un accès court contre son badge OIDC ; jetons longue durée supprimés | ✅ [Identité de la CI](infra/openbao/README.md#identité-de-la-ci) |
 | Tests de charge k6 (6 profils) ; test de fumée k6 avant chaque mise en prod ; autoscaling (HPA) du back en `staging` et en `prod` | ✅ [`load-test.sh`](scripts/README.md#load-testsh) |
@@ -559,6 +559,9 @@ actuel. Objectifs : perte de données maximale (RPO) de 24 h avec une
 sauvegarde quotidienne ; temps de restauration (RTO) mesuré à 0,6 s.
 Une alerte (`BackupTooOld`) prévient si la dernière sauvegarde réussie de
 la prod date de plus de 26 h.
+La base de SonarQube est sauvegardée de la même façon (chaque jour à
+11 h 40, vérifiée le vendredi, alerte `SonarQubeBackupTooOld`) :
+[`scripts/backup-sonarqube.sh`](scripts/README.md#backup-sonarqubesh).
 Fonctionnement, sécurité et limites : [`scripts/README.md`](scripts/README.md#backupsh).
 
 ## Superviser
@@ -568,10 +571,11 @@ sauf Grafana en AGPL v3), installée par OpenTofu dans deux namespaces :
 `monitoring` (« restricted ») et `monitoring-collector` (collecteur de
 journaux seul, verrouillé). Elle lit les métriques de l'API (Spring Boot
 Actuator, port de gestion 8081), de Kubernetes et de la machine
-(node_exporter), et les journaux des conteneurs (gardés 7 jours). Onze
+(node_exporter), et les journaux des conteneurs (gardés 7 jours). Douze
 alertes sont envoyées par e-mail : disponibilité (prod arrêtée,
 redémarrages en boucle), performance (erreurs 5xx, lenteur), machine
-(disque, sauvegardes de la base et du coffre, certificat du coffre) et
+(disque, sauvegardes de la base de prod, de celle de SonarQube et du
+coffre, certificat du coffre) et
 sécurité (rafale de requêtes refusées, journaux
 qui n'arrivent plus, coffre-fort scellé). Quatre tableaux de bord sont
 disponibles : disponibilité, performance, sécurité, et livraison
@@ -655,7 +659,6 @@ Ce qui reste à améliorer, détaillé dans chaque README :
 | Pas d'ESLint dans le front | ESLint (équipe Dev) | [audit, R4](docs/01-veille-audit-recommandations.md#r4-remettre-le-socle-applicatif-sous-maintenance) |
 | Réglage par défaut de Spring Boot `spring.jpa.open-in-view` actif (avertissement au démarrage du back) : chaque requête garde sa connexion à la base jusqu'à la fin de sa réponse ; sous forte charge, la réserve de connexions s'épuise plus vite | Le désactiver, après les tests du back et un test de charge avant et après (équipe Dev) | [réglages du back](back/src/main/resources/application.properties) |
 | Après une création, l'API renvoie l'adresse du nouvel élément (en-tête `Location`) sans le préfixe `/api` ni le port : le relais du front ne transmet pas l'adresse d'origine ; le front ne se sert pas de cet en-tête | Relais qui transmet le préfixe et l'hôte d'origine (`X-Forwarded-Prefix`, `X-Forwarded-Host`), lus par Spring Boot (`server.forward-headers-strategy=framework`) | [chart](infra/helm/microcrm/README.md#limites-connues) |
-| Base de SonarQube non sauvegardée : l'historique de la qualité serait perdu avec son disque | La sauvegarder comme les bases de MicroCRM | [rapport, recommandation 20](docs/04-rapport-performance.md#83-recommandations) |
 | Coffre OpenBao : instantané quotidien sur le poste (jeton limité à l'instantané, rangé en 600) et copie hors site, mais un seul serveur ; certificat TLS renouvelé à la main, après l'alerte des 30 jours | 3 serveurs Raft ; dans la cible AWS, instantanés vers S3 par une identité IAM, sans jeton stocké ; cert-manager | [OpenBao](infra/openbao/README.md#limites), [rapport, recommandation 26](docs/04-rapport-performance.md#83-recommandations) |
 | Runner local (ARC) et SonarQube installés à la main (`helm install`, `deploy-sonarqube.sh`), hors du socle OpenTofu : un écart entre le cluster et le dépôt n'y est pas détecté (constaté le 09/11 sur 2 règles réseau de SonarQube) ; chart et image de SonarQube mis à jour à la main | Les décrire en OpenTofu avec le reste du socle (ou GitOps) ; suivre le chart SonarQube (2026.5.1004 disponible ; la version suivante passe de StatefulSet à Deployment : migration à préparer, base sauvegardée avant) | [rapport, recommandation 28](docs/04-rapport-performance.md#83-recommandations) |
 | Images déployées par étiquette (`vX.Y.Z`, `sha-…`), réinscriptible sur le registre, et non par empreinte : la signature est vérifiée sur l'étiquette juste avant le déploiement, mais l'étiquette pourrait changer entre les deux ; le cluster lui-même n'exige ni signature ni registre de confiance (Trivy, KSV-0125) ; images publiées avant le 12/11 non signées | Déployer par empreinte (`image@sha256:…`, celle que la vérification renvoie) ; politique d'admission (ValidatingAdmissionPolicy de Kubernetes, Kyverno ou policy-controller de Sigstore) qui refuse toute image non signée ou hors GHCR | [rapport, recommandation 27](docs/04-rapport-performance.md#83-recommandations) |

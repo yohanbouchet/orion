@@ -168,6 +168,24 @@ extraObjects:
               annotations:
                 summary: No successful OpenBao snapshot for more than 74 hours.
                 runbook: infra/monitoring/README.md#openbaobackuptooold
+            # Dernière sauvegarde de la base de SonarQube il y a plus de
+            # 74 h (une par jour ; un week-end poste éteint n'alerte pas),
+            # ou jamais vue ; avertissement : la qualité se mesure encore,
+            # seul l'historique est en jeu ; métrique écrite par
+            # scripts/backup-sonarqube.sh, lue par node_exporter
+            - alert: SonarQubeBackupTooOld
+              expr: >-
+                (time() - sonarqube_backup_last_success_timestamp_seconds
+                > 74 * 3600)
+                or absent(sonarqube_backup_last_success_timestamp_seconds)
+              for: 15m
+              labels:
+                severity: warning
+              annotations:
+                summary: >-
+                  No successful SonarQube database backup for more than
+                  74 hours.
+                runbook: infra/monitoring/README.md#sonarqubebackuptooold
             # Certificat TLS du coffre OpenBao expiré dans moins de 30
             # jours : un certificat expiré couperait la CI du coffre ;
             # date lue chaque jour par scripts/backup-openbao.sh

@@ -3,9 +3,12 @@
 #            poste et chaque jour à 12 h 30, et vérification chaque
 #            vendredi qu'elle se restaure vraiment
 #            (base temporaire) ; instantané du coffre OpenBao chaque
-#            jour à 11 h 50 ; journaux dans ~/.local/state
-# Utilise  : scripts/backup.sh, scripts/backup-openbao.sh ;
-#            group_vars/all.yml (backup_*, openbao_backup_*,
+#            jour à 11 h 50 ; base de SonarQube chaque jour à 11 h 40,
+#            restauration vérifiée le vendredi ; journaux dans
+#            ~/.local/state
+# Utilise  : scripts/backup.sh, scripts/backup-openbao.sh,
+#            scripts/backup-sonarqube.sh ; group_vars/all.yml (backup_*,
+#            openbao_backup_*, sonarqube_backup_*,
 #            node_exporter_textfile_dir : métriques des sauvegardes)
 # Utilisé par : site.yml
 
@@ -81,3 +84,32 @@
       BACKUP_METRICS_DIR={{ node_exporter_textfile_dir }}
       {{ repo_dir }}/scripts/backup-openbao.sh
       >> {{ openbao_backup_log }} 2>&1
+
+# Base de SonarQube : sans elle, une reconstruction perd l'historique de
+# la qualité, les réglages et le jeton de la CI ; la métrique alimente
+# l'alerte SonarQubeBackupTooOld
+- name: Back up the SonarQube database every day
+  ansible.builtin.cron:
+    name: sonarqube backup (ansible)
+    hour: "11"
+    minute: "40"
+    job: >-
+      PATH={{ ops_home }}/.local/bin:/usr/bin:/bin
+      BACKUP_DIR={{ sonarqube_backup_dir }}
+      BACKUP_METRICS_DIR={{ node_exporter_textfile_dir }}
+      {{ repo_dir }}/scripts/backup-sonarqube.sh
+      >> {{ sonarqube_backup_log }} 2>&1
+
+# Comme pour la prod : la dernière sauvegarde est restaurée chaque
+# vendredi dans une base temporaire, 10 min après celle de MicroCRM
+- name: Check every week that the last SonarQube backup restores
+  ansible.builtin.cron:
+    name: sonarqube backup verify (ansible)
+    weekday: "5"
+    hour: "13"
+    minute: "10"
+    job: >-
+      PATH={{ ops_home }}/.local/bin:/usr/bin:/bin
+      BACKUP_DIR={{ sonarqube_backup_dir }}
+      {{ repo_dir }}/scripts/backup-sonarqube.sh verify
+      >> {{ sonarqube_backup_log }} 2>&1
