@@ -22,6 +22,8 @@ Exécuté en local avec gitlab-ci-local 4.77.0, cache froid.
 
 ![Tableau de bord SonarQube de la première analyse : Quality Gate « Passed », sécurité C (4 problèmes), fiabilité D (33), maintenabilité A (5), couverture 0,0 % sur 166 lignes, duplication 2,5 %](sonarqube-original.png)
 
+*Tableau de bord SonarQube de la première analyse : Quality Gate « Passed », sécurité C (4 problèmes), fiabilité D (33), maintenabilité A (5), couverture 0,0 % sur 166 lignes, duplication 2,5 %*
+
 | Indicateur        | Valeur                          |
 | ----------------- | ------------------------------- |
 | Lignes de code    | 960 (Java 226, TypeScript 332, HTML 401) |
@@ -44,3 +46,5 @@ Exécuté en local avec gitlab-ci-local 4.77.0, cache froid.
 | GitHub Dependabot               | 165 alertes ouvertes                  |
 
 ![Page des alertes Dependabot du dépôt : 165 alertes ouvertes, toutes détectées dans front/package-lock.json, dont plusieurs critiques](dependabot-alerts-original.png)
+
+*Page des alertes Dependabot du dépôt : 165 alertes ouvertes, toutes détectées dans front/package-lock.json, dont plusieurs critiques*
