@@ -5,8 +5,8 @@
 | Projet | Démarche DevOps pour l'application MicroCRM |
 | Client | Orion (destinataire : Maria, CTO) |
 | Auteur | Yohan Bouchet, ingénieur DevOps |
-| Version | 1.2 (12/11 : images signées, tests de bout en bout, contrôle des workflows, analyse quotidienne des images, sauvegardes du coffre et de SonarQube, plan de reprise testé ; 1.1 du 11/11 : OpenBao, OpenTofu, Molecule, DORA dans Grafana ; indicateurs de livraison du 10/11) |
-| Date | 07/11/2026, mis à jour le 12/11/2026 (configuration vérifiée ce jour) |
+| Version | 1.3 (13/11 : outils et compétences des équipes (2.3) ; 1.2 du 12/11 : images signées, tests de bout en bout, contrôle des workflows, analyse quotidienne des images, sauvegardes du coffre et de SonarQube, plan de reprise testé ; 1.1 du 11/11 : OpenBao, OpenTofu, Molecule, DORA dans Grafana ; indicateurs de livraison du 10/11) |
+| Date | 07/11/2026, mis à jour le 13/11/2026 (configuration vérifiée le 12/11) |
 | Dépôt | [github.com/yohanbouchet/orion](https://github.com/yohanbouchet/orion) (public) |
 
 ## Sommaire
@@ -114,6 +114,25 @@ de performance (document 4) :
 | 3. Livrer plus vite et de façon traçable | déploiement manuel, non tracé | chaque déploiement lié à une version, une image et un commit | **5,1 mises en prod par semaine**, 2,9 h entre un commit et la prod (médiane), 0 % d'échec |
 | 4. Revenir en arrière sans coupure | aucun retour arrière ni sauvegarde | retour arrière automatique ; sauvegarde restaurable | **testés** : retour arrière sans coupure ; restauration vérifiée chaque semaine ; plateforme entière reconstruite en 48 min (exercice du 12/11) |
 | 5. Voir et être prévenu | aucune supervision | disponibilité, performance et sécurité suivies | **4 tableaux de bord, 12 alertes**, indicateurs DORA chaque jour ouvré, dans Grafana |
+
+### 2.3 Outils et compétences des équipes
+
+Les outils ont été choisis à partir des sondages des deux équipes. Une
+partie était **demandée par Maria dans la mission** : Kubernetes et
+Helm, Terraform et Ansible, une supervision (ELK ou équivalent),
+SonarQube. Certains sont nouveaux pour les équipes : le tableau montre
+ce que chacune retrouve, ce qu'elle découvre, et ce qui est prévu pour
+sa prise en main.
+
+| Équipe | Compétences (sondage) | Ce qu'elle retrouve | Ce qui est nouveau pour elle | Prise en main prévue |
+| --- | --- | --- | --- | --- |
+| Dev | bonnes : Angular, NPM, Karma, Docker ; débutantes : Java, Gradle, JUnit, HyperSQL | Angular, NPM, Docker ; HyperSQL sur le poste et dans les tests ; le travail quotidien reste une PR | Vitest à la place de Karma ; SonarQube | SonarQube répond à leur demande d'analyse statique : il signale les mauvaises pratiques Java à chaque PR. Karma n'est plus maintenu : Vitest est son successeur dans Angular, et les tests s'écrivent de la même façon (`describe`, `it`, `expect`) |
+| Ops | très bonnes : Bash ; bonnes : Ansible, Apt, TestInfra, BashUnit, Debian, Docker ; moyennes : PostgreSQL | scripts en Bash testés par bashunit ; Ansible pour le poste ; PostgreSQL en production ; Trivy, qu'ils lançaient à la main, désormais dans la CI ; alertes par e-mail | Kubernetes et Helm ; OpenTofu (équivalent open source de Terraform, même langage) ; OpenBao (coffre-fort des secrets) ; VictoriaMetrics, VictoriaLogs et Grafana (équivalent d'ELK) | un README pour chacun de ces outils ([Helm](../infra/helm/microcrm/README.md), [OpenTofu](../infra/terraform/README.md), [OpenBao](../infra/openbao/README.md), [supervision](../infra/monitoring/README.md)) ; chaque script documenté ([`scripts/README.md`](../scripts/README.md)) ; plan de reprise pas à pas ([document 5](05-plan-de-reprise.md)) ; atelier de prise en main (document 2, étape 6) ; formation recommandée (rapport de performance, recommandation 31) |
+
+Les deux demandes des Ops sont traitées : l'analyse des images **avant**
+leur livraison (Trivy bloquant dans la CI) et le déploiement automatisé.
+Le registre **interne** n'est fait qu'en partie : GHCR est un service
+externe, Harbor reste la cible (document 1, section 2.3.5).
 
 ## 3. Workflow de branches
 

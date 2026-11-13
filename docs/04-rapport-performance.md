@@ -5,7 +5,7 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataires : Maria, CTO, et les équipes Dev et Ops) |
 | Auteur  | Yohan Bouchet |
-| Version | 1.4 (12/11 : exercice de reprise après la perte du cluster (7.9), 14 contrôles, images signées, tests de bout en bout, sauvegardes du coffre et de SonarQube ; 1.3 du 11/11, 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
+| Version | 1.5 (13/11 : outils et compétences des équipes (2), recommandation 31 ; 1.4 du 12/11 : exercice de reprise après la perte du cluster (7.9), 14 contrôles, images signées, tests de bout en bout, sauvegardes du coffre et de SonarQube ; 1.3 du 11/11, 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
 | Date    | 12/11/2026 : état de la production au 12/11 (v1.9.1, en production depuis le 11/11) ; mesures du 06/11 au 12/11 |
 
 **Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
@@ -112,6 +112,15 @@ la sécurité. Le plan de mise en œuvre
 | Pipeline plus rapide malgré plus de contrôles | 4,67 min, 4 tâches | durée suivie, gain mesuré | **oui** : 2,2 min avec 12 contrôles ; 3,2 à 3,4 min avec 14, depuis le 12/11 (section 3.2) |
 | Livraison traçable | aucune image, version `0.0.1-SNAPSHOT` | chaque image liée à une version et à un commit | **oui** : 26 versions, v1.0.0 à v1.9.1 |
 | Déploiement sans action manuelle | déploiement manuel | déploiement et retour arrière automatisés | **oui**, avec approbation humaine avant la prod |
+
+**Outils et compétences des équipes.** Une partie des outils était
+demandée par Maria dans la mission (Kubernetes et Helm, Terraform et
+Ansible, supervision, SonarQube). Les Dev gardent leur quotidien (une
+PR, que la CI vérifie) ; Vitest remplace Karma, qui n'est plus
+maintenu. Les Ops retrouvent Bash, bashunit, Ansible et PostgreSQL ;
+Kubernetes, OpenTofu, OpenBao et la supervision (VictoriaMetrics,
+Grafana) sont nouveaux pour eux : leur prise en main fait l'objet de la recommandation 31 (détail :
+documentation CI/CD, section 2.3).
 
 ## 3. Livraison : indicateurs DORA et pipeline
 
@@ -1021,7 +1030,7 @@ Chaque recommandation répond à un constat de ce rapport. Les
 recommandations 1 à 15 sont classées par priorité (version du 07/11) ;
 les recommandations 16 à 21, ajoutées les 08 et 09/11, 22 à 25,
 ajoutées le 10/11, puis 26 à 30, ajoutées le 11/11 (relecture de
-cohérence), viennent ensuite, pour que les numéros cités dans les
+cohérence), et 31, ajoutée le 13/11, viennent ensuite, pour que les numéros cités dans les
 sections précédentes restent valables. Les trois priorités du moment
 sont rappelées dans la synthèse (section 1). La colonne « État » montre
 où en est chacune le 12/11 : 9 sont appliquées, 6 le sont en partie.
@@ -1058,6 +1067,7 @@ où en est chacune le 12/11 : 9 sont appliquées, 6 le sont en partie.
 | 28 | Décrire le runner local (ARC) et SonarQube en OpenTofu, avec le reste du socle, et suivre le chart SonarQube (2026.5.1004 disponible, base sauvegardée avant la montée de version) | deux briques installées à la main, écarts non détectés (8.2) | faible | Ops | À faire ; le GitOps (recommandation 7) les couvrirait aussi |
 | 29 | Rejouer l'installation complète de zéro (`minikube delete`, puis le README), temps mesuré, écarts corrigés | la procédure d'installation est décrite, jamais rejouée d'un bloc : reproductibilité non prouvée | faible | Ops | **Appliquée** (12/11) : cluster supprimé, plateforme reconstruite en 48 min avec ses données, 4 écarts corrigés ; procédure : [plan de reprise](05-plan-de-reprise.md) (7.9) |
 | 30 | Analyser chaque jour les images en service (workflow planifié ou Trivy Operator), avec un ticket ouvert d'office | le 11/11, le front v1.9.0 en prod avait 2 failles hautes (libxslt), publiées après sa construction et trouvées à la main | faible | Ops | **Appliquée** (12/11) : workflow `image-scan.yml`, chaque jour à 6 h 30, images de la version en production (dernier déploiement réussi), ticket « security » si faille haute ou critique |
+| 31 | Former les Ops aux outils nouveaux pour eux (Kubernetes et Helm, OpenTofu, OpenBao, supervision avec VictoriaMetrics et Grafana) : formation, travail en binôme sur les opérations courantes (déploiement, alerte, montée de version), et [plan de reprise](05-plan-de-reprise.md) rejoué par un Ops, chronométré | ces outils, demandés par la mission, ne figurent pas dans les compétences du sondage Ops (Bash, Ansible, Docker sur Debian) ; l'exercice de reprise n'a été joué que par l'ingénieur DevOps (7.9) | moyen | Ops et ingénieur DevOps | À faire ; l'atelier de prise en main est prévu au plan de mise en œuvre (document 2, étape 6) |
 
 ## 9. Conclusion
 
