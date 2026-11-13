@@ -4,8 +4,8 @@
 | --- | --- |
 | Projet | Démarche DevOps pour l'application MicroCRM |
 | Client | Orion (destinataire : Maria, CTO) |
-| Auteur | Yohan Bouchet, ingénieur DevOps |
-| Version | 1.3 (13/11 : outils et compétences des équipes (2.3) ; 1.2 du 12/11 : images signées, tests de bout en bout, contrôle des workflows, analyse quotidienne des images, sauvegardes du coffre et de SonarQube, plan de reprise testé ; 1.1 du 11/11 : OpenBao, OpenTofu, Molecule, DORA dans Grafana ; indicateurs de livraison du 10/11) |
+| Auteur | Yohan Bouchet |
+| Version | 1.4 (13/11 au soir : nom de ZAP, en-tête ; 1.3 du 13/11 : outils et compétences des équipes (2.3) ; 1.2 du 12/11 : images signées, tests de bout en bout, contrôle des workflows, analyse quotidienne des images, sauvegardes du coffre et de SonarQube, plan de reprise testé ; 1.1 du 11/11 : OpenBao, OpenTofu, Molecule, DORA dans Grafana ; indicateurs de livraison du 10/11) |
 | Date | 07/11/2026, mis à jour le 13/11/2026 (configuration vérifiée le 12/11) |
 | Dépôt | [github.com/yohanbouchet/orion](https://github.com/yohanbouchet/orion) (public) |
 
@@ -38,7 +38,7 @@ et comment revenir en arrière.
 Il décrit la configuration **réelle**, vérifiée le 12/11/2026, et renvoie
 aux fichiers du dépôt pour le détail. Rédigé avec l'assistance de l'IA
 (Claude, Anthropic) à partir de la configuration vérifiée, puis relu et
-validé par l'ingénieur DevOps. Il suit le modèle de documentation
+validé par l'auteur. Il suit le modèle de documentation
 CI/CD fourni et intègre le **plan de tests et de sécurité** (sections 4
 et 6) et le **plan de CD** (sections 5 et 7). Documents liés :
 
@@ -62,7 +62,7 @@ apparition et dans le glossaire ([annexe A](#annexe-a-glossaire)).
 | CI/CD | **GitHub Actions** (à la place de GitLab CI, avec l'accord du mentor) | exécute le pipeline : contrôles sur des machines jetables de GitHub ; analyse et déploiements par un runner local dans le cluster (ARC 0.15.1) |
 | Versions | **semantic-release** | calcule le numéro de version (SemVer) à partir des messages de commit, crée l'étiquette et la release |
 | Qualité | **SonarQube** Community Build 26.10 | analyse statique, couverture, Quality Gate bloquant |
-| Sécurité | **Trivy** 0.76.2, **gitleaks** 8.30.1, **hadolint** 2.15.1, **ShellCheck** 0.11.0, **OWASP ZAP** 2.17.0, **Dependabot** | failles des dépendances et des images, secrets, bonnes pratiques, test d'intrusion, mises à jour |
+| Sécurité | **Trivy** 0.76.2, **gitleaks** 8.30.1, **hadolint** 2.15.1, **ShellCheck** 0.11.0, **ZAP** 2.17.0, **Dependabot** | failles des dépendances et des images, secrets, bonnes pratiques, test d'intrusion, mises à jour |
 | Secrets | **OpenBao** 2.7.2 (coffre-fort, MPL-2.0 ; chart 0.30.7) | délivre à chaque job de la CI un accès court au cluster contre son badge OIDC de GitHub, garde le jeton SonarQube, trace chaque demande : **aucun secret dans GitHub** |
 | Tests | **Vitest** 5 (front), JUnit 5 + JaCoCo, bashunit, pytest, `tofu test`, **Molecule** 26.11, **k6** 2.3.0 | tests du front, du back, des scripts, de l'infrastructure et du poste Ops ; tests de charge |
 | Conteneurs | **Docker** (images durcies ; celle du back emballe le jar testé par la CI), **GHCR** (registre de GitHub) | images de l'application, versionnées et publiées |
@@ -222,7 +222,7 @@ manuelle ratée.
 | Unitaires | Vitest, navigateur simulé jsdom (front, 16 tests, back simulé : chargement, création, suppression, liens entre personnes et organisations) | chaque PR et chaque fusion | **80 % du code nouveau** (Quality Gate) ; au 08/11, 82,9 % de l'ensemble (lignes 87,6 %, branches 57,9 %) |
 | Intégration | JUnit 5 + Spring Boot Test, base en mémoire (back, 6 tests : démarrage de l'application, points de gestion, accès à la base) ; `tofu test` (16 tests : 9 du socle, 7 de la configuration d'OpenBao) ; `helm lint` à chaque déploiement | chaque PR ; chaque déploiement | même cible de couverture ; chaque règle d'accès du socle et d'OpenBao |
 | E2E | **Playwright** (vrai navigateur Chromium, 3 parcours : accueil, création d'une organisation, création d'une personne rattachée à l'organisation) sur les images construites, avec une base jetable (`scripts/e2e.sh`, `e2e/`) ; **test de fumée** après chaque déploiement : appel de `/api/persons` depuis le pod du front (front → back → base) | Playwright : chaque PR et chaque fusion (job `e2e`) ; fumée : chaque déploiement (dev, staging, prod) | les écrans principaux, de l'interface à la base ; un échec de la fumée remet la version précédente |
-| Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **OWASP ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
+| Sécurité | **SonarQube** (analyse statique), Trivy, gitleaks, hadolint ; **ZAP** (test d'intrusion de staging) | chaque PR ; ZAP à chaque déploiement de staging | 0 nouveau problème ; 0 faille haute ou critique corrigeable ; 0 alerte ZAP bloquante (66 règles) |
 | Performance | **k6** : test de fumée (1 utilisateur simulé, 30 s) ; 6 profils de charge à la demande | chaque déploiement de staging (bloque la prod) ; à la demande | moins de 1 % d'erreurs, p95 < 500 ms, p99 < 1,5 s |
 | Scripts d'exploitation | bashunit (106 tests), pytest (30 tests) | chaque PR | chaque script et chaque cas d'arrêt documenté |
 | Infrastructure | `tofu fmt`, `validate` et `test` ; `ansible-playbook --syntax-check`, ansible-lint (profil production) ; **Molecule** : 5 rôles Ansible appliqués à une machine jetable, idempotence, contrôles | chaque PR | 100 % des fichiers Terraform et Ansible ; 5 rôles sur 8 exécutés |
@@ -721,7 +721,7 @@ Top 10 2025 (application) et OWASP Top 10 CI/CD Security Risks (chaîne).
 | **cosign** 3.1.4 (Sigstore) + SBOM CycloneDX (Trivy) | Signature des images | chaque image publiée est signée par son empreinte, sans clé (badge OIDC du job `publish`, trace dans le journal de transparence Rekor) ; sa liste de composants est attachée et signée ; le déploiement vérifie la signature (identité : `ci.yml` du dépôt, sur `main`) |
 | **actionlint** 1.7.12 + **zizmor** 1.32.0 | Sécurité des workflows | syntaxe et scripts des workflows ; injections, droits trop larges, actions non figées ou connues pour une faille (job `workflows`, chaque PR) |
 | **gitleaks** 8.30.1 + protection de GitHub | Secrets detection | mots de passe, jetons ou clés dans tout l'historique ; poussée bloquée par GitHub si un secret connu est détecté |
-| **OWASP ZAP** 2.17.0 | DAST (test d'intrusion) | en-têtes de sécurité, fuites d'information, injections ; passif à chaque déploiement de `staging`, actif à la demande |
+| **ZAP** 2.17.0 (anciennement OWASP ZAP, aujourd'hui « ZAP by Checkmarx ») | DAST (test d'intrusion) | en-têtes de sécurité, fuites d'information, injections ; passif à chaque déploiement de `staging`, actif à la demande |
 | Pod Security « restricted » | Contrôle d'admission Kubernetes | refuse tout pod root, privilégié ou avec des capacités |
 
 ### 6.3 Gestion des secrets

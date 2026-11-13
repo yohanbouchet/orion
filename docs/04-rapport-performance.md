@@ -5,7 +5,7 @@
 | Projet  | Démarche DevOps pour l'application MicroCRM |
 | Client  | Orion (destinataires : Maria, CTO, et les équipes Dev et Ops) |
 | Auteur  | Yohan Bouchet |
-| Version | 1.5 (13/11 : outils et compétences des équipes (2), recommandation 31 ; 1.4 du 12/11 : exercice de reprise après la perte du cluster (7.9), 14 contrôles, images signées, tests de bout en bout, sauvegardes du coffre et de SonarQube ; 1.3 du 11/11, 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
+| Version | 1.6 (13/11 au soir : légendes des captures, failles hors livraison (5.1), lecture des panneaux « no traffic » (6.1, 6.3) ; 1.5 du 13/11 : outils et compétences des équipes (2), recommandation 31 ; 1.4 du 12/11 : exercice de reprise après la perte du cluster (7.9), 14 contrôles, images signées, tests de bout en bout, sauvegardes du coffre et de SonarQube ; 1.3 du 11/11, 1.2 du 10/11, 1.1 du 09/11, 1.0 du 07/11) |
 | Date    | 12/11/2026 : état de la production au 12/11 (v1.9.1, en production depuis le 11/11) ; mesures du 06/11 au 12/11 |
 
 **Accessibilité** : titres hiérarchisés, tableaux avec ligne d'en-tête,
@@ -193,6 +193,8 @@ production (workflow *DORA metrics*).
 
 ![Résumé du workflow DORA metrics sur GitHub le 08/11 (avant les versions du 09/11) : tableau des 5 indicateurs de la production](rapport-performance/dora.png)
 
+*Résumé du workflow DORA metrics sur GitHub le 08/11 (avant les versions du 09/11) : tableau des 5 indicateurs de la production*
+
 **Dans Grafana depuis le 11/11** : le workflow importe aussi ces
 valeurs dans VictoriaMetrics, chaque jour ouvré ; le tableau de bord
 *Orion - Delivery* montre les 5 indicateurs et leur évolution, à côté
@@ -204,6 +206,8 @@ veille au soir, ce qui illustre le constat ci-dessus et la
 recommandation 18. Les chiffres de ce rapport restent ceux du 10/11.
 
 ![Tableau de bord Grafana Orion - Delivery le 11/11, 30 derniers jours : 5,4 déploiements par semaine, délai médian de 5,3 h, 0 % d'échec, « No incident » pour le temps de rétablissement, 30 % de reprise, 23 déploiements comptés ; traits bleus verticaux : chaque mise en production d'une nouvelle image depuis le 06/11](rapport-performance/grafana-delivery.png)
+
+*Tableau de bord Grafana Orion - Delivery le 11/11, 30 derniers jours : 5,4 déploiements par semaine, délai médian de 5,3 h, 0 % d'échec, « No incident » pour le temps de rétablissement, 30 % de reprise, 23 déploiements comptés ; traits bleus verticaux : chaque mise en production d'une nouvelle image depuis le 06/11*
 
 Les courbes ne comptent qu'un point par indicateur : l'import a
 commencé le 11/11. Elles se rempliront à chaque exécution du workflow
@@ -235,6 +239,8 @@ plus rapide qu'au départ (4,67 min), avec 3,5 fois plus de contrôles.
 
 ![Graphe de l'exécution du pipeline sur main qui a livré v1.9.1 le 11/11, toutes les étapes réussies en 8 min 25 s : 9 contrôles en parallèle, construction des 2 images, SonarQube, release, publication des 2 images, déploiements dev et staging, ZAP, test de charge, production après approbation, notification](rapport-performance/pipeline.png)
 
+*Graphe de l'exécution du pipeline sur main qui a livré v1.9.1 le 11/11, toutes les étapes réussies en 8 min 25 s : 9 contrôles en parallèle, construction des 2 images, SonarQube, release, publication des 2 images, déploiements dev et staging, ZAP, test de charge, production après approbation, notification*
+
 ### 3.3 Releases
 
 - **26 versions** publiées du 31/10 au 11/11 (v1.0.0 à v1.9.1). Le
@@ -258,6 +264,8 @@ plus rapide qu'au départ (4,67 min), avec 3,5 fois plus de contrôles.
 
 ![Notification de la version v1.5.2 : notes de version produites automatiquement à partir des messages de commit](rapport-performance/release-notification.png)
 
+*Notification de la version v1.5.2 : notes de version produites automatiquement à partir des messages de commit*
+
 ## 4. Tests et qualité du code
 
 ### 4.1 Tests
@@ -270,7 +278,7 @@ plus rapide qu'au départ (4,67 min), avec 3,5 fois plus de contrôles.
 | Tests de bout en bout (Playwright, vrai navigateur) | 0 | 3 parcours : accueil, création d'une organisation, d'une personne rattachée (depuis le 12/11) | chaque PR, sur les images construites |
 | Tests de l'infrastructure (OpenTofu) | 0 | 16 (socle du cluster et configuration d'OpenBao, faux fournisseurs) | chaque PR |
 | Test du poste Ops (Ansible, Molecule) | 0 | 5 rôles appliqués sur une machine jetable, rejoués sans aucun changement (idempotence), puis 6 contrôles (outils, sauvegardes planifiées, services, métriques, pare-feu, journaux Docker) | chaque PR (depuis le 10/11) |
-| Test d'intrusion (OWASP ZAP) | 0 | 0 échec ; 19 règles bloquantes | chaque déploiement de staging |
+| Test d'intrusion (ZAP) | 0 | 0 échec ; 19 règles bloquantes | chaque déploiement de staging |
 | Test de fumée de charge (k6) | 0 | seuils respectés | chaque déploiement de staging, bloque la prod |
 | Tests de charge complets (k6) | 0 | 3 profils mesurés (section 6) | à la demande |
 
@@ -321,19 +329,35 @@ ces nombres ne s'additionnent pas.
 
 ![Tableau de bord SonarQube du projet orion le 11/11, vue Overall Code : Quality Gate réussi, 0 problème ouvert en sécurité, fiabilité et maintenabilité (notes A), 82,9 % de couverture, 0 % de duplication](rapport-performance/sonarqube-11-11.png)
 
+*Tableau de bord SonarQube du projet orion le 11/11, vue Overall Code : Quality Gate réussi, 0 problème ouvert en sécurité, fiabilité et maintenabilité (notes A), 82,9 % de couverture, 0 % de duplication*
+
 ![Même tableau de bord, vue New Code (code modifié depuis la photo avant) : 0 nouveau problème, 90,9 % de couverture pour 80 % exigés, 0 % de duplication pour 3 % au plus](rapport-performance/sonarqube-11-11-nouveau-code.png)
+
+*Même tableau de bord, vue New Code (code modifié depuis la photo avant) : 0 nouveau problème, 90,9 % de couverture pour 80 % exigés, 0 % de duplication pour 3 % au plus*
 
 ![Historique SonarQube du nombre de problèmes jusqu'au 11/11 : 37, puis 30, puis 0 à partir du 08/11 ; les 5 analyses du 11/11 réussissent la Quality Gate sans nouveau problème](rapport-performance/sonarqube-historique.png)
 
+*Historique SonarQube du nombre de problèmes jusqu'au 11/11 : 37, puis 30, puis 0 à partir du 08/11 ; les 5 analyses du 11/11 réussissent la Quality Gate sans nouveau problème*
+
 ![Vue sécurité de SonarQube, 30 derniers jours : 0 problème ouvert, 4 fermés, délai moyen de correction de 3 jours](rapport-performance/sonarqube-securite-30-jours.png)
+
+*Vue sécurité de SonarQube, 30 derniers jours : 0 problème ouvert, 4 fermés, délai moyen de correction de 3 jours*
 
 ![Vue fiabilité de SonarQube, 30 derniers jours : 0 problème ouvert, 41 fermés, délai moyen de correction de 8,6 jours ; pic de corrections vers le 8 novembre](rapport-performance/sonarqube-fiabilite-30-jours.png)
 
+*Vue fiabilité de SonarQube, 30 derniers jours : 0 problème ouvert, 41 fermés, délai moyen de correction de 8,6 jours ; pic de corrections vers le 8 novembre*
+
 ![Vue maintenabilité de SonarQube, 30 derniers jours : 0 problème ouvert, 7 fermés, délai moyen de correction de 7 jours](rapport-performance/sonarqube-maintenabilite-30-jours.png)
+
+*Vue maintenabilité de SonarQube, 30 derniers jours : 0 problème ouvert, 7 fermés, délai moyen de correction de 7 jours*
 
 ![Le même tableau de bord le 07/11, avant la mise à jour Angular 22 : 30 problèmes ouverts, 39,7 % de couverture, 1 problème de sécurité de gravité faible](rapport-performance/sonarqube.png)
 
+*Le même tableau de bord le 07/11, avant la mise à jour Angular 22 : 30 problèmes ouverts, 39,7 % de couverture, 1 problème de sécurité de gravité faible*
+
 ![Vue fiabilité de SonarQube le 07/11, avant la mise à jour : 29 problèmes, règles les plus fréquentes (promesses non traitées, champs de formulaire sans libellé), tous corrigés le 08/11](rapport-performance/sonarqube-fiabilite.png)
+
+*Vue fiabilité de SonarQube le 07/11, avant la mise à jour : 29 problèmes, règles les plus fréquentes (promesses non traitées, champs de formulaire sans libellé), tous corrigés le 08/11*
 
 ## 5. Sécurité
 
@@ -352,11 +376,15 @@ ces nombres ne s'additionnent pas.
 | Sécurité des workflows (zizmor) | non contrôlée | **0 trouvaille** (10/11) : délai de 7 jours ajouté à Dependabot, 2 exceptions justifiées ; dans la CI depuis le 12/11 avec actionlint (job `workflows`, recommandation 25) |
 | Compte de l'application dans la base | superutilisateur (réglage par défaut de l'image) | **compte limité** : lire et écrire des lignes, rien d'autre (v1.8.0) |
 
-**Plus aucune faille connue ni acceptée** : la mise à jour vers
+**Plus aucune faille connue dans ce qui est livré, et aucune exception** : la mise à jour vers
 Angular 22 (08/11, PR #114) a supprimé toutes les failles de
 `npm audit`, y compris dans les outils de construction, et une version
 corrigée de l'outil de publication a permis de retirer les 42 exceptions
-de `.trivyignore`.
+de `.trivyignore`. Hors de ce qui est livré, Trivy signale encore 2
+failles de gravité moyenne (déni de service) dans `glob` et `minimatch`,
+intégrées au paquet npm qu'embarque l'outil de publication des versions
+(`.github/release`, CI seulement) : non bloquantes, suivies dans les
+limites du README (vérifié le 13/11).
 
 **Une image saine ne le reste pas** : le 11/11, l'image du front en
 production (v1.9.0, 0 faille le 10/11) avait 2 failles hautes dans
@@ -415,7 +443,11 @@ applicatif : évolution).
 
 ![E-mail « FIRING » de l'alerte de sécurité MicrocrmClientErrorSpike (groupe orion.security, gravité warning) pendant le test du 07/11, adresse du destinataire masquée](rapport-performance/alerte-securite-email.png)
 
+*E-mail « FIRING » de l'alerte de sécurité MicrocrmClientErrorSpike (groupe orion.security, gravité warning) pendant le test du 07/11, adresse du destinataire masquée*
+
 ![E-mail « RESOLVED » de la même alerte de sécurité, 5 minutes plus tard](rapport-performance/alerte-securite-email-resolue.png)
+
+*E-mail « RESOLVED » de la même alerte de sécurité, 5 minutes plus tard*
 
 **Défaut trouvé en préparant ce rapport (corrigé le 07/11, PR #100 et
 #101)** : le panneau des journaux d'erreurs cherchait des mots entiers en
@@ -428,6 +460,8 @@ inoffensives des outils de test (rapport ZAP « PASS: Application Error
 Disclosure », journaux de k6) ; les exclure est une amélioration simple.
 
 ![Tableau de bord Grafana Orion - Security sur le staging, 7 derniers jours, après correction : les journaux d'erreurs du test de rupture du 06/11 (délais dépassés) apparaissent, ainsi que des lignes inoffensives de ZAP](rapport-performance/grafana-security.png)
+
+*Tableau de bord Grafana Orion - Security sur le staging, 7 derniers jours, après correction : les journaux d'erreurs du test de rupture du 06/11 (délais dépassés) apparaissent, ainsi que des lignes inoffensives de ZAP*
 
 **Journaux structurés (09/11, v1.9.0)** : le back (format ECS de
 Spring Boot) et le serveur web du front écrivent chaque ligne en JSON ;
@@ -453,7 +487,11 @@ test (et non un incident) : e-mail « FIRING » à 08:02, puis
 
 ![E-mail d'alerte de test « FIRING », adresse du destinataire masquée](rapport-performance/alerte-email.png)
 
+*E-mail d'alerte de test « FIRING », adresse du destinataire masquée*
+
 ![E-mail « RESOLVED » de la même alerte de test, 6 minutes plus tard](rapport-performance/alerte-email-resolue.png)
+
+*E-mail « RESOLVED » de la même alerte de test, 6 minutes plus tard*
 
 ### 5.3 Secrets et identité de la CI (09-10/11)
 
@@ -501,7 +539,11 @@ L'évolution est le déverrouillage automatique (recommandation 23).
 
 ![E-mail « FIRING » de l'alerte OpenBaoSealed du 10/11 au matin (groupe orion.security) : coffre-fort scellé depuis 15 min, avec la commande de déverrouillage ; adresse du destinataire masquée](rapport-performance/alerte-openbao-email.png)
 
+*E-mail « FIRING » de l'alerte OpenBaoSealed du 10/11 au matin (groupe orion.security) : coffre-fort scellé depuis 15 min, avec la commande de déverrouillage ; adresse du destinataire masquée*
+
 ![E-mail « RESOLVED » de la même alerte, après le déverrouillage](rapport-performance/alerte-openbao-email-resolue.png)
+
+*E-mail « RESOLVED » de la même alerte, après le déverrouillage*
 
 ## 6. Supervision et performance
 
@@ -536,6 +578,11 @@ Choix justifié dans le document 1 (section 2.3.7).
 Chaque alerte renvoie vers une fiche de premiers gestes
 (`infra/monitoring/README.md`).
 
+En production, le trafic est presque nul : les panneaux du temps de
+réponse y affichent « no traffic ». Les courbes p50, p95 et p99 sous
+charge sont dans les sections 6.3 (tests de charge sur le staging) et
+7.3 (exercice de panne en production).
+
 **Panneaux vides rendus lisibles (07/11)** : en prod, le trafic est
 presque nul (13 requêtes en 2 jours) et plusieurs panneaux affichaient
 « No data », ce qui ne distingue pas « rien à signaler » d'une panne de
@@ -546,11 +593,19 @@ changement de pod du collecteur : il est regroupé (1 série).
 
 ![Orion - Performance sur la prod avant correction : « No data » sur le temps de réponse, légende des répliques en triple](rapport-performance/grafana-performance-avant-correctif.png)
 
+*Orion - Performance sur la prod avant correction : « No data » sur le temps de réponse, légende des répliques en triple*
+
 ![Orion - Performance sur la prod après correction : « no traffic » sur le temps de réponse et une seule série par indicateur de répliques, stable à 2](rapport-performance/grafana-performance-prod.png)
+
+*Orion - Performance sur la prod après correction : « no traffic » sur le temps de réponse et une seule série par indicateur de répliques, stable à 2*
 
 ![Orion - Availability sur la prod avant correction : « No data » sur les alertes en cours](rapport-performance/grafana-availability-avant-correctif.png)
 
+*Orion - Availability sur la prod avant correction : « No data » sur les alertes en cours*
+
 ![Orion - Availability sur la prod après correction : pods prêts, redémarrages, disque, âge de la dernière sauvegarde et « no firing alert »](rapport-performance/grafana-availability.png)
+
+*Orion - Availability sur la prod après correction : pods prêts, redémarrages, disque, âge de la dernière sauvegarde et « no firing alert »*
 
 ### 6.2 Tests de charge : méthode
 
@@ -590,7 +645,15 @@ Trois états mesurés le 06/11, avec le même scénario :
 | Point de rupture | pods du back | 1 | 1 | 1 → 4 |
 
 Les captures ci-dessous montrent le staging pendant chaque test de
-rupture (heures de Paris).
+rupture (heures de Paris). Les courbes du temps de réponse (p50, p95,
+p99) sont en haut à droite de chaque capture ; elles apparaissent aussi
+en production pendant l'exercice de panne (section 7.3).
+
+**Lecture du panneau « Server error rate (5xx) »** : il affiche
+« no traffic » pendant ces tests alors que le trafic est fort. Sa
+formule ne renvoie rien tant qu'aucune erreur 5xx n'a eu lieu : il faut
+lire « 0 % d'erreur ». Défaut d'affichage connu, à corriger (afficher
+0 %).
 
 **À noter sur la première capture** : avant correction, le temps de
 réponse mesuré **par le back** reste sous 15 ms, alors que k6, côté
@@ -601,11 +664,19 @@ recommandation 5 (supervision synthétique).
 
 ![Orion - Performance, staging, 06/11 15:20-15:40, point de rupture avant correction : trafic jusqu'à environ 180 requêtes par seconde, temps de réponse côté back sous 15 ms](rapport-performance/grafana-rupture-avant.png)
 
+*Orion - Performance, staging, 06/11 15:20-15:40, point de rupture avant correction : trafic jusqu'à environ 180 requêtes par seconde, temps de réponse côté back sous 15 ms*
+
 ![Orion - Performance, staging, 06/11 17:35-17:50, point de rupture après correction, 1 réplique : environ 230 requêtes par seconde, p95 sous 10 ms ; « No data » pour les répliques car l'autoscaling n'était pas encore activé en staging](rapport-performance/grafana-rupture-apres.png)
+
+*Orion - Performance, staging, 06/11 17:35-17:50, point de rupture après correction, 1 réplique : environ 230 requêtes par seconde, p95 sous 10 ms ; « No data » pour les répliques car l'autoscaling n'était pas encore activé en staging*
 
 ![Orion - Performance, staging, 06/11 18:37-18:52, point de rupture avec autoscaling : le nombre de répliques du back passe de 1 à 2, puis à 4](rapport-performance/grafana-autoscaling.png)
 
+*Orion - Performance, staging, 06/11 18:37-18:52, point de rupture avec autoscaling : le nombre de répliques du back passe de 1 à 2, puis à 4*
+
 ![Orion - Availability, staging, 06/11 17:37-19:58 : pods du back prêts pendant les trois tests avec autoscaling (stress jusqu'à 3, pic à 2 après la fin du test, rupture jusqu'à 4)](rapport-performance/grafana-pods-staging.png)
+
+*Orion - Availability, staging, 06/11 17:37-19:58 : pods du back prêts pendant les trois tests avec autoscaling (stress jusqu'à 3, pic à 2 après la fin du test, rupture jusqu'à 4)*
 
 **Conclusions** :
 
@@ -670,6 +741,8 @@ recommandation 5 (supervision synthétique).
 
 ![Ticket #97 : contexte mesuré, demande et critères d'acceptation de la correction du relais nginx](rapport-performance/ticket-97.png)
 
+*Ticket #97 : contexte mesuré, demande et critères d'acceptation de la correction du relais nginx*
+
 ### 7.3 07/11 : exercice de panne volontaire en production
 
 Exercice annoncé (ticket #103), **pas un incident** : il n'entre pas
@@ -703,7 +776,11 @@ dans les indicateurs DORA.
 
 ![Orion - Performance, prod, 07/11 14:00-14:08 : trafic de la sonde (environ 1 requête par seconde) ; sur le processeur, la mémoire et la mémoire Java, la courbe du pod supprimé s'arrête vers 14:03 et celle du remplaçant démarre](rapport-performance/grafana-exercice-panne-trafic.png)
 
+*Orion - Performance, prod, 07/11 14:00-14:08 : trafic de la sonde (environ 1 requête par seconde) ; sur le processeur, la mémoire et la mémoire Java, la courbe du pod supprimé s'arrête vers 14:03 et celle du remplaçant démarre*
+
 ![Orion - Availability, prod, 07/11 14:00-14:08 : les pods prêts restent affichés à 2, le creux de 11 s n'est pas visible ; aucune alerte en cours](rapport-performance/grafana-exercice-panne-disponibilite.png)
+
+*Orion - Availability, prod, 07/11 14:00-14:08 : les pods prêts restent affichés à 2, le creux de 11 s n'est pas visible ; aucune alerte en cours*
 
 ### 7.4 07/11 : SonarQube arrêté par manque de mémoire (incident de la CI)
 
