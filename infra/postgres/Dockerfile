@@ -12,7 +12,7 @@
 # (PostgreSQL 18 supporté jusqu'au 14/11/2030, Alpine 3.24 jusqu'au
 # 01/06/2028). L'empreinte (sha256) garantit d'obtenir exactement
 # l'image vérifiée, même si l'étiquette est déplacée plus tard.
-FROM postgres:18.6-alpine3.24@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
+FROM postgres:18.6-alpine3.24@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
 
 # Sécurité : applique les correctifs Alpine publiés depuis la sortie de
 # l'image (même version d'Alpine, correctifs seulement : brotli-libs et
