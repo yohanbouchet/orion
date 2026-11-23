@@ -14,7 +14,7 @@
 # 08 et 09/11/2026). Sur le poste : `./gradlew bootJar` puis docker build.
 
 # JRE 17 seul : aucun outil de compilation dans l'image livrée
-FROM eclipse-temurin:17.0.21_9-jre-alpine-3.24@sha256:e2ba4e947bd5e236a9866fbdda03e4936036cb9e9d16ea0d84d103d6634a5c21
+FROM eclipse-temurin:17-jre-alpine-3.21@sha256:3a31efca6e13f64e3b395941be5e2fac8ff968cfd71c7223fd8ab13617fc90c7
 # Correctifs Alpine publiés depuis la sortie de l'image (ex. brotli-libs,
 # faille critique corrigée, le 31/10/2026)
 RUN apk upgrade --no-cache
